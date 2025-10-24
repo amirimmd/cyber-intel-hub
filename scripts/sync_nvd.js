@@ -5,7 +5,7 @@ import pLimit from 'p-limit';
 import 'dotenv/config';
 
 // --- Config ---
-// [FIX #3] Added the missing 'CVE_v1.1' subfolder to the path. This is the correct URL.
+// [FINAL FIX] This is the correct, full, raw URL
 const NVD_MODIFIED_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/CVE_v1.1/nvdcve-1.1-modified.json';
 
 // Use environment variables from GitHub Secrets (or .env for local)
