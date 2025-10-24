@@ -5,8 +5,8 @@ import pLimit from 'p-limit';
 import 'dotenv/config';
 
 // --- Config ---
-// [FINAL FIX] This is the correct, full, raw URL
-const NVD_MODIFIED_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/CVE_v1.1/nvdcve-1.1-modified.json';
+// [FINAL-FIX-URL] This is the correct, full, raw URL (removed the non-existent 'CVE_v1.1' folder)
+const NVD_MODIFIED_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-modified.json';
 
 // Use environment variables from GitHub Secrets (or .env for local)
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -81,7 +81,7 @@ function transformCveData(cveItem) {
   };
 }
 
-async function upsertToSupABASE(dataToUpsert) {
+async function upsertToSupabase(dataToUpsert) {
   if (!dataToUpsert || dataToUpsert.length === 0) {
     console.log('::INFO:: No data to upsert.');
     return;
@@ -119,7 +119,7 @@ async function main() {
   const transformedData = (await Promise.all(
     allCves.map(cve => limit(() => transformCveData(cve)))
   )).filter(Boolean);
-  await upsertToSupABASE(transformedData);
+  await upsertToSupabase(transformedData);
   console.log('::JOB_END:: NVD sync process finished.');
 }
 
