@@ -5,8 +5,11 @@ import pLimit from 'p-limit';
 import 'dotenv/config'; // Load .env file (for local testing)
 
 // --- Config ---
-// GitHub API URL for the NVD JSON feeds repo
-const NVD_REPO_API_URL = 'https://api.github.com/repos/fkie-cad/nvd-json-data-feeds/contents/data';
+// [FIX] Using the direct RAW URL to avoid API rate limits and "Not Found" errors
+const NVD_MODIFIED_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-modified.json';
+// To fetch a full year (e.g., 2024), the URL would be:
+// const NVD_YEAR_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-2024.json';
+
 // Use environment variables from GitHub Secrets (or .env for local)
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -29,26 +32,23 @@ const limit = pLimit(10);
 
 /**
  * Fetches the content of a JSON file from the NVD GitHub repo
- * @param {string} fileName - e.g., "nvdcve-1.1-modified.json"
+ * @param {string} url - The raw URL to the JSON file
  */
-async function fetchNVDFile(fileName) {
-  const url = `${NVD_REPO_API_URL}/${fileName}`; // This will now correctly point to .../data/nvdcve-1.1-modified.json
+async function fetchNVDFile(url) {
   console.log(`::FETCH:: Attempting to fetch: ${url}`);
   
-  try { // [FIX] This 'try' block was missing in the previous copy-paste
-    const response = await fetch(url, {
-      headers: { 'Accept': 'application/vnd.github.v3.raw' } // Get raw content
-    });
+  try {
+    const response = await fetch(url); // Simplified fetch
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch ${fileName}: ${response.statusText}`);
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
     }
     
     const data = await response.json();
-    console.log(`::SUCCESS:: Fetched and parsed ${fileName}.`);
+    console.log(`::SUCCESS:: Fetched and parsed ${url}.`);
     return data;
-  } catch (error) { // This 'catch' block now correctly follows the 'try'
-    console.error(`::ERROR:: while fetching ${fileName}:`, error.message);
+  } catch (error) {
+    console.error(`::ERROR:: while fetching ${url}:`, error.message);
     return null;
   }
 }
@@ -66,7 +66,6 @@ function transformCveData(cveItem) {
 
   const description = cve.description?.description_data?.[0]?.value || 'No description provided.';
   
-  // [FIX] Updated published date logic to be more robust
   let published;
   try {
     published = new Date(cveItem.publishedDate).toISOString();
@@ -119,17 +118,23 @@ async function upsertToSupABASE(dataToUpsert) {
 
   console.log(`::DB_SYNC:: Attempting to upsert ${dataToUpsert.length} records...`);
   
-  const { data, error } = await supabase
-    .from('vulnerabilities')
-    .upsert(dataToUpsert, {
-      onConflict: 'id', // If 'id' (CVE ID) exists, update the row
-      ignoreDuplicates: false,
-    });
+  // Upsert in chunks to avoid payload size limits
+  const CHUNK_SIZE = 500;
+  for (let i = 0; i < dataToUpsert.length; i += CHUNK_SIZE) {
+    const chunk = dataToUpsert.slice(i, i + CHUNK_SIZE);
+    
+    const { error } = await supabase
+      .from('vulnerabilities')
+      .upsert(chunk, {
+        onConflict: 'id', // If 'id' (CVE ID) exists, update the row
+        ignoreDuplicates: false,
+      });
 
-  if (error) {
-    console.error('::DB_ERROR:: Failed to upsert data:', error.message);
-  } else {
-    console.log(`::DB_SUCCESS:: Successfully upserted/updated ${dataToUpsert.length} records.`);
+    if (error) {
+      console.error(`::DB_ERROR:: Failed to upsert chunk ${i / CHUNK_SIZE + 1}:`, error.message);
+    } else {
+      console.log(`::DB_SUCCESS:: Upserted chunk ${i / CHUNK_SIZE + 1} (${chunk.length} records).`);
+    }
   }
 }
 
@@ -140,7 +145,7 @@ async function main() {
   console.log('::JOB_START:: Starting NVD sync process...');
   
   // 1. Fetch the 'modified' feed first
-  const modifiedData = await fetchNVDFile('nvdcve-1.1-modified.json');
+  const modifiedData = await fetchNVDFile(NVD_MODIFIED_URL);
   let allCves = [];
 
   if (modifiedData && modifiedData.CVE_Items) {
@@ -148,13 +153,15 @@ async function main() {
   }
 
   // 2. OPTIONAL: Fetch recent years if you need a fuller sync
-  // For this example, we'll just sync the 'modified' file.
-  // To sync a full year, uncomment below:
-  // const currentYear = new Date().getFullYear();
-  // const yearData = await fetchNVDFile(`nvdcve-1.1-${currentYear}.json`);
-  // if (yearData && yearData.CVE_Items) {
-  //   allCves.push(...yearData.CVE_Items);
-  // }
+  // (Uncomment the section below to sync the current year as well)
+  /*
+  const currentYear = new Date().getFullYear();
+  const yearUrl = `https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-${currentYear}.json`;
+  const yearData = await fetchNVDFile(yearUrl);
+  if (yearData && yearData.CVE_Items) {
+    allCves.push(...yearData.CVE_Items);
+  }
+  */
 
   if (allCves.length === 0) {
     console.log('::INFO:: No CVEs found to process. Exiting.');
