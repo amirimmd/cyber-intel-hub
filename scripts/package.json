@@ -1,0 +1,19 @@
+    // scripts/package.json
+    {
+      "name": "cyber-intel-hub-scripts",
+      "version": "1.0.0",
+      "description": "Data sync scripts for Supabase",
+      "main": "sync_nvd.js",
+      "type": "module",
+      "scripts": {
+        "sync:nvd": "node sync_nvd.js",
+        "sync:exploitdb": "node sync_exploitdb.js"
+      },
+      "dependencies": {
+        "@supabase/supabase-js": "^2.43.4",
+        "dotenv": "^16.4.5",
+        "node-fetch": "^3.3.2",
+        "p-limit": "^5.0.0"
+      }
+    }
+    
