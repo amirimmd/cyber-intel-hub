@@ -1,1 +1,48 @@
+    # .github/workflows/sync_data.yml
+    
+    name: '::SYNC_SECURITY_FEEDS::'
+    
+    on:
+      workflow_dispatch: # Allows manual triggering
+      schedule:
+        - cron: '0 */6 * * *' # Runs every 6 hours
+    
+    jobs:
+      sync-data:
+        name: 'Sync NVD and ExploitDB Data'
+        runs-on: ubuntu-latest
+    
+        steps:
+          - name: '::CHECKOUT_CODE::'
+            uses: actions/checkout@v4
+    
+          - name: '::SETUP_NODE_JS::'
+            uses: actions/setup-node@v4
+            with:
+              node-version: '20' # Use Node.js 20
+    
+          - name: '::INSTALL_SCRIPT_DEPS::'
+            run: |
+              cd scripts
+              npm install
+            
+          - name: '::RUN_NVD_SYNC::'
+            env:
+              SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+              SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+            run: |
+              cd scripts
+              npm run sync:nvd
+              
+          - name: '::RUN_EXPLOITDB_SYNC::'
+            env:
+              SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+              SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+            run: |
+              cd scripts
+              npm run sync:exploitdb
+              
+          - name: '::SYNC_COMPLETE::'
+            run: echo "Data sync job finished at $(date)"
+    
 
