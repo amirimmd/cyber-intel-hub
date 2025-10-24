@@ -1,13 +1,14 @@
-    // scripts/sync_nvd.js
-    import { createClient } from '@supabase/supabase-js';
+// scripts/sync_nvd.js
+import { createClient } from '@supabase/supabase-js';
     import fetch from 'node-fetch';
     import pLimit from 'p-limit';
     import 'dotenv/config'; // Load .env file (for local testing)
-    
-    // --- Config ---
-    // GitHub API URL for the NVD JSON feeds repo
-    const NVD_REPO_API_URL = 'https://api.github.com/repos/fkie-cad/nvd-json-data-feeds/contents/data/cve';
-    // Use environment variables from GitHub Secrets (or .env for local)
+
+// --- Config ---
+// GitHub API URL for the NVD JSON feeds repo
+// [FIX]: The path was wrong. Removed '/cve' from the end.
+const NVD_REPO_API_URL = 'https://api.github.com/repos/fkie-cad/nvd-json-data-feeds/contents/data';
+// Use environment variables from GitHub Secrets (or .env for local)
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
     
@@ -32,10 +33,10 @@
      * @param {string} fileName - e.g., "nvdcve-1.1-modified.json"
      */
     async function fetchNVDFile(fileName) {
-      const url = `${NVD_REPO_API_URL}/${fileName}`;
-      console.log(`::FETCH:: Attempting to fetch: ${url}`);
-      
-      try {
+  const url = `${NVD_REPO_API_URL}/${fileName}`; // This will now correctly point to .../data/nvdcve-1.1-modified.json
+  console.log(`::FETCH:: Attempting to fetch: ${url}`);
+  
+// ... (Rest of the file is correct) ...
         const response = await fetch(url, {
           headers: { 'Accept': 'application/vnd.github.v3.raw' } // Get raw content
         });
@@ -58,48 +59,57 @@
      * @param {object} cveItem - A single CVE item from the NVD JSON
      */
     function transformCveData(cveItem) {
-      const cve = cveItem.cve;
+  const cve = cveItem.cve;
       if (!cve) return null;
     
       const id = cve.CVE_data_meta?.ID;
-      const description = cve.description?.description_data?.[0]?.value || 'No description provided.';
-      const published = cve.affects?.vendor?.vendor_data?.[0]?.product?.product_data?.[0]?.version?.version_data?.[0]?.version_value ? new Date(cve.affects.vendor.vendor_data[0].product.product_data[0].version.version_data[0].version_value).toISOString() : new Date(cveItem.publishedDate).toISOString();
-      
-      // Get CVSS v3.1 data, fallback to v3.0, then v2
+  if (!id) return null; // Added check for valid ID
+
+  const description = cve.description?.description_data?.[0]?.value || 'No description provided.';
+  
+  // [FIX] Updated published date logic to be more robust
+  let published;
+  try {
+    published = new Date(cveItem.publishedDate).toISOString();
+  } catch (e) {
+    published = new Date().toISOString(); // Fallback
+  }
+
+  // Get CVSS v3.1 data, fallback to v3.0, then v2
       const metricsV31 = cveItem.impact?.baseMetricV3;
       const metricsV2 = cveItem.impact?.baseMetricV2;
     
       let base_score = 0;
-      let severity = 'UNKNOWN';
+  let severity = 'UNKNOWN';
       let vector_string = 'N/A';
     
       if (metricsV31?.cvssV3) {
-        base_score = metricsV31.cvssV3.baseScore;
+    base_score = metricsV31.cvssV3.baseScore;
         severity = metricsV31.cvssV3.baseSeverity;
         vector_string = metricsV31.cvssV3.vectorString;
       } else if (metricsV2?.cvssV2) {
-        base_score = metricsV2.cvssV2.baseScore;
+    base_score = metricsV2.cvssV2.baseScore;
         severity = metricsV2.severity;
         vector_string = metricsV2.cvssV2.vectorString;
       }
-    
-      // Get CWE ID
+
+  // Get CWE ID
       const cwe = cve.problemtype?.problemtype_data?.[0]?.description?.[0]?.value || 'N/A';
     
       return {
-        id,
-        description,
-        published_date: published,
-        last_modified: new Date(cveItem.lastModifiedDate).toISOString(),
-        base_score,
+    id,
+    description,
+    published_date: published,
+    last_modified: new Date(cveItem.lastModifiedDate).toISOString(),
+    base_score,
         severity,
         vector_string,
         cwe
       };
-    }
-    
-    /**
-     * Upserts an array of vulnerabilities into the Supabase 'vulnerabilities' table
+}
+
+/**
+// ... (Rest of the file is correct) ...
      * @param {Array<object>} dataToUpsert - Array of transformed CVE objects
      */
     async function upsertToSupabase(dataToUpsert) {
@@ -128,41 +138,41 @@
      * Main sync function
      */
     async function main() {
-      console.log('::JOB_START:: Starting NVD sync process...');
+  console.log('::JOB_START:: Starting NVD sync process...');
       
       // 1. Fetch the 'modified' feed first
       const modifiedData = await fetchNVDFile('nvdcve-1.1-modified.json');
-      let allCves = [];
-    
-      if (modifiedData && modifiedData.CVE_Items) {
+  let allCves = [];
+
+  if (modifiedData && modifiedData.CVE_Items) {
         allCves.push(...modifiedData.CVE_Items);
       }
-    
-      // 2. OPTIONAL: Fetch recent years if you need a fuller sync
+
+  // 2. OPTIONAL: Fetch recent years if you need a fuller sync
       // For this example, we'll just sync the 'modified' file.
       // To sync a full year, uncomment below:
       // const currentYear = new Date().getFullYear();
       // const yearData = await fetchNVDFile(`nvdcve-1.1-${currentYear}.json`);
       // if (yearData && yearData.CVE_Items) {
       //   allCves.push(...yearData.CVE_Items);
-      // }
-    
-      if (allCves.length === 0) {
+  // }
+
+  if (allCves.length === 0) {
         console.log('::INFO:: No CVEs found to process. Exiting.');
         return;
-      }
-    
-      console.log(`::PROCESS:: Found ${allCves.length} total CVEs to process...`);
+  }
+
+  console.log(`::PROCESS:: Found ${allCves.length} total CVEs to process...`);
     
       // 3. Transform data in parallel
       const transformedData = (await Promise.all(
-        allCves.map(cve => limit(() => transformCveData(cve)))
-      )).filter(Boolean); // Filter out any null/failed transformations
+    allCves.map(cve => limit(() => transformCveData(cve)))
+  )).filter(Boolean); // Filter out any null/failed transformations
     
       // 4. Upsert to Supabase
       await upsertToSupabase(transformedData);
-    
-      console.log('::JOB_END:: NVD sync process finished.');
+
+  console.log('::JOB_END:: NVD sync process finished.');
     }
     
     main().catch(err => {
