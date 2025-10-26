@@ -1,204 +1,195 @@
-// مسیر فایل: scripts/sync_nvd.js
-// این اسکریپت برای مپ کردن داده‌های NVD به Schema سفارشی شما ویرایش شده است
+// frontend/src/components/NVDTable.jsx
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../supabaseClient';
+import { Loader2, Filter, DatabaseZap } from 'lucide-react';
 
-import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
-import 'dotenv/config'; 
-import pLimit from 'p-limit'; 
-import zlib from 'zlib'; 
-import { promisify } from 'util'; 
-
-const gunzip = promisify(zlib.gunzip);
-
-// مسیر پوشه‌ای که در فایل YML کلون می‌شود
-const NVD_BASE_PATH = path.join(process.cwd(), '../nvd-data-repo');
-
-const NVD_RECENT_PATH = path.join(NVD_BASE_PATH, 'nvdcve-1.1-recent.json.gz');
-const NVD_MODIFIED_PATH = path.join(NVD_BASE_PATH, 'nvdcve-1.1-modified.json.gz');
-
-const START_YEAR = 2002;
-const currentYear = new Date().getFullYear();
-const yearlyPaths = [];
-for (let year = START_YEAR; year <= currentYear; year++) {
-  yearlyPaths.push(path.join(NVD_BASE_PATH, `nvdcve-1.1-${year}.json.gz`));
-}
-
-// دریافت متغیرهای محیطی
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('::ERROR:: SUPABASE_URL or SUPABASE_SERVICE_KEY is not set.');
-  process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-const limit = pLimit(5);
-
-/**
- * تابع خواندن و باز کردن فایل از دیسک (بدون تغییر)
- */
-async function readAndDecompress(filePath) {
-  console.log(`::INFO:: Reading data from ${filePath}...`);
+// [FIX]: این تابع تاریخ ISO را به فرمت خوانا تبدیل می‌کند
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A';
   try {
-    if (!fs.existsSync(filePath)) {
-      console.warn(`::WARN:: File not found: ${filePath}. Skipping this file.`);
-      return null;
-    }
-    const compressedData = fs.readFileSync(filePath);
-    const decompressedData = await gunzip(compressedData);
-    return JSON.parse(decompressedData.toString());
-  } catch (err) {
-    console.error(`::ERROR:: Failed to read or decompress ${filePath}:`, err.message);
-    throw new Error(`Failed to process ${filePath}: ${err.message}`);
-  }
-}
-
-/**
- * داده‌های NVD JSON را واکشی و پردازش می‌کند
- */
-async function syncNVD() {
-  console.log('::INFO:: Starting NVD sync (Full Historical + Recent + Modified)...');
-  
-  try {
-    const allPathsToRead = [
-      ...yearlyPaths,
-      NVD_MODIFIED_PATH,
-      NVD_RECENT_PATH
-    ];
-
-    console.log(`::INFO:: Reading ${allPathsToRead.length} data feeds sequentially from local clone...`);
-
-    const allCveItems = new Map();
-
-    for (const filePath of allPathsToRead) {
-      try {
-        const data = await readAndDecompress(filePath);
-        if (data && data.CVE_Items) {
-          console.log(`::INFO:: Processing ${items.length} items from ${filePath}...`);
-          for (const item of items) {
-            if (item.cve?.CVE_data_meta?.ID) {
-              allCveItems.set(item.cve.CVE_data_meta.ID, item);
-            }
-          }
-        }
-      } catch (readError) {
-         console.warn(`::WARN:: Failed to process feed ${filePath}: ${readError.message || 'Unknown Error'}`);
-      }
-    }
-
-    const cveItems = Array.from(allCveItems.values());
-    console.log(`::INFO:: Total unique CVEs to process: ${cveItems.length}`);
-    
-    if (cveItems.length === 0) {
-       console.error('::FATAL:: No data could be read from the cloned NVD repository. Halting sync.');
-       process.exit(1); 
-    }
-
-    // [!!!] ویرایش: نگاشت داده‌ها به Schema سفارشی شما
-    const vulnerabilitiesToInsert = cveItems.map(item => {
-      const cveId = item.cve?.CVE_data_meta?.ID || 'N/A';
-      const description = item.cve?.description?.description_data?.[0]?.value || 'No description available.';
-      
-      // استخراج تاریخ از داده‌های JSON (قابل اعتمادتر از نام CVE)
-      const publishedDate = item.publishedDate || new Date().toISOString();
-
-      const cvssV3 = item.impact?.baseMetricV3?.cvssV3;
-      const cvssV2 = item.impact?.baseMetricV2?.cvssV2;
-
-      let vectorString = 'N/A';
-      let av = 'N/A';
-      let ac = 'N/A';
-      let pr = 'N/A';
-      let ui = 'N/A';
-      let s = 'N/A';
-      let c = 'N/A';
-      let i = 'N/A';
-      let a = 'N/A';
-      let score = 0;
-      let baseSeverity = 'UNKNOWN';
-
-      if (cvssV3) {
-          vectorString = cvssV3.vectorString || 'N/A';
-          av = cvssV3.attackVector || 'N/A';
-          ac = cvssV3.attackComplexity || 'N/A';
-          pr = cvssV3.privilegesRequired || 'N/A';
-          ui = cvssV3.userInteraction || 'N/A';
-          s = cvssV3.scope || 'N/A';
-          c = cvssV3.confidentialityImpact || 'N/A';
-          i = cvssV3.integrityImpact || 'N/A';
-          a = cvssV3.availabilityImpact || 'N/A';
-          score = cvssV3.baseScore || 0;
-          baseSeverity = cvssV3.baseSeverity || 'UNKNOWN';
-      } else if (cvssV2) {
-          // Fallback برای داده‌های V2
-          vectorString = cvssV2.vectorString || 'N/A';
-          av = cvssV2.accessVector || 'N/A';
-          ac = cvssV2.accessComplexity || 'N/A';
-          pr = cvssV2.authentication || 'N/A'; 
-          ui = cvssV2.userInteraction || 'N/A'; // V2 userInteraction ندارد، اما NVD JSON ممکن است آن را مپ کند
-          s = 'N/A'; // V2 scope ندارد
-          c = cvssV2.confidentialityImpact || 'N/A';
-          i = cvssV2.integrityImpact || 'N/A';
-          a = cvssV2.availabilityImpact || 'N/A';
-          score = cvssV2.baseScore || 0;
-          baseSeverity = item.impact?.baseMetricV2?.severity || 'UNKNOWN';
-      }
-
-      return {
-          "ID": cveId, // مپ به ستون "ID"
-          "text": description, // مپ به ستون "text"
-          "vectorString": vectorString,
-          "av": av,
-          "ac": ac,
-          "pr": pr,
-          "ui": ui,
-          "s": s,
-          "c": c,
-          "i": i,
-          "a": a,
-          "score": score,
-          "baseSeverity": baseSeverity,
-          "published_date": publishedDate // ستون تاریخ برای مرتب‌سازی
-      };
+    // اگر تاریخ 1978 است (داده‌ی placeholder از CSV)، آن را نمایش نده
+    if (dateString.startsWith('1978-01-01')) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
     });
-    // [!!!] پایان ویرایش
+  } catch (error) {
+    console.warn("Invalid date format:", dateString);
+    return 'Invalid Date';
+  }
+};
 
-    // 3. درج داده‌ها در Supabase
-    const chunkSize = 500;
-    console.log(`::INFO:: Upserting ${vulnerabilitiesToInsert.length} vulnerabilities in chunks of ${chunkSize}...`);
+// Helper for severity badges
+const SeverityBadge = ({ severity }) => {
+  let badgeClass = 'badge-unknown';
+  // [FIX]: بررسی مقدار null یا "UNKNOWN"
+  const upperSeverity = String(severity).toUpperCase();
+  switch (upperSeverity) {
+    case 'CRITICAL': badgeClass = 'badge-critical'; break;
+    case 'HIGH': badgeClass = 'badge-high'; break;
+    case 'MEDIUM': badgeClass = 'badge-medium'; break;
+    case 'LOW': badgeClass = 'badge-low'; break;
+    default: badgeClass = 'badge-unknown'; break;
+  }
+  return <span className={`severity-badge ${badgeClass}`}>{severity || 'UNKNOWN'}</span>;
+};
+
+const NVDTable = () => {
+  const [vulnerabilities, setVulnerabilities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({ keyword: '', severity: 'all', date: '' });
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     
-    let allPromises = [];
+    let query = supabase
+      // [FIX]: ستون‌های سفارشی شما (که با حروف بزرگ هستند) باید داخل دابل کوتیشن باشند
+      .from('vulnerabilities')
+      .select('"ID","text","baseSeverity","score","published_date","vectorString"') // انتخاب ستون‌های صحیح
+      .order('published_date', { ascending: false, nullsFirst: false })
+      .limit(100);
 
-    for (let i = 0; i < vulnerabilitiesToInsert.length; i += chunkSize) {
-      const chunk = vulnerabilitiesToInsert.slice(i, i + chunkSize);
-      
-      allPromises.push(limit(async () => {
-        console.log(`::INFO:: Upserting chunk ${Math.floor(i / chunkSize) + 1}...`);
-        
-        const { error } = await supabase
-          .from('vulnerabilities') // نام جدول شما
-          .upsert(chunk, { onConflict: '"ID"' }); // [!!!] ویرایش: استفاده از ستون "ID" شما برای onConflict
-
-        if (error) {
-          // خطاهای رایج:
-          // 400 Bad Request: احتمالاً به این دلیل که ستون‌ها در Supabase (فایل SQL) با ستون‌های map شده در اینجا (return {...}) مطابقت ندارند
-          console.error(`::ERROR:: Supabase upsert failed for chunk ${Math.floor(i / chunkSize) + 1}:`, error.message);
-        }
-      }));
+    // Apply filters
+    if (filters.keyword) {
+      // [FIX]: خطای سینتکسی بک‌تیک (`) در اینجا اصلاح شد
+      query = query.or(`"ID".ilike.%${filters.keyword}%, "text".ilike.%${filters.keyword}%`);
+    }
+    if (filters.severity !== 'all') {
+      // [FIX]: فیلتر بر اساس ستون "baseSeverity"
+      query = query.eq('"baseSeverity"', filters.severity.toUpperCase());
+    }
+    if (filters.date) {
+      // [FIX]: فیلتر بر اساس ستون "published_date"
+      query = query.gte('"published_date"', new Date(filters.date).toISOString());
     }
 
-    await Promise.all(allPromises);
+    // [FIX]: رفع خطای نوشتاری که باعث build failure شده بود
+    const { data, error: queryError } = await query;
 
-    console.log('::SUCCESS:: NVD sync completed.');
-    
-  } catch (error) {
-    console.error('::FATAL:: An error occurred during NVD sync:', error.message);
-    process.exit(1);
-  }
-}
+    if (queryError) {
+      console.error('Error fetching NVD data:', queryError);
+      setError(queryError.message);
+    } else {
+      setVulnerabilities(data);
+    }
+    setLoading(false);
+  }, [filters]); // Re-run when filters change
 
-// اجرای اسکریپت
-syncNVD();
+  // Initial data fetch on component mount
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]); // [FIX]: استفاده از fetchData در dependency array
+
+  const handleFilterSubmit = (e) => {
+    e.preventDefault();
+    fetchData();
+  };
+
+  return (
+    <div>
+      {/* Filter Form */}
+      <form onSubmit={handleFilterSubmit} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
+        <div className="flex-grow">
+          <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
+          <input type="text" name="keyword" id="nvd-keyword" value={filters.keyword} onChange={handleFilterChange} placeholder="e.g., SQLI, RCE, Apache..." className="cyber-input" />
+        </div>
+        <div>
+          <label htmlFor="nvd-severity" className="block text-sm font-medium text-gray-400 mb-1">Severity:</label>
+          <select name="severity" id="nvd-severity" value={filters.severity} onChange={handleFilterChange} className="cyber-select w-full md:w-48">
+            <option value="all">::ALL::</option>
+            <option value="CRITICAL">CRITICAL</option>
+            <option value="HIGH">HIGH</option>
+            <option value="MEDIUM">MEDIUM</option>
+            <option value="LOW">LOW</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After:</label>
+          <input type="date" name="date" id="nvd-date" value={filters.date} onChange={handleFilterChange} className="cyber-input w-full md:w-48" />
+        </div>
+        <div>
+          <button type="submit" className="cyber-button" disabled={loading}>
+            <Filter className="w-5 h-5 mr-2" />
+            FILTER_
+          </button>
+        </div>
+      </form>
+
+      {/* Results Table */}
+      <div className="overflow-x-auto rounded-lg border border-gray-800">
+        <table className="min-w-full divide-y divide-gray-800">
+          <thead className="bg-gray-800/50">
+            <tr>
+              {/* [FIX]: استفاده از نام ستون‌های سفارشی شما */}
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CVE ID</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Description</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Score</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Published</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CVSS Vector</th>
+            </tr>
+          </thead>
+          <tbody className="bg-cyber-card divide-y divide-gray-800">
+            {loading && (
+              <tr>
+                <td colSpan="6" className="px-6 py-10 text-center">
+                  <div className="flex justify-center items-center text-cyber-cyan">
+                    <Loader2 className="animate-spin h-6 w-6 mr-3" />
+                    <span>LOADING NVD_DATA_STREAM...</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!loading && error && (
+              <tr>
+                <td colSpan="6" className="px-6 py-10 text-center">
+                  <div className="text-cyber-red">
+                    <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
+                    <span>ERROR: {error}</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!loading && !error && vulnerabilities.length === 0 && (
+              <tr>
+                <td colSpan="6" className="px-6 py-10 text-center">
+                  <div className="text-gray-500">
+                    <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
+                    <span>NO MATCHING VULNERABILITIES FOUND_</span>
+                  </div>
+                </td>
+              </tr>
+            )}
+            {!loading && !error && vulnerabilities.map((cve) => (
+              // [FIX]: استفاده از cve.ID (با حروف بزرگ) به عنوان کلید
+              <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
+                {/* [FIX]: استفاده از نام ستون‌های سفارشی شما */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
+                  <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
+                </td>
+                <td className="px-6 py-4 text-sm text-cyber-text max-w-md truncate" title={cve.text}>{cve.text}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <SeverityBadge severity={cve.baseSeverity} />
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(cve.published_date)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cve.vectorString}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default NVDTable;
 
