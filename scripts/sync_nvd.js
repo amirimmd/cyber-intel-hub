@@ -1,27 +1,27 @@
 // مسیر فایل: scripts/sync_nvd.js
-import { createClient } from '@supabase/supabase-js';
-import fetch from 'node-fetch';
-import 'dotenv/config'; // برای بارگیری متغیرها از .env در اجرای محلی
-import pLimit from 'p-limit'; // برای مدیریت همزمانی درخواست‌ها
-import zlib from 'zlib'; // [جدید] برای باز کردن فایل‌های .gz
-import { promisify } from 'util'; // [جدید] برای تبدیل zlib.gunzip به Promise
+// این اسکریپت برای مپ کردن داده‌های NVD به Schema سفارشی شما ویرایش شده است
 
-// [جدید] تابع gunzip را به نسخه Promise تبدیل می‌کنیم
+import { createClient } from '@supabase/supabase-js';
+import fs from 'fs';
+import path from 'path';
+import 'dotenv/config'; 
+import pLimit from 'p-limit'; 
+import zlib from 'zlib'; 
+import { promisify } from 'util'; 
+
 const gunzip = promisify(zlib.gunzip);
 
-// [!!!] ویرایش: تغییر به jsDelivr CDN برای جلوگیری از خطای 404
-// به جای: 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main'
-const NVD_BASE_URL = 'https://cdn.jsdelivr.net/gh/fkie-cad/nvd-json-data-feeds@main';
+// مسیر پوشه‌ای که در فایل YML کلون می‌شود
+const NVD_BASE_PATH = path.join(process.cwd(), '../nvd-data-repo');
 
-const NVD_RECENT_URL = `${NVD_BASE_URL}/nvdcve-1.1-recent.json.gz`;
-const NVD_MODIFIED_URL = `${NVD_BASE_URL}/nvdcve-1.1-modified.json.gz`;
+const NVD_RECENT_PATH = path.join(NVD_BASE_PATH, 'nvdcve-1.1-recent.json.gz');
+const NVD_MODIFIED_PATH = path.join(NVD_BASE_PATH, 'nvdcve-1.1-modified.json.gz');
 
-// [جدید] اضافه کردن تمام فایل‌های سالانه برای همگام‌سازی کامل تاریخی
 const START_YEAR = 2002;
 const currentYear = new Date().getFullYear();
-const yearlyUrls = [];
+const yearlyPaths = [];
 for (let year = START_YEAR; year <= currentYear; year++) {
-  yearlyUrls.push(`${NVD_BASE_URL}/nvdcve-1.1-${year}.json.gz`);
+  yearlyPaths.push(path.join(NVD_BASE_PATH, `nvdcve-1.1-${year}.json.gz`));
 }
 
 // دریافت متغیرهای محیطی
@@ -33,38 +33,26 @@ if (!supabaseUrl || !supabaseServiceKey) {
   process.exit(1);
 }
 
-// مقداردهی اولیه Supabase Client با Service Key
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// [!!!] ویرایش: محدودیت فقط برای نوشتن در دیتابیس استفاده خواهد شد
 const limit = pLimit(5);
 
 /**
- * [جدید] تابع کمکی برای واکشی و باز کردن فایل .gz
+ * تابع خواندن و باز کردن فایل از دیسک (بدون تغییر)
  */
-async function fetchAndDecompress(url) {
-  console.log(`::INFO:: Fetching data from ${url}...`);
-  
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Node.js-Sync-Script'
+async function readAndDecompress(filePath) {
+  console.log(`::INFO:: Reading data from ${filePath}...`);
+  try {
+    if (!fs.existsSync(filePath)) {
+      console.warn(`::WARN:: File not found: ${filePath}. Skipping this file.`);
+      return null;
     }
-  });
-
-  if (!response.ok) {
-    // اگر فایلی موجود نبود (مثلا فایل سال جاری هنوز ساخته نشده)، فقط یک هشدار میدهیم
-    if (response.status === 404) {
-      console.warn(`::WARN:: File not found (404): ${url}. Skipping this file.`);
-      return null; // بازگشت null تا در ادامه از آن صرف نظر شود
-    }
-    console.error(`::ERROR:: Fetch failed for ${url}. Status: ${response.status} ${response.statusText}`);
-    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    const compressedData = fs.readFileSync(filePath);
+    const decompressedData = await gunzip(compressedData);
+    return JSON.parse(decompressedData.toString());
+  } catch (err) {
+    console.error(`::ERROR:: Failed to read or decompress ${filePath}:`, err.message);
+    throw new Error(`Failed to process ${filePath}: ${err.message}`);
   }
-  
-  const compressedData = await response.arrayBuffer();
-  const buffer = Buffer.from(compressedData);
-  const decompressedData = await gunzip(buffer);
-  return JSON.parse(decompressedData.toString());
 }
 
 /**
@@ -74,83 +62,110 @@ async function syncNVD() {
   console.log('::INFO:: Starting NVD sync (Full Historical + Recent + Modified)...');
   
   try {
-    const allUrlsToFetch = [
-      ...yearlyUrls, // ابتدا تاریخی
-      NVD_MODIFIED_URL, // سپس اصلاح شده
-      NVD_RECENT_URL      // در آخر جدیدترین‌ها (تا داده‌های تکراری را بازنویسی کنند)
+    const allPathsToRead = [
+      ...yearlyPaths,
+      NVD_MODIFIED_PATH,
+      NVD_RECENT_PATH
     ];
 
-    console.log(`::INFO:: Fetching ${allUrlsToFetch.length} data feeds sequentially...`);
+    console.log(`::INFO:: Reading ${allPathsToRead.length} data feeds sequentially from local clone...`);
 
     const allCveItems = new Map();
 
-    // [!!!] ویرایش: استفاده از حلقه سریالی (for...of) برای جلوگیری از مسدود شدن توسط CDN
-    for (const url of allUrlsToFetch) {
+    for (const filePath of allPathsToRead) {
       try {
-        const data = await fetchAndDecompress(url);
-        
-        // فقط نتایج موفقیت آمیز و غیر null را پردازش می‌کنیم
+        const data = await readAndDecompress(filePath);
         if (data && data.CVE_Items) {
-          const items = data.CVE_Items;
-          console.log(`::INFO:: Processing ${items.length} items from ${url}...`);
-          
+          console.log(`::INFO:: Processing ${items.length} items from ${filePath}...`);
           for (const item of items) {
             if (item.cve?.CVE_data_meta?.ID) {
-              // چون فایل‌های جدیدتر در آخر لیست هستند، به طور خودکار داده‌های قدیمی‌تر را در Map بازنویسی می‌کنند
               allCveItems.set(item.cve.CVE_data_meta.ID, item);
             }
           }
         }
-      } catch (fetchError) {
-         // خطاهایی که 404 نبودند را لاگ می‌کنیم
-         console.warn(`::WARN:: Failed to process feed ${url}: ${fetchError.message || 'Unknown Error'}`);
+      } catch (readError) {
+         console.warn(`::WARN:: Failed to process feed ${filePath}: ${readError.message || 'Unknown Error'}`);
       }
     }
-    // [!!!] پایان ویرایش
 
     const cveItems = Array.from(allCveItems.values());
     console.log(`::INFO:: Total unique CVEs to process: ${cveItems.length}`);
     
     if (cveItems.length === 0) {
-      // اگر بعد از این همه تلاش هیچ دیتایی نبود، یک خطا میدهیم
-      // (این اتفاق نباید بیفتد مگر اینکه CDN کاملا قطع باشد)
-      if (!cveItems.some(res => res.status === 'fulfilled' && res.value)) {
-           console.error('::FATAL:: No data could be fetched from any NVD source. Halting sync.');
-           process.exit(1); // خروج با خطا
-      }
-      console.log('::INFO:: No new CVE items found. Sync complete.');
-      return; 
+       console.error('::FATAL:: No data could be read from the cloned NVD repository. Halting sync.');
+       process.exit(1); 
     }
 
-    // 2. پردازش و نگاشت داده‌ها (بدون تغییر)
+    // [!!!] ویرایش: نگاشت داده‌ها به Schema سفارشی شما
     const vulnerabilitiesToInsert = cveItems.map(item => {
       const cveId = item.cve?.CVE_data_meta?.ID || 'N/A';
       const description = item.cve?.description?.description_data?.[0]?.value || 'No description available.';
+      
+      // استخراج تاریخ از داده‌های JSON (قابل اعتمادتر از نام CVE)
       const publishedDate = item.publishedDate || new Date().toISOString();
-      
-      let baseScore = 0;
-      let severity = 'UNKNOWN';
-      if (item.impact?.baseMetricV3) {
-        baseScore = item.impact.baseMetricV3.cvssV3?.baseScore || 0;
-        severity = item.impact.baseMetricV3.cvssV3?.baseSeverity || 'UNKNOWN';
-      } else if (item.impact?.baseMetricV2) {
-        baseScore = item.impact.baseMetricV2.cvssV2?.baseScore || 0;
-        severity = item.impact.baseMetricV2.severity || 'UNKNOWN';
+
+      const cvssV3 = item.impact?.baseMetricV3?.cvssV3;
+      const cvssV2 = item.impact?.baseMetricV2?.cvssV2;
+
+      let vectorString = 'N/A';
+      let av = 'N/A';
+      let ac = 'N/A';
+      let pr = 'N/A';
+      let ui = 'N/A';
+      let s = 'N/A';
+      let c = 'N/A';
+      let i = 'N/A';
+      let a = 'N/A';
+      let score = 0;
+      let baseSeverity = 'UNKNOWN';
+
+      if (cvssV3) {
+          vectorString = cvssV3.vectorString || 'N/A';
+          av = cvssV3.attackVector || 'N/A';
+          ac = cvssV3.attackComplexity || 'N/A';
+          pr = cvssV3.privilegesRequired || 'N/A';
+          ui = cvssV3.userInteraction || 'N/A';
+          s = cvssV3.scope || 'N/A';
+          c = cvssV3.confidentialityImpact || 'N/A';
+          i = cvssV3.integrityImpact || 'N/A';
+          a = cvssV3.availabilityImpact || 'N/A';
+          score = cvssV3.baseScore || 0;
+          baseSeverity = cvssV3.baseSeverity || 'UNKNOWN';
+      } else if (cvssV2) {
+          // Fallback برای داده‌های V2
+          vectorString = cvssV2.vectorString || 'N/A';
+          av = cvssV2.accessVector || 'N/A';
+          ac = cvssV2.accessComplexity || 'N/A';
+          pr = cvssV2.authentication || 'N/A'; 
+          ui = cvssV2.userInteraction || 'N/A'; // V2 userInteraction ندارد، اما NVD JSON ممکن است آن را مپ کند
+          s = 'N/A'; // V2 scope ندارد
+          c = cvssV2.confidentialityImpact || 'N/A';
+          i = cvssV2.integrityImpact || 'N/A';
+          a = cvssV2.availabilityImpact || 'N/A';
+          score = cvssV2.baseScore || 0;
+          baseSeverity = item.impact?.baseMetricV2?.severity || 'UNKNOWN';
       }
-      
-      const cwe = item.cve?.problemtype?.problemtype_data?.[0]?.description?.[0]?.value || 'N/A';
 
       return {
-        id: cveId,
-        description: description,
-        severity: severity,
-        base_score: baseScore,
-        published_date: publishedDate,
-        cwe: cwe
+          "ID": cveId, // مپ به ستون "ID"
+          "text": description, // مپ به ستون "text"
+          "vectorString": vectorString,
+          "av": av,
+          "ac": ac,
+          "pr": pr,
+          "ui": ui,
+          "s": s,
+          "c": c,
+          "i": i,
+          "a": a,
+          "score": score,
+          "baseSeverity": baseSeverity,
+          "published_date": publishedDate // ستون تاریخ برای مرتب‌سازی
       };
     });
+    // [!!!] پایان ویرایش
 
-    // 3. درج داده‌ها در Supabase (بدون تغییر)
+    // 3. درج داده‌ها در Supabase
     const chunkSize = 500;
     console.log(`::INFO:: Upserting ${vulnerabilitiesToInsert.length} vulnerabilities in chunks of ${chunkSize}...`);
     
@@ -164,9 +179,11 @@ async function syncNVD() {
         
         const { error } = await supabase
           .from('vulnerabilities') // نام جدول شما
-          .upsert(chunk, { onConflict: 'id' }); // 'id' باید کلید اصلی باشد
+          .upsert(chunk, { onConflict: '"ID"' }); // [!!!] ویرایش: استفاده از ستون "ID" شما برای onConflict
 
         if (error) {
+          // خطاهای رایج:
+          // 400 Bad Request: احتمالاً به این دلیل که ستون‌ها در Supabase (فایل SQL) با ستون‌های map شده در اینجا (return {...}) مطابقت ندارند
           console.error(`::ERROR:: Supabase upsert failed for chunk ${Math.floor(i / chunkSize) + 1}:`, error.message);
         }
       }));
