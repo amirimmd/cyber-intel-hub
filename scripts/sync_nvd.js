@@ -5,7 +5,9 @@ import 'dotenv/config'; // برای بارگیری متغیرها از .env در
 import pLimit from 'p-limit'; // برای مدیریت همزمانی درخواست‌ها
 
 // URL منبع داده NVD
-const NVD_JSON_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-modified.json';
+// [!!!] تذکر: فایل modified.json دیگر در دسترس نبود (خطای 404).
+// ما آن را به فایل recent.json تغییر می‌دهیم که حاوی داده‌های 8 روز گذشته است.
+const NVD_JSON_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-recent.json';
 
 // دریافت متغیرهای محیطی
 const supabaseUrl = process.env.SUPABASE_URL;
