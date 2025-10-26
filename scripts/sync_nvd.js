@@ -33,8 +33,18 @@ const limit = pLimit(10);
  */
 async function fetchAndDecompress(url) {
   console.log(`::INFO:: Fetching data from ${url}...`);
-  const response = await fetch(url);
+  
+  // [!!!] ویرایش: یک User-Agent اضافه می‌کنیم.
+  // گاهی اوقات سرورها (مانند گیت‌هاب) درخواست‌های بدون User-Agent را مسدود می‌کنند.
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Node.js-Sync-Script'
+    }
+  });
+
   if (!response.ok) {
+    // [!!!] ویرایش: لاگ خطای بهتری اضافه می‌کنیم
+    console.error(`::ERROR:: Fetch failed for ${url}. Status: ${response.status} ${response.statusText}`);
     throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
   }
   
@@ -148,4 +158,5 @@ async function syncNVD() {
 
 // اجرای اسکریپت
 syncNVD();
+
 
