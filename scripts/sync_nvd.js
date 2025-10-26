@@ -37,7 +37,8 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // محدود کردن تعداد درخواست‌های همزمان به Supabase
-const limit = pLimit(10);
+// [!!!] ویرایش: کاهش همزمانی برای جلوگیری از خطای CDN
+const limit = pLimit(5);
 
 /**
  * [جدید] تابع کمکی برای واکشی و باز کردن فایل .gz
@@ -84,7 +85,8 @@ async function syncNVD() {
     console.log(`::INFO:: Fetching ${allUrlsToFetch.length} data feeds...`);
 
     // از Promise.allSettled استفاده می‌کنیم تا اگر یک فایل (مثلا سال جاری) 404 داد، کل فرآیند متوقف نشود
-    const results = await Promise.allSettled(allUrlsToFetch.map(url => fetchAndDecompress(url)));
+    // [!!!] ویرایش: تابع limit را به واکشی‌ها اضافه می‌کنیم تا درخواست‌های شبکه را محدود کند
+    const results = await Promise.allSettled(allUrlsToFetch.map(url => limit(() => fetchAndDecompress(url))));
 
     const allCveItems = new Map();
 
@@ -176,5 +178,6 @@ async function syncNVD() {
 
 // اجرای اسکریپت
 syncNVD();
+
 
 
