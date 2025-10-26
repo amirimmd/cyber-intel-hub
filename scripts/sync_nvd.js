@@ -9,8 +9,9 @@ import { promisify } from 'util'; // [جدید] برای تبدیل zlib.gunzip 
 // [جدید] تابع gunzip را به نسخه Promise تبدیل می‌کنیم
 const gunzip = promisify(zlib.gunzip);
 
-// [!!!] ویرایش: مسیر URL ها اصلاح شد. فایل ها در ریشه (root) هستند، نه در /data
-const NVD_BASE_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main';
+// [!!!] ویرایش: تغییر به jsDelivr CDN برای جلوگیری از خطای 404
+// به جای: 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main'
+const NVD_BASE_URL = 'https://cdn.jsdelivr.net/gh/fkie-cad/nvd-json-data-feeds@main';
 
 const NVD_RECENT_URL = `${NVD_BASE_URL}/nvdcve-1.1-recent.json.gz`;
 const NVD_MODIFIED_URL = `${NVD_BASE_URL}/nvdcve-1.1-modified.json.gz`;
@@ -175,4 +176,5 @@ async function syncNVD() {
 
 // اجرای اسکریپت
 syncNVD();
+
 
