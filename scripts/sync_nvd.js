@@ -3,11 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 import fetch from 'node-fetch';
 import 'dotenv/config'; // برای بارگیری متغیرها از .env در اجرای محلی
 import pLimit from 'p-limit'; // برای مدیریت همزمانی درخواست‌ها
+import zlib from 'zlib'; // [جدید] برای باز کردن فایل‌های .gz
+import { promisify } from 'util'; // [جدید] برای تبدیل zlib.gunzip به Promise
 
-// URL منبع داده NVD
-// [!!!] تذکر: فایل modified.json دیگر در دسترس نبود (خطای 404).
-// ما آن را به فایل recent.json تغییر می‌دهیم که حاوی داده‌های 8 روز گذشته است.
-const NVD_JSON_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-recent.json';
+// [جدید] تابع gunzip را به نسخه Promise تبدیل می‌کنیم
+const gunzip = promisify(zlib.gunzip);
+
+// [جدید] اکنون هر دو فایل فشرده شده را هدف قرار می‌دهیم
+const NVD_RECENT_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-recent.json.gz';
+const NVD_MODIFIED_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-modified.json.gz';
 
 // دریافت متغیرهای محیطی
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -22,7 +26,29 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // محدود کردن تعداد درخواست‌های همزمان به Supabase
-const limit = pLimit(10); 
+const limit = pLimit(10);
+
+/**
+ * [جدید] تابع کمکی برای واکشی و باز کردن فایل .gz
+ */
+async function fetchAndDecompress(url) {
+  console.log(`::INFO:: Fetching data from ${url}...`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+  }
+  
+  // داده‌های فشرده را به صورت ArrayBuffer دریافت می‌کنیم
+  const compressedData = await response.arrayBuffer();
+  // آن را به یک Buffer نود تبدیل می‌کنیم
+  const buffer = Buffer.from(compressedData);
+  
+  // داده‌ها را از حالت فشرده خارج می‌کنیم
+  const decompressedData = await gunzip(buffer);
+  
+  // به JSON پارس کرده و برمی‌گردانیم
+  return JSON.parse(decompressedData.toString());
+}
 
 /**
  * داده‌های NVD JSON را واکشی و پردازش می‌کند
@@ -31,30 +57,41 @@ async function syncNVD() {
   console.log('::INFO:: Starting NVD sync...');
   
   try {
-    // 1. واکشی داده‌های JSON
-    console.log(`::INFO:: Fetching data from ${NVD_JSON_URL}...`);
-    const response = await fetch(NVD_JSON_URL);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch JSON: ${response.statusText}`);
+    // 1. [جدید] واکشی و پردازش هر دو فایل
+    const nvdRecentData = await fetchAndDecompress(NVD_RECENT_URL);
+    const nvdModifiedData = await fetchAndDecompress(NVD_MODIFIED_URL);
+
+    const recentItems = nvdRecentData.CVE_Items || [];
+    const modifiedItems = nvdModifiedData.CVE_Items || [];
+    console.log(`::INFO:: Found ${recentItems.length} recent CVEs and ${modifiedItems.length} modified CVEs.`);
+
+    // [جدید] از یک Map برای ادغام و حذف موارد تکراری بر اساس ID استفاده می‌کنیم
+    const allCveItems = new Map();
+    for (const item of recentItems) {
+      if (item.cve?.CVE_data_meta?.ID) {
+        allCveItems.set(item.cve.CVE_data_meta.ID, item);
+      }
     }
-    const nvdData = await response.json();
-    
-    if (!nvdData.CVE_Items || nvdData.CVE_Items.length === 0) {
-      throw new Error('::ERROR:: NVD data format is invalid or empty. CVE_Items not found.');
+    for (const item of modifiedItems) {
+        if (item.cve?.CVE_data_meta?.ID) {
+            allCveItems.set(item.cve.CVE_data_meta.ID, item);
+        }
     }
 
-    const cveItems = nvdData.CVE_Items;
-    console.log(`::INFO:: Found ${cveItems.length} CVEs. Processing...`);
-
-    // 2. پردازش و نگاشت داده‌ها
-    // بر اساس کامپوننت React، شما به: id, description, severity, base_score, published_date, cwe نیاز دارید
+    const cveItems = Array.from(allCveItems.values());
+    console.log(`::INFO:: Total unique CVEs to process: ${cveItems.length}`);
     
+    if (cveItems.length === 0) {
+      console.log('::INFO:: No CVE items found in recent or modified feeds. Sync complete.');
+      return; // خروج از تابع چون داده‌ای برای پردازش نیست
+    }
+
+    // 2. پردازش و نگاشت داده‌ها (این بخش بدون تغییر باقی می‌ماند)
     const vulnerabilitiesToInsert = cveItems.map(item => {
       const cveId = item.cve?.CVE_data_meta?.ID || 'N/A';
       const description = item.cve?.description?.description_data?.[0]?.value || 'No description available.';
       const publishedDate = item.publishedDate || new Date().toISOString();
       
-      // استخراج داده‌های CVSS V3 (یا V2 به عنوان جایگزین)
       let baseScore = 0;
       let severity = 'UNKNOWN';
       if (item.impact?.baseMetricV3) {
@@ -65,11 +102,10 @@ async function syncNVD() {
         severity = item.impact.baseMetricV2.severity || 'UNKNOWN';
       }
       
-      // استخراج CWE
       const cwe = item.cve?.problemtype?.problemtype_data?.[0]?.description?.[0]?.value || 'N/A';
 
       return {
-        id: cveId, // فرض می‌کنیم ستون 'id' شما از نوع متنی (TEXT) و کلید اصلی (Primary Key) است
+        id: cveId,
         description: description,
         severity: severity,
         base_score: baseScore,
@@ -78,8 +114,7 @@ async function syncNVD() {
       };
     });
 
-    // 3. درج داده‌ها در Supabase
-    // داده‌ها را به دسته‌های (chunks) 500 تایی تقسیم می‌کنیم تا Supabase دچار مشکل نشود
+    // 3. درج داده‌ها در Supabase (این بخش بدون تغییر باقی می‌ماند)
     const chunkSize = 500;
     console.log(`::INFO:: Upserting ${vulnerabilitiesToInsert.length} vulnerabilities in chunks of ${chunkSize}...`);
     
@@ -88,23 +123,19 @@ async function syncNVD() {
     for (let i = 0; i < vulnerabilitiesToInsert.length; i += chunkSize) {
       const chunk = vulnerabilitiesToInsert.slice(i, i + chunkSize);
       
-      // هر دسته را به عنوان یک Promise به pLimit اضافه می‌کنیم
       allPromises.push(limit(async () => {
-        console.log(`::INFO:: Upserting chunk ${i / chunkSize + 1}...`);
+        console.log(`::INFO:: Upserting chunk ${Math.floor(i / chunkSize) + 1}...`);
         
-        // از 'upsert' استفاده می‌کنیم تا رکوردهای موجود بر اساس 'id' به‌روزرسانی شوند
         const { error } = await supabase
           .from('vulnerabilities') // نام جدول شما
           .upsert(chunk, { onConflict: 'id' }); // 'id' باید کلید اصلی باشد
 
         if (error) {
-          console.error(`::ERROR:: Supabase upsert failed for chunk ${i / chunkSize + 1}:`, error);
-          // در صورت خطا، آن را لاگ می‌کنیم اما ادامه می‌دهیم
+          console.error(`::ERROR:: Supabase upsert failed for chunk ${Math.floor(i / chunkSize) + 1}:`, error);
         }
       }));
     }
 
-    // منتظر می‌مانیم تا تمام دسته‌ها پردازش شوند
     await Promise.all(allPromises);
 
     console.log('::SUCCESS:: NVD sync completed.');
@@ -117,5 +148,4 @@ async function syncNVD() {
 
 // اجرای اسکریپت
 syncNVD();
-
 
