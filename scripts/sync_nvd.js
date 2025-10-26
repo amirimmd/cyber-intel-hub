@@ -36,8 +36,7 @@ if (!supabaseUrl || !supabaseServiceKey) {
 // مقداردهی اولیه Supabase Client با Service Key
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// محدود کردن تعداد درخواست‌های همزمان به Supabase
-// [!!!] ویرایش: کاهش همزمانی برای جلوگیری از خطای CDN
+// [!!!] ویرایش: محدودیت فقط برای نوشتن در دیتابیس استفاده خواهد شد
 const limit = pLimit(5);
 
 /**
@@ -75,44 +74,51 @@ async function syncNVD() {
   console.log('::INFO:: Starting NVD sync (Full Historical + Recent + Modified)...');
   
   try {
-    // [!!!] ویرایش: تمام URL ها (سالانه + اخیر + اصلاح شده) را واکشی می‌کنیم
     const allUrlsToFetch = [
       ...yearlyUrls, // ابتدا تاریخی
       NVD_MODIFIED_URL, // سپس اصلاح شده
       NVD_RECENT_URL      // در آخر جدیدترین‌ها (تا داده‌های تکراری را بازنویسی کنند)
     ];
 
-    console.log(`::INFO:: Fetching ${allUrlsToFetch.length} data feeds...`);
-
-    // از Promise.allSettled استفاده می‌کنیم تا اگر یک فایل (مثلا سال جاری) 404 داد، کل فرآیند متوقف نشود
-    // [!!!] ویرایش: تابع limit را به واکشی‌ها اضافه می‌کنیم تا درخواست‌های شبکه را محدود کند
-    const results = await Promise.allSettled(allUrlsToFetch.map(url => limit(() => fetchAndDecompress(url))));
+    console.log(`::INFO:: Fetching ${allUrlsToFetch.length} data feeds sequentially...`);
 
     const allCveItems = new Map();
 
-    for (const result of results) {
-      // فقط نتایج موفقیت آمیز و غیر null را پردازش می‌کنیم
-      if (result.status === 'fulfilled' && result.value && result.value.CVE_Items) {
-        const items = result.value.CVE_Items;
-        console.log(`::INFO:: Processing ${items.length} items from a feed...`);
+    // [!!!] ویرایش: استفاده از حلقه سریالی (for...of) برای جلوگیری از مسدود شدن توسط CDN
+    for (const url of allUrlsToFetch) {
+      try {
+        const data = await fetchAndDecompress(url);
         
-        for (const item of items) {
-          if (item.cve?.CVE_data_meta?.ID) {
-            // چون فایل‌های جدیدتر در آخر لیست هستند، به طور خودکار داده‌های قدیمی‌تر را در Map بازنویسی می‌کنند
-            allCveItems.set(item.cve.CVE_data_meta.ID, item);
+        // فقط نتایج موفقیت آمیز و غیر null را پردازش می‌کنیم
+        if (data && data.CVE_Items) {
+          const items = data.CVE_Items;
+          console.log(`::INFO:: Processing ${items.length} items from ${url}...`);
+          
+          for (const item of items) {
+            if (item.cve?.CVE_data_meta?.ID) {
+              // چون فایل‌های جدیدتر در آخر لیست هستند، به طور خودکار داده‌های قدیمی‌تر را در Map بازنویسی می‌کنند
+              allCveItems.set(item.cve.CVE_data_meta.ID, item);
+            }
           }
         }
-      } else if (result.status === 'rejected') {
-        // خطاهایی که 404 نبودند را لاگ می‌کنیم
-        console.warn(`::WARN:: Failed to process a feed: ${result.reason?.message || 'Unknown Error'}`);
+      } catch (fetchError) {
+         // خطاهایی که 404 نبودند را لاگ می‌کنیم
+         console.warn(`::WARN:: Failed to process feed ${url}: ${fetchError.message || 'Unknown Error'}`);
       }
     }
+    // [!!!] پایان ویرایش
 
     const cveItems = Array.from(allCveItems.values());
     console.log(`::INFO:: Total unique CVEs to process: ${cveItems.length}`);
     
     if (cveItems.length === 0) {
-      console.log('::INFO:: No CVE items found. Sync complete.');
+      // اگر بعد از این همه تلاش هیچ دیتایی نبود، یک خطا میدهیم
+      // (این اتفاق نباید بیفتد مگر اینکه CDN کاملا قطع باشد)
+      if (!cveItems.some(res => res.status === 'fulfilled' && res.value)) {
+           console.error('::FATAL:: No data could be fetched from any NVD source. Halting sync.');
+           process.exit(1); // خروج با خطا
+      }
+      console.log('::INFO:: No new CVE items found. Sync complete.');
       return; 
     }
 
@@ -161,7 +167,7 @@ async function syncNVD() {
           .upsert(chunk, { onConflict: 'id' }); // 'id' باید کلید اصلی باشد
 
         if (error) {
-          console.error(`::ERROR:: Supabase upsert failed for chunk ${Math.floor(i / chunkSize) + 1}:`, error);
+          console.error(`::ERROR:: Supabase upsert failed for chunk ${Math.floor(i / chunkSize) + 1}:`, error.message);
         }
       }));
     }
@@ -178,6 +184,4 @@ async function syncNVD() {
 
 // اجرای اسکریپت
 syncNVD();
-
-
 
