@@ -9,14 +9,19 @@ const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
   try {
     // اگر تاریخ 1978 است (داده‌ی placeholder از CSV)، آن را نمایش نده
-    if (dateString.startsWith('1978-01-01')) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-US', {
+    if (String(dateString).startsWith('1978-01-01')) return 'N/A';
+    // [FIX]: اطمینان از اینکه تاریخ معتبر است
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      throw new Error("Invalid date object");
+    }
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     });
   } catch (error) {
-    console.warn("Invalid date format:", dateString);
+    console.warn("Invalid date format:", dateString, error);
     return 'Invalid Date';
   }
 };
@@ -54,14 +59,16 @@ const NVDTable = () => {
     let query = supabase
       // [FIX]: ستون‌های سفارشی شما (که با حروف بزرگ هستند) باید داخل دابل کوتیشن باشند
       .from('vulnerabilities')
-      .select('"ID","text","baseSeverity","score","published_date","vectorString"') // انتخاب ستون‌های صحیح
+      // [FIX]: انتخاب دقیق نام ستون‌ها از schema شما
+      .select('"ID", text, "vectorString", av, ac, pr, ui, s, c, i, a, score, "baseSeverity", published_date')
       .order('published_date', { ascending: false, nullsFirst: false })
       .limit(100);
 
     // Apply filters
     if (filters.keyword) {
       // [FIX]: خطای سینتکسی بک‌تیک (`) در اینجا اصلاح شد
-      query = query.or(`"ID".ilike.%${filters.keyword}%, "text".ilike.%${filters.keyword}%`);
+      // [FIX]: فیلتر بر اساس ستون‌های صحیح "ID" و "text"
+      query = query.or(`"ID".ilike.%${filters.keyword}%, text.ilike.%${filters.keyword}%`);
     }
     if (filters.severity !== 'all') {
       // [FIX]: فیلتر بر اساس ستون "baseSeverity"
@@ -69,7 +76,14 @@ const NVDTable = () => {
     }
     if (filters.date) {
       // [FIX]: فیلتر بر اساس ستون "published_date"
-      query = query.gte('"published_date"', new Date(filters.date).toISOString());
+      try {
+        // اطمینان از فرمت صحیح تاریخ برای کوئری
+        const filterDate = new Date(filters.date).toISOString();
+         query = query.gte('published_date', filterDate);
+      } catch (dateError) {
+         console.error("Invalid date filter format:", filters.date, dateError);
+         // در صورت نامعتبر بودن تاریخ، فیلتر را اعمال نکن
+      }
     }
 
     // [FIX]: رفع خطای نوشتاری که باعث build failure شده بود
@@ -172,17 +186,17 @@ const NVDTable = () => {
             {!loading && !error && vulnerabilities.map((cve) => (
               // [FIX]: استفاده از cve.ID (با حروف بزرگ) به عنوان کلید
               <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
-                {/* [FIX]: استفاده از نام ستون‌های سفارشی شما */}
+                {/* [FIX]: استفاده از نام ستون‌های دقیق دیتابیس شما */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
                   <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
                 </td>
                 <td className="px-6 py-4 text-sm text-cyber-text max-w-md truncate" title={cve.text}>{cve.text}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <SeverityBadge severity={cve.baseSeverity} />
+                  <SeverityBadge severity={cve.baseSeverity} /> {/* نام ستون شما baseSeverity است */}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(cve.published_date)}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cve.vectorString}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score}</td> {/* نام ستون شما score است */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(cve.published_date)}</td> {/* نام ستون شما published_date است */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cve.vectorString}</td> {/* نام ستون شما vectorString است */}
               </tr>
             ))}
           </tbody>
