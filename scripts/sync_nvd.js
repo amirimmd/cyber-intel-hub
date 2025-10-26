@@ -1,6 +1,7 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
+// [FIX]: مسیر import اصلاح شد تا شامل پسوند .js باشد
+import { supabase } from '../supabaseClient.js';
 import { Loader2, Filter, DatabaseZap } from 'lucide-react';
 
 // [FIX]: این تابع تاریخ ISO را به فرمت خوانا تبدیل می‌کند
