@@ -9,9 +9,13 @@ import { promisify } from 'util'; // [جدید] برای تبدیل zlib.gunzip 
 // [جدید] تابع gunzip را به نسخه Promise تبدیل می‌کنیم
 const gunzip = promisify(zlib.gunzip);
 
-// [جدید] اکنون هر دو فایل فشرده شده را هدف قرار می‌دهیم
-const NVD_RECENT_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-recent.json.gz';
-const NVD_MODIFIED_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-modified.json.gz';
+// [!!!] ویرایش: فایل‌ها در پوشه‌های سالانه قرار دارند
+const currentYear = new Date().getFullYear();
+const NVD_BASE_URL = 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data';
+
+// آدرس‌دهی به فایل‌های داخل پوشه سال جاری
+const NVD_RECENT_URL = `${NVD_BASE_URL}/${currentYear}/nvdcve-1.1-recent.json.gz`;
+const NVD_MODIFIED_URL = `${NVD_BASE_URL}/${currentYear}/nvdcve-1.1-modified.json.gz`;
 
 // دریافت متغیرهای محیطی
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -158,5 +162,6 @@ async function syncNVD() {
 
 // اجرای اسکریپت
 syncNVD();
+
 
 
