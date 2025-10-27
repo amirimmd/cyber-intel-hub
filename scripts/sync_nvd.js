@@ -1,234 +1,189 @@
-// frontend/src/components/NVDTable.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient.js'; // مسیر صحیح
-import { Loader2, Filter, DatabaseZap } from 'lucide-react';
+// مسیر فایل: scripts/sync_nvd.js
+import { createClient } from '@supabase/supabase-js';
+import fetch from 'node-fetch';
+import 'dotenv/config'; // برای بارگیری متغیرها از .env در اجرای محلی
+import pLimit from 'p-limit'; // برای مدیریت همزمانی درخواست‌ها
+import zlib from 'zlib'; // [جدید] برای باز کردن فایل‌های .gz
+import { promisify } from 'util'; // [جدید] برای تبدیل zlib.gunzip به Promise
 
-// تابع برای فرمت کردن تاریخ
-const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
+// [جدید] تابع gunzip را به نسخه Promise تبدیل می‌کنیم
+const gunzip = promisify(zlib.gunzip);
+
+// [!!!] ویرایش: تغییر به jsDelivr CDN برای جلوگیری از خطای 404
+// به جای: 'https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main'
+const NVD_BASE_URL = 'https://cdn.jsdelivr.net/gh/fkie-cad/nvd-json-data-feeds@main';
+
+const NVD_RECENT_URL = `${NVD_BASE_URL}/nvdcve-1.1-recent.json.gz`;
+const NVD_MODIFIED_URL = `${NVD_BASE_URL}/nvdcve-1.1-modified.json.gz`;
+
+// [جدید] اضافه کردن تمام فایل‌های سالانه برای همگام‌سازی کامل تاریخی
+const START_YEAR = 2002;
+const currentYear = new Date().getFullYear();
+const yearlyUrls = [];
+for (let year = START_YEAR; year <= currentYear; year++) {
+  yearlyUrls.push(`${NVD_BASE_URL}/nvdcve-1.1-${year}.json.gz`);
+}
+
+// دریافت متغیرهای محیطی
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('::ERROR:: SUPABASE_URL or SUPABASE_SERVICE_KEY is not set.');
+  process.exit(1);
+}
+
+// مقداردهی اولیه Supabase Client با Service Key
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// [!!!] ویرایش: محدودیت فقط برای نوشتن در دیتابیس استفاده خواهد شد
+const limit = pLimit(5);
+
+/**
+ * [جدید] تابع کمکی برای واکشی و باز کردن فایل .gz
+ */
+async function fetchAndDecompress(url) {
+  console.log(`::INFO:: Fetching data from ${url}...`);
+  
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Node.js-Sync-Script'
+    }
+  });
+
+  if (!response.ok) {
+    // اگر فایلی موجود نبود (مثلا فایل سال جاری هنوز ساخته نشده)، فقط یک هشدار میدهیم
+    if (response.status === 404) {
+      console.warn(`::WARN:: File not found (404): ${url}. Skipping this file.`);
+      return null; // بازگشت null تا در ادامه از آن صرف نظر شود
+    }
+    console.error(`::ERROR:: Fetch failed for ${url}. Status: ${response.status} ${response.statusText}`);
+    throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+  }
+  
+  const compressedData = await response.arrayBuffer();
+  const buffer = Buffer.from(compressedData);
+  const decompressedData = await gunzip(buffer);
+  return JSON.parse(decompressedData.toString());
+}
+
+/**
+ * داده‌های NVD JSON را واکشی و پردازش می‌کند
+ */
+async function syncNVD() {
+  console.log('::INFO:: Starting NVD sync (Full Historical + Recent + Modified)...');
+  
   try {
-    // اگر تاریخ 1978 است (احتمالاً placeholder)، آن را نمایش نده
-    if (String(dateString).startsWith('1978-01-01')) return 'N/A';
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-      throw new Error("Invalid date object");
-    }
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch (error) {
-    console.warn("Invalid date format:", dateString, error);
-    return 'Invalid Date';
-  }
-};
+    const allUrlsToFetch = [
+      ...yearlyUrls, // ابتدا تاریخی
+      NVD_MODIFIED_URL, // سپس اصلاح شده
+      NVD_RECENT_URL      // در آخر جدیدترین‌ها (تا داده‌های تکراری را بازنویسی کنند)
+    ];
 
-// کامپوننت برای نمایش Badge شدت
-const SeverityBadge = ({ severity }) => {
-  let badgeClass = 'badge-unknown';
-  const upperSeverity = String(severity).toUpperCase(); // مدیریت null یا undefined
-  switch (upperSeverity) {
-    case 'CRITICAL': badgeClass = 'badge-critical'; break;
-    case 'HIGH': badgeClass = 'badge-high'; break;
-    case 'MEDIUM': badgeClass = 'badge-medium'; break;
-    case 'LOW': badgeClass = 'badge-low'; break;
-    default: badgeClass = 'badge-unknown'; break; // شامل UNKNOWN یا مقادیر نامعتبر
-  }
-  // نمایش UNKNOWN اگر مقدار null یا خالی است
-  return <span className={`severity-badge ${badgeClass}`}>{severity || 'UNKNOWN'}</span>;
-};
+    console.log(`::INFO:: Fetching ${allUrlsToFetch.length} data feeds sequentially...`);
 
-// کامپوننت اصلی جدول NVD
-const NVDTable = () => {
-  const [vulnerabilities, setVulnerabilities] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [filters, setFilters] = useState({ keyword: '', severity: 'all', date: '' });
+    const allCveItems = new Map();
 
-  // مدیریت تغییرات در فیلترها
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
-  };
-
-  // تابع واکشی داده‌ها از Supabase
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    let query = supabase
-      .from('vulnerabilities')
-      // انتخاب دقیق ستون‌ها مطابق Schema شما
-      // ستون‌هایی که حروف بزرگ دارند یا نام‌های خاص هستند باید داخل "" باشند
-      .select('"ID", text, "vectorString", av, ac, pr, ui, s, c, i, a, score, "baseSeverity", published_date')
-      .order('published_date', { ascending: false, nullsFirst: false }) // مرتب‌سازی بر اساس تاریخ انتشار (جدیدترین اول)
-      .limit(100); // محدود کردن نتایج برای بهبود عملکرد
-
-    // اعمال فیلتر کلمه کلیدی
-    if (filters.keyword) {
-      // جستجو در ستون‌های "ID" و "text"
-      // نام ستون‌ها باید داخل "" باشند
-      query = query.or(`"ID".ilike.%${filters.keyword}%, text.ilike.%${filters.keyword}%`);
-    }
-
-    // اعمال فیلتر شدت
-    if (filters.severity !== 'all') {
-      // فیلتر بر اساس ستون "baseSeverity"
-      query = query.eq('"baseSeverity"', filters.severity.toUpperCase());
-    }
-
-    // اعمال فیلتر تاریخ
-    if (filters.date) {
+    // [!!!] ویرایش: استفاده از حلقه سریالی (for...of) برای جلوگیری از مسدود شدن توسط CDN
+    for (const url of allUrlsToFetch) {
       try {
-        const filterDate = new Date(filters.date).toISOString();
-        // فیلتر بر اساس ستون published_date
-        query = query.gte('published_date', filterDate);
-      } catch (dateError) {
-         console.error("Invalid date filter format:", filters.date, dateError);
-         // در صورت نامعتبر بودن تاریخ، فیلتر را اعمال نکن
+        const data = await fetchAndDecompress(url);
+        
+        // فقط نتایج موفقیت آمیز و غیر null را پردازش می‌کنیم
+        if (data && data.CVE_Items) {
+          const items = data.CVE_Items;
+          console.log(`::INFO:: Processing ${items.length} items from ${url}...`);
+          
+          for (const item of items) {
+            if (item.cve?.CVE_data_meta?.ID) {
+              // چون فایل‌های جدیدتر در آخر لیست هستند، به طور خودکار داده‌های قدیمی‌تر را در Map بازنویسی می‌کنند
+              allCveItems.set(item.cve.CVE_data_meta.ID, item);
+            }
+          }
+        }
+      } catch (fetchError) {
+         // خطاهایی که 404 نبودند را لاگ می‌کنیم
+         console.warn(`::WARN:: Failed to process feed ${url}: ${fetchError.message || 'Unknown Error'}`);
       }
     }
+    // [!!!] پایان ویرایش
 
-    // اجرای کوئری
-    const { data, error: queryError } = await query;
-
-    // مدیریت خطا یا موفقیت
-    if (queryError) {
-      console.error('Error fetching NVD data:', queryError);
-      setError(queryError.message); // نمایش پیام خطا به کاربر
-      setVulnerabilities([]); // خالی کردن جدول در صورت خطا
-    } else {
-      setVulnerabilities(data || []); // اطمینان از اینکه همیشه یک آرایه است
+    const cveItems = Array.from(allCveItems.values());
+    console.log(`::INFO:: Total unique CVEs to process: ${cveItems.length}`);
+    
+    if (cveItems.length === 0) {
+      // اگر بعد از این همه تلاش هیچ دیتایی نبود، یک خطا میدهیم
+      // (این اتفاق نباید بیفتد مگر اینکه CDN کاملا قطع باشد)
+       console.error('::FATAL:: No data could be fetched from any NVD source. Halting sync.');
+       process.exit(1); // خروج با خطا
     }
-    setLoading(false);
-  }, [filters]); // اجرای مجدد fetchData فقط زمانی که فیلترها تغییر می‌کنند
 
-  // واکشی اولیه داده‌ها هنگام بارگذاری کامپوننت
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]); // اجرای fetchData یک بار پس از mount شدن
+    // 2. پردازش و نگاشت داده‌ها (بدون تغییر)
+    const vulnerabilitiesToInsert = cveItems.map(item => {
+      const cveId = item.cve?.CVE_data_meta?.ID || 'N/A';
+      const description = item.cve?.description?.description_data?.[0]?.value || 'No description available.';
+      const publishedDate = item.publishedDate || new Date().toISOString();
+      
+      let baseScore = 0;
+      let severity = 'UNKNOWN';
+      if (item.impact?.baseMetricV3) {
+        baseScore = item.impact.baseMetricV3.cvssV3?.baseScore || 0;
+        severity = item.impact.baseMetricV3.cvssV3?.baseSeverity || 'UNKNOWN';
+      } else if (item.impact?.baseMetricV2) {
+        baseScore = item.impact.baseMetricV2.cvssV2?.baseScore || 0;
+        severity = item.impact.baseMetricV2.severity || 'UNKNOWN';
+      }
+      
+      // const cwe = item.cve?.problemtype?.problemtype_data?.[0]?.description?.[0]?.value || 'N/A';
+      
+      // [اصلاح شده] نگاشت به ستون‌های اسکیما: ID, text, score, baseSeverity
+      return {
+        ID: cveId, // به جای id
+        text: description, // به جای description
+        baseSeverity: severity, // به جای severity
+        score: baseScore, // به جای base_score
+        published_date: publishedDate,
+        // ستون cwe در اسکیما شما وجود نداشت، پس آن را حذف می‌کنیم
+        // cwe: cwe
+        
+        // ستون‌های vectorString, av, ac, pr, ui, s, c, i, a
+        // در این اسکریپت sync مقداردهی نشده‌اند، چون در فایل JSON اصلی NVD به این شکل نیستند
+        // اگر به آن‌ها نیاز دارید، باید منطق استخراج آن‌ها را اضافه کنید
+      };
+    });
 
-  // مدیریت ارسال فرم فیلتر
-  const handleFilterSubmit = (e) => {
-    e.preventDefault(); // جلوگیری از رفرش صفحه
-    fetchData(); // اجرای مجدد واکشی با فیلترهای جدید
-  };
+    // 3. درج داده‌ها در Supabase (بدون تغییر)
+    const chunkSize = 500;
+    console.log(`::INFO:: Upserting ${vulnerabilitiesToInsert.length} vulnerabilities in chunks of ${chunkSize}...`);
+    
+    let allPromises = [];
 
-  // رندر JSX کامپوننت
-  return (
-    <div>
-      {/* فرم فیلتر */}
-      <form onSubmit={handleFilterSubmit} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
-        {/* ورودی کلمه کلیدی */}
-        <div className="flex-grow">
-          <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
-          <input type="text" name="keyword" id="nvd-keyword" value={filters.keyword} onChange={handleFilterChange} placeholder="e.g., SQLI, RCE, Apache..." className="cyber-input" />
-        </div>
-        {/* انتخاب شدت */}
-        <div>
-          <label htmlFor="nvd-severity" className="block text-sm font-medium text-gray-400 mb-1">Severity:</label>
-          <select name="severity" id="nvd-severity" value={filters.severity} onChange={handleFilterChange} className="cyber-select w-full md:w-48">
-            <option value="all">::ALL::</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
-            {/* گزینه UNKNOWN را اضافه نکنید چون داده شما آن را ندارد */}
-          </select>
-        </div>
-        {/* انتخاب تاریخ */}
-        <div>
-          <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After:</label>
-          <input type="date" name="date" id="nvd-date" value={filters.date} onChange={handleFilterChange} className="cyber-input w-full md:w-48" />
-        </div>
-        {/* دکمه فیلتر */}
-        <div>
-          <button type="submit" className="cyber-button" disabled={loading}>
-            <Filter className="w-5 h-5 mr-2 inline-block" />
-            FILTER_
-          </button>
-        </div>
-      </form>
+    for (let i = 0; i < vulnerabilitiesToInsert.length; i += chunkSize) {
+      const chunk = vulnerabilitiesToInsert.slice(i, i + chunkSize);
+      
+      allPromises.push(limit(async () => {
+        console.log(`::INFO:: Upserting chunk ${Math.floor(i / chunkSize) + 1}...`);
+        
+        const { error } = await supabase
+          .from('vulnerabilities') // نام جدول شما
+          .upsert(chunk, { onConflict: 'ID' }); // [اصلاح شده] onConflict بر اساس ستون 'ID'
 
-      {/* جدول نتایج */}
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
-        <table className="min-w-full divide-y divide-gray-800">
-          {/* سربرگ جدول */}
-          <thead className="bg-gray-800/50">
-            <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CVE ID</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Description</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Score</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Published</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CVSS Vector</th>
-              {/* ستون CWE در Schema شما نیست، پس حذف شد */}
-            </tr>
-          </thead>
-          {/* بدنه جدول */}
-          <tbody className="bg-cyber-card divide-y divide-gray-800">
-            {/* حالت Loading */}
-            {loading && (
-              <tr>
-                <td colSpan="6" className="px-6 py-10 text-center">
-                  <div className="flex justify-center items-center text-cyber-cyan">
-                    <Loader2 className="animate-spin h-6 w-6 mr-3" />
-                    <span>LOADING NVD_DATA_STREAM...</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {/* حالت خطا */}
-            {!loading && error && (
-              <tr>
-                <td colSpan="6" className="px-6 py-10 text-center">
-                  <div className="text-cyber-red break-words px-4"> {/* break-words برای خطاهای طولانی */}
-                    <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
-                    <span>ERROR: {error}</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {/* حالت بدون داده */}
-            {!loading && !error && vulnerabilities.length === 0 && (
-              <tr>
-                <td colSpan="6" className="px-6 py-10 text-center">
-                  <div className="text-gray-500">
-                    <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
-                    <span>NO MATCHING VULNERABILITIES FOUND_</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {/* نمایش داده‌ها */}
-            {!loading && !error && vulnerabilities.map((cve) => (
-              // استفاده از cve.ID (با حروف بزرگ) به عنوان کلید منحصر به فرد هر ردیف
-              <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
-                {/* دسترسی به داده‌ها با نام ستون‌های دقیق دیتابیس شما */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
-                  <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
-                </td>
-                {/* ستون text */}
-                <td className="px-6 py-4 text-sm text-cyber-text max-w-md truncate" title={cve.text}>{cve.text}</td>
-                {/* ستون baseSeverity */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  <SeverityBadge severity={cve.baseSeverity} />
-                </td>
-                {/* ستون score */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score}</td>
-                {/* ستون published_date */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(cve.published_date)}</td>
-                {/* ستون vectorString */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cve.vectorString}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-};
+        if (error) {
+          console.error(`::ERROR:: Supabase upsert failed for chunk ${Math.floor(i / chunkSize) + 1}:`, error.message);
+        }
+      }));
+    }
 
-export default NVDTable;
+    await Promise.all(allPromises);
+
+    console.log('::SUCCESS:: NVD sync completed.');
+    
+  } catch (error) {
+    console.error('::FATAL:: An error occurred during NVD sync:', error.message);
+    process.exit(1);
+  }
+}
+
+// اجرای اسکریپت
+syncNVD();
 

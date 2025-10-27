@@ -27,10 +27,10 @@ const NVDLiveFeed = () => {
   // Fetch initial 10 items
   const fetchInitialData = async () => {
     setLoading(true);
-    // Querying columns based on sync_nvd.js schema + user's request for vectorString
+    // [اصلاح شده] استفاده از نام ستون‌های صحیح طبق اسکیما
     const { data, error } = await supabase
       .from('vulnerabilities')
-      .select('id, description, vectorString, base_score, severity, published_date')
+      .select('ID, text, vectorString, score, baseSeverity, published_date')
       .order('published_date', { ascending: false })
       .limit(10);
 
@@ -49,10 +49,10 @@ const NVDLiveFeed = () => {
     if (isPaused || !lastFetchTimestamp.current) return;
 
     // We fetch items published *before* the last timestamp we fetched
-    // This simulates scrolling through historical data
+    // [اصلاح شده] استفاده از نام ستون‌های صحیح طبق اسکیما
     const { data, error } = await supabase
       .from('vulnerabilities')
-      .select('id, description, vectorString, base_score, severity, published_date')
+      .select('ID, text, vectorString, score, baseSeverity, published_date')
       .lt('published_date', lastFetchTimestamp.current)
       .order('published_date', { ascending: false })
       .limit(1);
@@ -118,12 +118,14 @@ const NVDLiveFeed = () => {
       {!loading && !error && (
         <ul ref={listRef} className="h-full overflow-y-auto space-y-3 pr-2 live-feed-list">
           {vulnerabilities.map((cve) => (
-            <li key={cve.id} className="live-feed-item p-3 bg-cyber-card/50 rounded-md border border-gray-800/50 text-sm">
+            <li key={cve.ID} className="live-feed-item p-3 bg-cyber-card/50 rounded-md border border-gray-800/50 text-sm">
               <div className="flex justify-between items-center mb-1">
-                <span className="font-bold text-cyber-green">{cve.id}</span>
+                {/* [اصلاح شده] استفاده از cve.ID */}
+                <span className="font-bold text-cyber-green">{cve.ID}</span>
                 <div className="flex items-center space-x-2">
-                  <span className="text-white font-bold text-base">{cve.base_score || 'N/A'}</span>
-                  <SeverityBadge severity={cve.severity} />
+                  {/* [اصلاح شده] استفاده از cve.score و cve.baseSeverity */}
+                  <span className="text-white font-bold text-base">{cve.score || 'N/A'}</span>
+                  <SeverityBadge severity={cve.baseSeverity} />
                 </div>
               </div>
               {/* Display vectorString only if it exists */}
@@ -131,9 +133,11 @@ const NVDLiveFeed = () => {
                  <p className="text-cyber-yellow text-xs truncate mb-1" title={cve.vectorString}>
                    {cve.vectorString}
                  </p>
-              )}
-              <p className="text-cyber-text/80 text-xs leading-relaxed line-clamp-2" title={cve.description}>
-                {cve.description}
+              )} {/* [اصلاح شده] پرانتز بسته در اینجا اضافه شد */}
+
+              {/* [اصلاح شده] استفاده از cve.text */}
+              <p className="text-cyber-text/80 text-xs leading-relaxed line-clamp-2" title={cve.text}>
+                {cve.text}
               </p>
             </li>
           ))}
@@ -149,4 +153,6 @@ const NVDLiveFeed = () => {
 };
 
 export default NVDLiveFeed;
+
+
 
