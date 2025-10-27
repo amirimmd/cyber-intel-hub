@@ -1,7 +1,12 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 import { Loader2, Search, Filter, DatabaseZap } from 'lucide-react';
+
+// [جدید] تاریخ شروع فیلتر
+const START_DATE_FILTER = '2024-01-01';
+const START_DATE_ISO = '2024-01-01T00:00:00Z';
+
 
 // Helper for severity badges
 const SeverityBadge = ({ severity }) => {
@@ -12,14 +17,20 @@ const SeverityBadge = ({ severity }) => {
     case 'MEDIUM': badgeClass = 'badge-medium'; break;
     case 'LOW': badgeClass = 'badge-low'; break;
   }
-  return <span className={`severity-badge ${badgeClass}`}>{severity || 'UNKNOWN'}</span>;
+  return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
 };
 
 const NVDTable = () => {
   const [vulnerabilities, setVulnerabilities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filters, setFilters] = useState({ keyword: '', severity: 'all', date: '' });
+  
+  // [اصلاح شده] مقدار پیش‌فرض فیلتر تاریخ به 2024-01-01 تغییر کرد
+  const [filters, setFilters] = useState({ 
+    keyword: '', 
+    severity: 'all', 
+    date: START_DATE_FILTER // تنظیم پیش‌فرض
+  });
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -32,21 +43,31 @@ const NVDTable = () => {
     
     let query = supabase
       .from('vulnerabilities')
-      .select('*')
+      // [اصلاح شده] ستون‌های صحیح درخواست شد
+      .select('ID, text, baseSeverity, score, published_date, vectorString') // cwe و description کامل حذف شدند
       .order('published_date', { ascending: false })
-      .limit(100); // Limit to 100 results for performance
+      .limit(100);
 
-    // Apply filters
+    // [جدید] تعیین تاریخ شروع موثر
+    let effectiveDate = START_DATE_ISO;
+    if (filters.date) {
+      const userDate = new Date(filters.date).toISOString();
+      // اگر تاریخ انتخابی کاربر بعد از 2024 بود، از آن استفاده کن
+      if (userDate > START_DATE_ISO) {
+        effectiveDate = userDate;
+      }
+    }
+    // اعمال فیلتر تاریخ نهایی
+    query = query.gte('published_date', effectiveDate);
+
+    // Apply other filters
     if (filters.keyword) {
-      // [اصلاح شده] استفاده از نام ستون‌های صحیح ID و text
+      // [اصلاح شده] جستجو در ID و text
       query = query.or(`ID.ilike.%${filters.keyword}%,text.ilike.%${filters.keyword}%`);
     }
     if (filters.severity !== 'all') {
-      // [اصلاح شده] استفاده از نام ستون صحیح baseSeverity
+      // [اصلاح شده] فیلتر بر اساس baseSeverity
       query = query.eq('baseSeverity', filters.severity.toUpperCase());
-    }
-    if (filters.date) {
-      query = query.gte('published_date', new Date(filters.date).toISOString());
     }
 
     const { data, error } = await query;
@@ -63,7 +84,7 @@ const NVDTable = () => {
   // Initial data fetch on component mount
   useEffect(() => {
     fetchData();
-  }, []); // Only on mount
+  }, [fetchData]); // [اصلاح شده] استفاده از fetchData در وابستگی
 
   const handleFilterSubmit = (e) => {
     e.preventDefault();
@@ -76,11 +97,25 @@ const NVDTable = () => {
       <form onSubmit={handleFilterSubmit} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
         <div className="flex-grow">
           <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
-          <input type="text" name="keyword" id="nvd-keyword" value={filters.keyword} onChange={handleFilterChange} placeholder="e.g., SQLI, RCE, Apache..." className="cyber-input" />
+          <input 
+            type="text" 
+            name="keyword" 
+            id="nvd-keyword" 
+            value={filters.keyword} 
+            onChange={handleFilterChange} 
+            placeholder="e.g., SQLI, RCE, Apache..." 
+            className="cyber-input" 
+          />
         </div>
         <div>
           <label htmlFor="nvd-severity" className="block text-sm font-medium text-gray-400 mb-1">Severity:</label>
-          <select name="severity" id="nvd-severity" value={filters.severity} onChange={handleFilterChange} className="cyber-select w-full md:w-48">
+          <select 
+            name="severity" 
+            id="nvd-severity" 
+            value={filters.severity} 
+            onChange={handleFilterChange} 
+            className="cyber-select w-full md:w-48"
+          >
             <option value="all">::ALL::</option>
             <option value="CRITICAL">CRITICAL</option>
             <option value="HIGH">HIGH</option>
@@ -90,11 +125,24 @@ const NVDTable = () => {
         </div>
         <div>
           <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After:</label>
-          <input type="date" name="date" id="nvd-date" value={filters.date} onChange={handleFilterChange} className="cyber-input w-full md:w-48" />
+          <input 
+            type="date" 
+            name="date" 
+            id="nvd-date" 
+            value={filters.date} 
+            onChange={handleFilterChange} 
+            // [جدید] تنظیم حداقل تاریخ مجاز در تقویم
+            min={START_DATE_FILTER}
+            className="cyber-input w-full md:w-48" 
+          />
         </div>
         <div>
           <button type="submit" className="cyber-button" disabled={loading}>
-            <Filter className="w-5 h-5 mr-2" />
+            {loading ? (
+                <Loader2 className="animate-spin w-5 h-5 mr-2" />
+            ) : (
+                <Filter className="w-5 h-5 mr-2" />
+            )}
             FILTER_
           </button>
         </div>
@@ -109,28 +157,26 @@ const NVDTable = () => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Description</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Score</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Vector</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Published</th>
-              {/* [حذف شده] ستون CWE چون در اسکیما نبود
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CWE</th>
-              */}
             </tr>
           </thead>
           <tbody className="bg-cyber-card divide-y divide-gray-800">
             {loading && (
               <tr>
-                {/* [اصلاح شده] colSpan به 5 */}
-                <td colSpan="5" className="px-6 py-10 text-center">
+                {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
+                <td colSpan="6" className="px-6 py-10 text-center">
                   <div className="flex justify-center items-center text-cyber-cyan">
                     <Loader2 className="animate-spin h-6 w-6 mr-3" />
-                    <span>LOADING NVD_DATA_STREAM...</span>
+                    <span>LOADING NVD_DATA_STREAM (2024+)...</span>
                   </div>
                 </td>
               </tr>
             )}
             {!loading && error && (
               <tr>
-                {/* [اصلاح شده] colSpan به 5 */}
-                <td colSpan="5" className="px-6 py-10 text-center">
+                {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
+                <td colSpan="6" className="px-6 py-10 text-center">
                   <div className="text-cyber-red">
                     <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
                     <span>ERROR: {error}</span>
@@ -140,26 +186,31 @@ const NVDTable = () => {
             )}
             {!loading && !error && vulnerabilities.length === 0 && (
               <tr>
-                {/* [اصلاح شده] colSpan به 5 */}
-                <td colSpan="5" className="px-6 py-10 text-center">
+                {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
+                <td colSpan="6" className="px-6 py-10 text-center">
                   <div className="text-gray-500">
                     <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
-                    <span>NO MATCHING VULNERABILITIES FOUND_</span>
+                    <span>NO MATCHING VULNERABILITIES FOUND (2024+)_</span>
                   </div>
                 </td>
               </tr>
             )}
             {!loading && !error && vulnerabilities.map((cve) => (
-              // [اصلاح شده] استفاده از نام ستون‌های صحیح
+              // [اصلاح شده] استفاده از cve.ID
               <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan"><a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a></td>
-                <td className="px-6 py-4 text-sm text-cyber-text max-w-md truncate" title={cve.text}>{cve.text}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
+                  {/* [اصلاح شده] استفاده از cve.ID */}
+                  <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
+                </td>
+                {/* [اصلاح شده] استفاده از cve.text */}
+                <td className="px-6 py-4 text-sm text-cyber-text max-w-md truncate" title={cve.text}>{cve.text || 'N/A'}</td>
+                {/* [اصلاح شده] استفاده از cve.baseSeverity */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score}</td>
+                {/* [اصلاح شده] استفاده از cve.score */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score || 'N/A'}</td>
+                {/* [جدید] نمایش vectorString */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(cve.published_date).toLocaleDateString()}</td>
-                {/* [حذف شده] ستون CWE
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cve.cwe}</td>
-                */}
               </tr>
             ))}
           </tbody>

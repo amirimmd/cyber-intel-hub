@@ -1,9 +1,13 @@
 // frontend/src/components/NVDLiveFeed.jsx
 import React, { useState, useEffect, useRef } from 'react';
-import { supabase } from '../supabaseClient.js'; // [اصلاح شده] اضافه کردن پسوند .js برای رفع مشکل import
-import { Loader2, DatabaseZap, ShieldCheck } from 'lucide-react';
+// [اصلاح شده] پسوند .js از مسیر حذف شد
+import { supabase } from '../supabaseClient';
+import { Loader2, DatabaseZap } from 'lucide-react';
 
-// Helper for severity badges (copied from NVDTable.jsx for consistency)
+// [جدید] تاریخ شروع فیلتر
+const START_DATE_FILTER = '2024-01-01T00:00:00Z';
+
+// Helper for severity badges (کپی شده از NVDTable برای سازگاری)
 const SeverityBadge = ({ severity }) => {
   let badgeClass = 'badge-unknown';
   switch (String(severity).toUpperCase()) {
@@ -12,25 +16,31 @@ const SeverityBadge = ({ severity }) => {
     case 'MEDIUM': badgeClass = 'badge-medium'; break;
     case 'LOW': badgeClass = 'badge-low'; break;
   }
-  return <span className={`severity-badge ${badgeClass}`}>{severity || 'UNKNOWN'}</span>;
+  return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
 };
 
 const NVDLiveFeed = () => {
-  const [vulnerabilities, setVulnerabilities] = useState([]);
+  const [feedData, setFeedData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
-  const lastFetchTimestamp = useRef(null);
-  const listRef = useRef(null);
-  const intervalRef = useRef(null);
+  
+  // Ref برای ذخیره آخرین تاریخ واکشی شده
+  const lastFetchedDate = useRef(new Date().toISOString());
+  // Ref برای جلوگیری از واکشی موارد تکراری
+  const fetchedIds = useRef(new Set());
 
-  // Fetch initial 10 items
+  // تابع برای واکشی داده‌های اولیه
   const fetchInitialData = async () => {
     setLoading(true);
-    // [اصلاح شده] استفاده از نام ستون‌های صحیح طبق اسکیما
+    setError(null);
+    
     const { data, error } = await supabase
       .from('vulnerabilities')
+      // [اصلاح شده] ستون‌های صحیح درخواست شد
       .select('ID, text, vectorString, score, baseSeverity, published_date')
+      // [جدید] اعمال فیلتر تاریخ 2024
+      .gte('published_date', START_DATE_FILTER)
       .order('published_date', { ascending: false })
       .limit(10);
 
@@ -38,114 +48,109 @@ const NVDLiveFeed = () => {
       console.error('Error fetching initial NVD feed:', error);
       setError(error.message);
     } else if (data && data.length > 0) {
-      setVulnerabilities(data.reverse()); // Reverse to show oldest at top, newest at bottom
-      lastFetchTimestamp.current = data[0].published_date; // The newest date from the initial fetch
+      // ذخیره آخرین تاریخ برای واکشی بعدی
+      lastFetchedDate.current = data[0].published_date;
+      // ذخیره ID ها برای جلوگیری از تکرار
+      data.forEach(item => fetchedIds.current.add(item.ID));
+      setFeedData(data.reverse()); // نمایش از قدیمی به جدید
     }
     setLoading(false);
   };
 
-  // Fetch the next item (older than the last one we added)
-  const fetchNextData = async () => {
-    if (isPaused || !lastFetchTimestamp.current) return;
+  // تابع برای واکشی آیتم جدید
+  const fetchNewItem = async () => {
+    if (isPaused || document.hidden) return; // اگر متوقف بود یا تب فعال نبود، اجرا نکن
 
-    // We fetch items published *before* the last timestamp we fetched
-    // [اصلاح شده] استفاده از نام ستون‌های صحیح طبق اسکیما
     const { data, error } = await supabase
       .from('vulnerabilities')
       .select('ID, text, vectorString, score, baseSeverity, published_date')
-      .lt('published_date', lastFetchTimestamp.current)
-      .order('published_date', { ascending: false })
+      // [جدید] اعمال فیلتر تاریخ 2024
+      .gte('published_date', START_DATE_FILTER)
+      // دریافت جدیدترین آیتم بعد از آخرین مورد واکشی شده
+      .gt('published_date', lastFetchedDate.current)
+      .order('published_date', { ascending: true }) // دریافت قدیمی‌ترینِ جدیدترین‌ها
       .limit(1);
 
     if (error) {
-      console.warn('Error fetching next NVD item:', error.message);
-      // Stop interval if error occurs (e.g., rate limit)
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      console.error('Error fetching new NVD item:', error);
+      // خطاهای جزئی را نمایش نمی‌دهیم تا فید متوقف نشود
     } else if (data && data.length > 0) {
       const newItem = data[0];
-      setVulnerabilities(prev => {
-        const newArray = [...prev.slice(1), newItem]; // Remove first (oldest), add new item to end
-        return newArray;
-      });
-      // Update last timestamp to the new item's date
-      lastFetchTimestamp.current = newItem.published_date;
+      
+      // بررسی مجدد برای اطمینان از عدم تکرار
+      if (!fetchedIds.current.has(newItem.ID)) {
+        // به‌روزرسانی آخرین تاریخ
+        lastFetchedDate.current = newItem.published_date;
+        // افزودن ID جدید
+        fetchedIds.current.add(newItem.ID);
 
-      // Scroll to bottom
-      if (listRef.current) {
-        listRef.current.scrollTop = listRef.current.scrollHeight;
+        setFeedData(currentData => {
+          // افزودن آیتم جدید و حذف قدیمی‌ترین (اولین) آیتم
+          const updatedData = [...currentData, newItem];
+          if (updatedData.length > 10) {
+            // ID آیتمی که حذف می‌شود را نیز از Set پاک می‌کنیم
+            const removedItem = updatedData.shift();
+            fetchedIds.current.delete(removedItem.ID);
+          }
+          return updatedData;
+        });
       }
-    } else {
-      // No more data, or gap in data. We can stop polling.
-      if (intervalRef.current) clearInterval(intervalRef.current);
     }
   };
 
-  // Effect for initial fetch
+  // واکشی اولیه در زمان بارگذاری
   useEffect(() => {
     fetchInitialData();
   }, []);
 
-  // Effect for setting up the interval
+  // تنظیم اینتروال برای واکشی داده‌های جدید
   useEffect(() => {
-    if (!loading && !error) {
-      intervalRef.current = setInterval(fetchNextData, 3000); // 3 seconds
-    }
-
-    // Clear interval on component unmount
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [loading, error, isPaused]); // Re-run if loading/error state changes, or if paused
+    const interval = setInterval(fetchNewItem, 3000); // هر 3 ثانیه
+    return () => clearInterval(interval); // پاکسازی در زمان unmount
+  }, [isPaused]); // وابستگی به isPaused
 
   return (
     <div 
-      className="h-80 bg-dark-bg p-4 rounded-lg border border-cyber-cyan/30 overflow-hidden relative"
+      className="h-64 bg-dark-bg border border-cyber-cyan/30 rounded-lg p-4 overflow-hidden relative"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
     >
+      <div className="absolute top-2 left-4 text-xs font-bold text-cyber-cyan animate-flicker">
+        ::LIVE NVD FEED:: 2024+ :: {isPaused ? "[PAUSED]" : "[ACTIVE]"}
+      </div>
+      
       {loading && (
         <div className="flex justify-center items-center h-full text-cyber-cyan">
-          <Loader2 className="animate-spin h-6 w-6 mr-3" />
-          <span>ACCESSING_NVD_STREAM...</span>
+          <Loader2 className="animate-spin h-5 w-5 mr-2" />
+          <span>INITIATING NVD_DATA_STREAM (2024+)...</span>
         </div>
       )}
+
       {!loading && error && (
         <div className="flex justify-center items-center h-full text-cyber-red">
-          <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
+          <DatabaseZap className="h-6 w-6 mr-2" />
           <span>ERROR: {error}</span>
         </div>
       )}
-      {!loading && !error && (
-        <ul ref={listRef} className="h-full overflow-y-auto space-y-3 pr-2 live-feed-list">
-          {vulnerabilities.map((cve) => (
-            <li key={cve.ID} className="live-feed-item p-3 bg-cyber-card/50 rounded-md border border-gray-800/50 text-sm">
-              <div className="flex justify-between items-center mb-1">
-                {/* [اصلاح شده] استفاده از cve.ID */}
-                <span className="font-bold text-cyber-green">{cve.ID}</span>
-                <div className="flex items-center space-x-2">
-                  {/* [اصلاح شده] استفاده از cve.score و cve.baseSeverity */}
-                  <span className="text-white font-bold text-base">{cve.score || 'N/A'}</span>
-                  <SeverityBadge severity={cve.baseSeverity} />
-                </div>
-              </div>
-              {/* Display vectorString only if it exists */}
-              {cve.vectorString && (
-                 <p className="text-cyber-yellow text-xs truncate mb-1" title={cve.vectorString}>
-                   {cve.vectorString}
-                 </p>
-              )} {/* [اصلاح شده] پرانتز بسته در اینجا اضافه شد */}
 
-              {/* [اصلاح شده] استفاده از cve.text */}
-              <p className="text-cyber-text/80 text-xs leading-relaxed line-clamp-2" title={cve.text}>
+      {!loading && !error && (
+        <div className="feed-container h-full pt-6 overflow-y-auto custom-scrollbar">
+          {feedData.map((cve, index) => (
+            <div 
+              key={cve.ID} 
+              // انیمیشن فقط برای آخرین آیتم
+              className={`feed-item ${index === feedData.length - 1 ? 'feed-item-new' : ''}`}
+            >
+              <span className="text-gray-500 mr-2">{new Date(cve.published_date).toLocaleTimeString()}</span>
+              <span className="text-cyber-cyan font-medium mr-2">{cve.ID}</span>
+              <SeverityBadge severity={cve.baseSeverity} />
+              <span className="text-white mx-2 font-bold">{cve.score}</span>
+              <span className="text-cyber-text truncate" title={cve.text}>
+                {/* [اصلاح شده] استفاده از cve.text */}
                 {cve.text}
-              </p>
-            </li>
+              </span>
+            </div>
           ))}
-        </ul>
-      )}
-      {isPaused && (
-        <div className="absolute inset-0 bg-dark-bg/80 flex justify-center items-center text-cyber-yellow font-bold text-lg backdrop-blur-sm z-10">
-          :: PAUSED ::
         </div>
       )}
     </div>
@@ -153,6 +158,5 @@ const NVDLiveFeed = () => {
 };
 
 export default NVDLiveFeed;
-
 
 

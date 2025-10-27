@@ -1,10 +1,11 @@
 // frontend/src/App.jsx
 import React from 'react';
-import NVDLiveFeed from './components/NVDLiveFeed'; // [جدید] ایمپورت کامپوننت فید زنده
-import NVDTable from './components/NVDTable';
-import AIModelCard from './components/AIModelCard';
-import ExploitDBTable from './components/ExploitDBTable';
-import { BrainCircuit, ShieldAlert, Swords, Rss } from 'lucide-react'; // [جدید] اضافه کردن آیکون Rss
+// [اصلاح شده] حذف پسوند .jsx از ایمپورت‌ها
+import NVDLiveFeed from './components/NVDLiveFeed'; 
+import NVDTable from './components/NVDTable'; 
+import AIModelCard from './components/AIModelCard'; 
+import ExploitDBTable from './components/ExploitDBTable'; 
+import { BrainCircuit, ShieldAlert, Swords } from 'lucide-react'; 
 
 function App() {
   return (
@@ -19,21 +20,22 @@ function App() {
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
 
-        {/* [بخش جدید] فید زنده NVD */}
-        <section id="nvd-live-feed" className="cyber-card mb-12">
-          <div className="flex items-center mb-6">
-            <Rss className="icon-green w-8 h-8 mr-3 animate-pulse" />
-            <h2 className="text-2xl font-semibold text-green-300">LIVE.THREAT.STREAM_</h2>
-          </div>
-          <NVDLiveFeed />
-        </section>
+        {/* [بخش حذف شده] فید زنده NVD که جدا بود حذف شد */}
 
         {/* Section 1: NVD Table (Existing) */}
         <section id="nvd-section" className="cyber-card mb-12">
           <div className="flex items-center mb-6">
             <ShieldAlert className="icon-cyan w-8 h-8 mr-3" />
-            <h2 className="text-2xl font-semibold text-cyan-300">NVD Vulnerability Database_</h2>
+            {/* [اصلاح شده] عنوان به حالت اولیه بازگشت */}
+            <h2 className="text-2xl font-semibold text-cyan-300">NVD Vulnerability Feed_</h2>
           </div>
+
+          {/* [جدید] فید زنده به این بخش اضافه شد */}
+          <div className="mb-8"> {/* یک فاصله برای جدا کردن فید از جدول */}
+            <NVDLiveFeed />
+          </div>
+          
+          {/* جدول فیلتردار NVD همچنان باقی است */}
           <NVDTable />
         </section>
 
@@ -72,7 +74,7 @@ function App() {
             <h2 className="text-2xl font-semibold text-red-300">EXPLOIT.DB.LATEST_</h2>
           </div>
           <ExploitDBTable />
-        </section>
+       </section>
 
       </div>
     </>
@@ -80,3 +82,6 @@ function App() {
 }
 
 export default App;
+
+
+
