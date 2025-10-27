@@ -1,9 +1,9 @@
 // frontend/src/App.jsx
 import React from 'react';
-// [اصلاح شده] ایمپورت NVDLiveFeed حذف شد
-import NVDTable from './components/NVDTable'; 
-import AIModelCard from './components/AIModelCard'; 
-import ExploitDBTable from './components/ExploitDBTable'; 
+// [اصلاح شده] پسوند .jsx به ایمپورت ها اضافه شد
+import NVDTable from './components/NVDTable.jsx'; 
+import AIModelCard from './components/AIModelCard.jsx'; 
+import ExploitDBTable from './components/ExploitDBTable.jsx'; 
 import { BrainCircuit, ShieldAlert, Swords } from 'lucide-react'; 
 
 function App() {
@@ -26,9 +26,9 @@ function App() {
             <h2 className="text-2xl font-semibold text-cyan-300">NVD Vulnerability Feed_</h2>
           </div>
 
-          {/* [حذف شده] کامپوننت NVDLiveFeed از اینجا حذف شد */}
+          {/* [حذف شده] فید زنده NVD از اینجا حذف شد */}
           
-          {/* جدول فیلتردار NVD */}
+          {/* جدول فیلتردار NVD همچنان باقی است */}
           <NVDTable />
         </section>
 
@@ -75,4 +75,3 @@ function App() {
 }
 
 export default App;
-
