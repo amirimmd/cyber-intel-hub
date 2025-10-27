@@ -1,7 +1,6 @@
 // frontend/src/App.jsx
 import React from 'react';
-// [اصلاح شده] حذف پسوند .jsx از ایمپورت‌ها
-import NVDLiveFeed from './components/NVDLiveFeed'; 
+// [اصلاح شده] ایمپورت NVDLiveFeed حذف شد
 import NVDTable from './components/NVDTable'; 
 import AIModelCard from './components/AIModelCard'; 
 import ExploitDBTable from './components/ExploitDBTable'; 
@@ -20,22 +19,16 @@ function App() {
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
 
-        {/* [بخش حذف شده] فید زنده NVD که جدا بود حذف شد */}
-
         {/* Section 1: NVD Table (Existing) */}
         <section id="nvd-section" className="cyber-card mb-12">
           <div className="flex items-center mb-6">
             <ShieldAlert className="icon-cyan w-8 h-8 mr-3" />
-            {/* [اصلاح شده] عنوان به حالت اولیه بازگشت */}
             <h2 className="text-2xl font-semibold text-cyan-300">NVD Vulnerability Feed_</h2>
           </div>
 
-          {/* [جدید] فید زنده به این بخش اضافه شد */}
-          <div className="mb-8"> {/* یک فاصله برای جدا کردن فید از جدول */}
-            <NVDLiveFeed />
-          </div>
+          {/* [حذف شده] کامپوننت NVDLiveFeed از اینجا حذف شد */}
           
-          {/* جدول فیلتردار NVD همچنان باقی است */}
+          {/* جدول فیلتردار NVD */}
           <NVDTable />
         </section>
 
@@ -82,6 +75,4 @@ function App() {
 }
 
 export default App;
-
-
 
