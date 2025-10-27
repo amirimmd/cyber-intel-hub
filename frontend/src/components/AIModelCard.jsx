@@ -1,6 +1,9 @@
     // frontend/src/components/AIModelCard.jsx
     import React, { useState, useRef, useEffect } from 'react';
     import { Loader2 } from 'lucide-react';
+    // اگرچه supabaseClient مستقیماً در اینجا استفاده نمی‌شود، اما اگر در آینده تغییر کند، نیاز به مسیر درست دارد.
+    // [اصلاح خطا] حذف .js از مسیر ایمپورت
+    // import { supabase } from '../supabaseClient'; 
     
     // Typewriter Hook
     const useTypewriter = (text, speed = 50) => {
@@ -106,5 +109,3 @@
     };
     
     export default AIModelCard;
-    
-

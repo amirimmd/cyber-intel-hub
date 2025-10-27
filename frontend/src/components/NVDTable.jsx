@@ -1,6 +1,7 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../supabaseClient.js';
+// [اصلاح خطا] حذف .js از مسیر ایمپورت برای جلوگیری از خطای "Could not resolve"
+import { supabase } from '../supabaseClient'; 
 import { Loader2, Search, Filter, DatabaseZap } from 'lucide-react';
 
 // [جدید] تاریخ شروع فیلتر
@@ -94,6 +95,8 @@ const NVDTable = () => {
   return (
     <div>
       {/* Filter Form */}
+      {/* در حالت موبایل (sm:), فرم فیلتر به صورت عمودی قرار می‌گیرد و دکمه‌ها پهنای کامل می‌گیرند (w-full). */}
+      {/* در حالت دسکتاپ (md:), از flex استفاده می‌شود و المان‌ها کنار هم قرار می‌گیرند. */}
       <form onSubmit={handleFilterSubmit} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
         <div className="flex-grow">
           <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
@@ -109,6 +112,7 @@ const NVDTable = () => {
         </div>
         <div>
           <label htmlFor="nvd-severity" className="block text-sm font-medium text-gray-400 mb-1">Severity:</label>
+          {/* w-full روی موبایل، w-48 روی دسکتاپ */}
           <select 
             name="severity" 
             id="nvd-severity" 
@@ -125,6 +129,7 @@ const NVDTable = () => {
         </div>
         <div>
           <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After:</label>
+          {/* w-full روی موبایل، w-48 روی دسکتاپ */}
           <input 
             type="date" 
             name="date" 
@@ -136,8 +141,9 @@ const NVDTable = () => {
             className="cyber-input w-full md:w-48" 
           />
         </div>
-        <div>
-          <button type="submit" className="cyber-button" disabled={loading}>
+        <div className="md:flex-shrink-0">
+          <button type="submit" className="cyber-button w-full md:w-auto flex items-center justify-center" disabled={loading}>
+            {/* اضافه کردن w-full برای موبایل */}
             {loading ? (
                 <Loader2 className="animate-spin w-5 h-5 mr-2" />
             ) : (
@@ -149,23 +155,25 @@ const NVDTable = () => {
       </form>
 
       {/* Results Table */}
+      {/* overflow-x-auto تضمین می‌کند که جدول در صورت کوچک بودن صفحه (مانند موبایل) افقی اسکرول بخورد و ظاهر کلی سایت بهم نریزد */}
       <div className="overflow-x-auto rounded-lg border border-gray-800">
         <table className="min-w-full divide-y divide-gray-800">
           <thead className="bg-gray-800/50">
             <tr>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CVE ID</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Description</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Score</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Vector</th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Published</th>
+              {/* کاهش Padding روی موبایل: px-3 برای موبایل و px-6 برای صفحه بزرگتر */}
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">CVE ID</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Description</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Score</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Vector</th>
+              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Published</th>
             </tr>
           </thead>
           <tbody className="bg-cyber-card divide-y divide-gray-800">
             {loading && (
               <tr>
                 {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
-                <td colSpan="6" className="px-6 py-10 text-center">
+                <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="flex justify-center items-center text-cyber-cyan">
                     <Loader2 className="animate-spin h-6 w-6 mr-3" />
                     <span>LOADING NVD_DATA_STREAM (2024+)...</span>
@@ -176,7 +184,7 @@ const NVDTable = () => {
             {!loading && error && (
               <tr>
                 {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
-                <td colSpan="6" className="px-6 py-10 text-center">
+                <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="text-cyber-red">
                     <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
                     <span>ERROR: {error}</span>
@@ -187,7 +195,7 @@ const NVDTable = () => {
             {!loading && !error && vulnerabilities.length === 0 && (
               <tr>
                 {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
-                <td colSpan="6" className="px-6 py-10 text-center">
+                <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="text-gray-500">
                     <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
                     <span>NO MATCHING VULNERABILITIES FOUND (2024+)_</span>
@@ -198,19 +206,20 @@ const NVDTable = () => {
             {!loading && !error && vulnerabilities.map((cve) => (
               // [اصلاح شده] استفاده از cve.ID
               <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
+                {/* کاهش Padding روی موبایل */}
+                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
                   {/* [اصلاح شده] استفاده از cve.ID */}
                   <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
                 </td>
-                {/* [اصلاح شده] استفاده از cve.text */}
-                <td className="px-6 py-4 text-sm text-cyber-text max-w-md truncate" title={cve.text}>{cve.text || 'N/A'}</td>
+                {/* [اصلاح شده] استفاده از cve.text. استفاده از min-w-40 برای اطمینان از فضای کافی برای متن در حالت truncate */}
+                <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40 truncate" title={cve.text}>{cve.text || 'N/A'}</td>
                 {/* [اصلاح شده] استفاده از cve.baseSeverity */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
+                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
                 {/* [اصلاح شده] استفاده از cve.score */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score || 'N/A'}</td>
+                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score || 'N/A'}</td>
                 {/* [جدید] نمایش vectorString */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(cve.published_date).toLocaleDateString()}</td>
+                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
+                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(cve.published_date).toLocaleDateString()}</td>
               </tr>
             ))}
           </tbody>
@@ -221,4 +230,3 @@ const NVDTable = () => {
 };
 
 export default NVDTable;
-
