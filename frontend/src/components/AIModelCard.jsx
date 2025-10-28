@@ -9,7 +9,8 @@ const HF_MODEL_NAME = "amirimmd/ExBERT-Classifier-CVE";
 const API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL_NAME}`;
 
 // --- خواندن توکن از متغیرهای محیطی ---
-// [نکته] استفاده از process.env.VITE_HF_API_TOKEN استاندارد Vite است
+// !!! بازگشت به process.env که در اکثر محیط‌های Build بهتر تزریق می‌شود.
+// اگر همچنان خطا دارید، لطفاً دستورالعمل‌های تنظیم Vite در زیر را اجرا کنید.
 const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN;
 
 // [DEBUG] Check if token is loaded
@@ -94,7 +95,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     
     // --- 2. Live API Call for EXBERT Model ---
     if (!HF_API_TOKEN) {
-        // این خطا نباید هنگام اجرا رخ دهد اگر متغیر تنظیم شده باشد
+        // اگر این بلاک اجرا شود، همچنان پیام هشدار را می‌دهیم
         setError("Hugging Face API Token (VITE_HF_API_TOKEN) is missing. Cannot execute live query. Please configure in Vercel.");
         setLoading(false);
         return;
@@ -105,7 +106,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
-          // [اصلاح شده] توکن همیشه باید شامل Bearer باشد
           'Authorization': `Bearer ${HF_API_TOKEN}`,
           'Content-Type': 'application/json',
           'X-Wait-For-Model': 'true'
