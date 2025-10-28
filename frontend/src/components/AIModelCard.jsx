@@ -6,11 +6,11 @@ import { Loader2 } from 'lucide-react';
 // نام مدل شما در هاگینگ فیس
 const HF_MODEL_NAME = "amirimmd/ExBERT-Classifier-CVE";
 // URL پایه برای Inference API
-const API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL_NAME}`;
+// [اصلاح شده] استفاده از آدرس جدید Inference Providers API
+const API_URL = `https://router.huggingface.co/hf-inference/models/${HF_MODEL_NAME}`;
 
 // --- خواندن توکن از متغیرهای محیطی ---
-// !!! بازگشت به process.env که در اکثر محیط‌های Build بهتر تزریق می‌شود.
-// اگر همچنان خطا دارید، لطفاً دستورالعمل‌های تنظیم Vite در زیر را اجرا کنید.
+// !!! استفاده از process.env که در اکثر محیط‌های Build بهتر تزریق می‌شود.
 const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN;
 
 // [DEBUG] Check if token is loaded
@@ -114,18 +114,30 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           inputs: input,
         }),
       });
-
-      if (response.status === 401 || response.status === 403) {
-           throw new Error("Authorization failed. Please check if VITE_HF_API_TOKEN is correct and has 'read' access to the model.");
-      }
+      
+      // تلاش برای خواندن بدنه پاسخ قبل از بررسی .ok
+      const isJson = response.headers.get('content-type')?.includes('application/json');
+      const responseBody = isJson ? await response.json().catch(() => ({ error: "Could not parse JSON response" })) : { error: `Server returned non-JSON data (Status: ${response.status})` };
+      
       
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ error: "Unknown error format" }));
-        console.error("HF API Error Response:", errorBody);
-        throw new Error(errorBody.error || `API request failed with status ${response.status}`);
+        console.error("HF API Error Response:", responseBody);
+        
+        let errorMessage = `API request failed (Status: ${response.status}).`;
+
+        if (response.status === 404) {
+             // 404 اکنون ممکن است به دلیل استفاده از آدرس قدیمی (منسوخ شده) باشد یا مشکل در لود مدل
+             errorMessage = `404: Model Not Found. Ensure 'modeling_exbert.py' is uploaded and the model is loaded on HF.`;
+        } else if (response.status === 401 || response.status === 403) {
+             errorMessage = `401/403: Authorization Failed. Check VITE_HF_API_TOKEN and its permissions.`;
+        } else if (responseBody.error) {
+            errorMessage = responseBody.error;
+        }
+
+        throw new Error(errorMessage);
       }
 
-      const result = await response.json();
+      const result = responseBody; // responseBody اکنون همان result است
 
       console.log("HF API Success Response:", result);
 
@@ -133,6 +145,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       let formattedOutput = "Could not parse API response or model returned unexpected structure.";
       
       if (Array.isArray(result) && result.length > 0 && Array.isArray(result[0])) {
+          // فرض می‌کنیم لیبل با بالاترین امتیاز یا LABEL_1 مثبت است
           const prediction = result[0].find(p => p.label && (p.label === 'LABEL_1' || p.label.toLowerCase() === 'exploitable'));
           const score = prediction ? prediction.score : (result[0][0] ? 1.0 - result[0][0].score : 0);
           const probability = (score * 100).toFixed(1);
