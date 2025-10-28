@@ -9,8 +9,7 @@ const HF_MODEL_NAME = "amirimmd/ExBERT-Classifier-CVE";
 const API_URL = `https://api-inference.huggingface.co/models/${HF_MODEL_NAME}`;
 
 // --- خواندن توکن از متغیرهای محیطی ---
-// !!! مهم: این توکن باید در Vercel به عنوان Environment Variable تعریف شود
-// نام متغیر محیطی باید با VITE_ شروع شود تا Vite آن را بشناسد
+// [نکته] استفاده از process.env.VITE_HF_API_TOKEN استاندارد Vite است
 const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN;
 
 // [DEBUG] Check if token is loaded
@@ -90,13 +89,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         setOutput(simulated);
         startTyping(simulated);
         setLoading(false);
-        // setInput(''); // اختیاری
         return;
     }
     
     // --- 2. Live API Call for EXBERT Model ---
     if (!HF_API_TOKEN) {
-        setError("Hugging Face API Token (VITE_HF_API_TOKEN) is missing. Cannot execute live query.");
+        // این خطا نباید هنگام اجرا رخ دهد اگر متغیر تنظیم شده باشد
+        setError("Hugging Face API Token (VITE_HF_API_TOKEN) is missing. Cannot execute live query. Please configure in Vercel.");
         setLoading(false);
         return;
     }
@@ -106,6 +105,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
+          // [اصلاح شده] توکن همیشه باید شامل Bearer باشد
           'Authorization': `Bearer ${HF_API_TOKEN}`,
           'Content-Type': 'application/json',
           'X-Wait-For-Model': 'true'
@@ -115,6 +115,10 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         }),
       });
 
+      if (response.status === 401 || response.status === 403) {
+           throw new Error("Authorization failed. Please check if VITE_HF_API_TOKEN is correct and has 'read' access to the model.");
+      }
+      
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({ error: "Unknown error format" }));
         console.error("HF API Error Response:", errorBody);
@@ -129,9 +133,8 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       let formattedOutput = "Could not parse API response or model returned unexpected structure.";
       
       if (Array.isArray(result) && result.length > 0 && Array.isArray(result[0])) {
-          // فرض بر این است که لیبل 'LABEL_1' یا 'Exploitable' نشان‌دهنده احتمال مثبت است
           const prediction = result[0].find(p => p.label && (p.label === 'LABEL_1' || p.label.toLowerCase() === 'exploitable'));
-          const score = prediction ? prediction.score : (result[0][0] ? 1.0 - result[0][0].score : 0); // اگر فقط لیبل منفی باشد
+          const score = prediction ? prediction.score : (result[0][0] ? 1.0 - result[0][0].score : 0);
           const probability = (score * 100).toFixed(1);
 
           formattedOutput = `[EXBERT_ANALYSIS]: Input processed. Exploitability Probability: ${probability}%.`;
