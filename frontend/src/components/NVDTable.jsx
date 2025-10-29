@@ -4,10 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabaseClient'; 
 import { Loader2, Search, Filter, DatabaseZap } from 'lucide-react';
 
-// [جدید] تاریخ شروع فیلتر
-const START_DATE_FILTER = '2024-01-01';
-const START_DATE_ISO = '2024-01-01T00:00:00Z';
-
+// [اصلاح شده] تاریخ شروع فیلتر: شروع از 2024 برای نمایش داده های جدیدتر، اما حداقل مجاز 2016 است
+const DEFAULT_START_DATE_FILTER = '2024-01-01'; // Default view to show recent data (manual + synced)
+const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; // Minimum selectable date in the calendar
 
 // Helper for severity badges
 const SeverityBadge = ({ severity }) => {
@@ -26,11 +25,11 @@ const NVDTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // [اصلاح شده] مقدار پیش‌فرض فیلتر تاریخ به 2024-01-01 تغییر کرد
+  // [اصلاح شده] مقدار پیش‌فرض فیلتر تاریخ
   const [filters, setFilters] = useState({ 
     keyword: '', 
     severity: 'all', 
-    date: START_DATE_FILTER // تنظیم پیش‌فرض
+    date: DEFAULT_START_DATE_FILTER // تنظیم پیش‌فرض برای نمایش داده‌های اخیر
   });
 
   const handleFilterChange = (e) => {
@@ -45,22 +44,18 @@ const NVDTable = () => {
     let query = supabase
       .from('vulnerabilities')
       // [اصلاح شده] ستون‌های صحیح درخواست شد
-      .select('ID, text, baseSeverity, score, published_date, vectorString') // cwe و description کامل حذف شدند
+      .select('ID, text, baseSeverity, score, published_date, vectorString') 
       .order('published_date', { ascending: false })
       .limit(100);
 
-    // [جدید] تعیین تاریخ شروع موثر
-    let effectiveDate = START_DATE_ISO;
+    // [اصلاح شده] اعمال فیلتر تاریخ به صورت مستقیم (اگر تاریخ وارد شده باشد)
     if (filters.date) {
-      const userDate = new Date(filters.date).toISOString();
-      // اگر تاریخ انتخابی کاربر بعد از 2024 بود، از آن استفاده کن
-      if (userDate > START_DATE_ISO) {
-        effectiveDate = userDate;
-      }
+        // تبدیل تاریخ محلی به ISO 8601 UTC
+        const datePart = filters.date; // e.g., '2024-01-01'
+        const effectiveDateISO = new Date(`${datePart}T00:00:00Z`).toISOString();
+        query = query.gte('published_date', effectiveDateISO);
     }
-    // اعمال فیلتر تاریخ نهایی
-    query = query.gte('published_date', effectiveDate);
-
+    
     // Apply other filters
     if (filters.keyword) {
       // [اصلاح شده] جستجو در ID و text
@@ -136,8 +131,8 @@ const NVDTable = () => {
             id="nvd-date" 
             value={filters.date} 
             onChange={handleFilterChange} 
-            // [جدید] تنظیم حداقل تاریخ مجاز در تقویم
-            min={START_DATE_FILTER}
+            // [اصلاح شده] تنظیم حداقل تاریخ مجاز در تقویم به 2016
+            min={EARLIEST_MANUAL_DATA_YEAR}
             className="cyber-input w-full md:w-48" 
           />
         </div>
@@ -216,7 +211,7 @@ const NVDTable = () => {
                 {/* [اصلاح شده] استفاده از cve.baseSeverity */}
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
                 {/* [اصلاح شده] استفاده از cve.score */}
-                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score || 'N/A'}</td>
+                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
                 {/* [جدید] نمایش vectorString */}
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(cve.published_date).toLocaleDateString()}</td>
