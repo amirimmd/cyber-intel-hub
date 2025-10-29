@@ -41,7 +41,8 @@ function extractCvssV31Metrics(cveItem) {
     // 2. یافتن CVSS v3.1 Metric
     if (!cveItem.metrics || !cveItem.metrics.cvssMetricV31) {
         // اگر CVSS v3.1 موجود نبود، ردیف را نادیده بگیر 
-        console.warn(`::WARN:: Skipping CVE ${cveItem.id}: No CVSS V3.1 data found.`);
+        // در غیر این صورت ممکن است در فرانت اند، فیلدهای مورد نیاز را نداشته باشیم
+        // console.warn(`::WARN:: Skipping CVE ${cveItem.id}: No CVSS V3.1 data found.`);
         return null; 
     }
 

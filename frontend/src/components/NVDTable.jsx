@@ -1,10 +1,10 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-// [FIX] افزودن پسوند .js به مسیر ایمپورت برای رفع خطای "Could not resolve"
+// [FIX] افزودن پسوند .js به مسیر ایمپورت برای سازگاری بهتر با Vite و رفع خطاهای "Could not resolve"
 import { supabase } from '../supabaseClient.js'; 
 import { Loader2, Search, Filter, DatabaseZap } from 'lucide-react';
 
-// [اصلاح شده] تاریخ شروع فیلتر: شروع از 2024 برای نمایش داده های جدیدتر، اما حداقل مجاز 2016 است
+// تاریخ شروع فیلتر: شروع از 2024 برای نمایش داده های جدیدتر، اما حداقل مجاز 2016 است
 const DEFAULT_START_DATE_FILTER = '2024-01-01'; // Default view to show recent data (manual + synced)
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; // Minimum selectable date in the calendar
 
