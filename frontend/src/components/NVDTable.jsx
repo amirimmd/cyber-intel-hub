@@ -1,7 +1,7 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-// [اصلاح خطا] حذف .js از مسیر ایمپورت برای جلوگیری از خطای "Could not resolve"
-import { supabase } from '../supabaseClient'; 
+// [FIX] افزودن پسوند .js به مسیر ایمپورت برای رفع خطای "Could not resolve"
+import { supabase } from '../supabaseClient.js'; 
 import { Loader2, Search, Filter, DatabaseZap } from 'lucide-react';
 
 // [اصلاح شده] تاریخ شروع فیلتر: شروع از 2024 برای نمایش داده های جدیدتر، اما حداقل مجاز 2016 است
@@ -16,6 +16,7 @@ const SeverityBadge = ({ severity }) => {
     case 'HIGH': badgeClass = 'badge-high'; break;
     case 'MEDIUM': badgeClass = 'badge-medium'; break;
     case 'LOW': badgeClass = 'badge-low'; break;
+    case 'NONE': badgeClass = 'badge-low'; break; // None is similar to Low in terms of risk
   }
   return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
 };
@@ -25,7 +26,7 @@ const NVDTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // [اصلاح شده] مقدار پیش‌فرض فیلتر تاریخ
+  // مقدار پیش‌فرض فیلتر تاریخ
   const [filters, setFilters] = useState({ 
     keyword: '', 
     severity: 'all', 
@@ -43,12 +44,11 @@ const NVDTable = () => {
     
     let query = supabase
       .from('vulnerabilities')
-      // [اصلاح شده] ستون‌های صحیح درخواست شد
       .select('ID, text, baseSeverity, score, published_date, vectorString') 
       .order('published_date', { ascending: false })
       .limit(100);
 
-    // [اصلاح شده] اعمال فیلتر تاریخ به صورت مستقیم (اگر تاریخ وارد شده باشد)
+    // اعمال فیلتر تاریخ
     if (filters.date) {
         // تبدیل تاریخ محلی به ISO 8601 UTC
         const datePart = filters.date; // e.g., '2024-01-01'
@@ -58,11 +58,11 @@ const NVDTable = () => {
     
     // Apply other filters
     if (filters.keyword) {
-      // [اصلاح شده] جستجو در ID و text
+      // جستجو در ID و text
       query = query.or(`ID.ilike.%${filters.keyword}%,text.ilike.%${filters.keyword}%`);
     }
     if (filters.severity !== 'all') {
-      // [اصلاح شده] فیلتر بر اساس baseSeverity
+      // فیلتر بر اساس baseSeverity
       query = query.eq('baseSeverity', filters.severity.toUpperCase());
     }
 
@@ -80,7 +80,7 @@ const NVDTable = () => {
   // Initial data fetch on component mount
   useEffect(() => {
     fetchData();
-  }, [fetchData]); // [اصلاح شده] استفاده از fetchData در وابستگی
+  }, [fetchData]); // استفاده از fetchData در وابستگی
 
   const handleFilterSubmit = (e) => {
     e.preventDefault();
@@ -90,8 +90,6 @@ const NVDTable = () => {
   return (
     <div>
       {/* Filter Form */}
-      {/* در حالت موبایل (sm:), فرم فیلتر به صورت عمودی قرار می‌گیرد و دکمه‌ها پهنای کامل می‌گیرند (w-full). */}
-      {/* در حالت دسکتاپ (md:), از flex استفاده می‌شود و المان‌ها کنار هم قرار می‌گیرند. */}
       <form onSubmit={handleFilterSubmit} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
         <div className="flex-grow">
           <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
@@ -131,7 +129,7 @@ const NVDTable = () => {
             id="nvd-date" 
             value={filters.date} 
             onChange={handleFilterChange} 
-            // [اصلاح شده] تنظیم حداقل تاریخ مجاز در تقویم به 2016
+            // تنظیم حداقل تاریخ مجاز در تقویم به 2016
             min={EARLIEST_MANUAL_DATA_YEAR}
             className="cyber-input w-full md:w-48" 
           />
@@ -167,7 +165,6 @@ const NVDTable = () => {
           <tbody className="bg-cyber-card divide-y divide-gray-800">
             {loading && (
               <tr>
-                {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
                 <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="flex justify-center items-center text-cyber-cyan">
                     <Loader2 className="animate-spin h-6 w-6 mr-3" />
@@ -178,7 +175,6 @@ const NVDTable = () => {
             )}
             {!loading && error && (
               <tr>
-                {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
                 <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="text-cyber-red">
                     <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
@@ -189,7 +185,6 @@ const NVDTable = () => {
             )}
             {!loading && !error && vulnerabilities.length === 0 && (
               <tr>
-                {/* [اصلاح شده] colSpan به 6 تغییر کرد */}
                 <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="text-gray-500">
                     <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
@@ -199,20 +194,20 @@ const NVDTable = () => {
               </tr>
             )}
             {!loading && !error && vulnerabilities.map((cve) => (
-              // [اصلاح شده] استفاده از cve.ID
+              // استفاده از cve.ID
               <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
                 {/* کاهش Padding روی موبایل */}
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
-                  {/* [اصلاح شده] استفاده از cve.ID */}
+                  {/* استفاده از cve.ID */}
                   <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
                 </td>
-                {/* [اصلاح شده] استفاده از cve.text. استفاده از min-w-40 برای اطمینان از فضای کافی برای متن در حالت truncate */}
+                {/* استفاده از cve.text. استفاده از min-w-40 برای اطمینان از فضای کافی برای متن در حالت truncate */}
                 <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40 truncate" title={cve.text}>{cve.text || 'N/A'}</td>
-                {/* [اصلاح شده] استفاده از cve.baseSeverity */}
+                {/* استفاده از cve.baseSeverity */}
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
-                {/* [اصلاح شده] استفاده از cve.score */}
+                {/* استفاده از cve.score */}
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
-                {/* [جدید] نمایش vectorString */}
+                {/* نمایش vectorString */}
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
                 <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(cve.published_date).toLocaleDateString()}</td>
               </tr>

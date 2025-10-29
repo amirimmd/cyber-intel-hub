@@ -40,8 +40,7 @@ function extractCvssV31Metrics(cveItem) {
 
     // 2. یافتن CVSS v3.1 Metric
     if (!cveItem.metrics || !cveItem.metrics.cvssMetricV31) {
-        // اگر CVSS v3.1 موجود نبود، ردیف را نادیده بگیر (یا منطق fallback اضافه کنید)
-        // برای حفظ سادگی و دقت، در حال حاضر فقط v3.1 را می‌گیریم.
+        // اگر CVSS v3.1 موجود نبود، ردیف را نادیده بگیر 
         console.warn(`::WARN:: Skipping CVE ${cveItem.id}: No CVSS V3.1 data found.`);
         return null; 
     }
@@ -90,6 +89,7 @@ function extractCvssV31Metrics(cveItem) {
  * @returns {object} آبجکت نتیجه NVD API شامل totalResults و vulnerabilities
  */
 async function fetchNvdPage(startIndex) {
+    // pubStartDate فقط تاریخ انتشار را فیلتر می‌کند، نه آخرین به‌روزرسانی را.
     const url = `${NVD_API_URL}?resultsPerPage=${MAX_RESULTS_PER_PAGE}&startIndex=${startIndex}&pubStartDate=${START_DATE_FILTER}`;
     
     // NVD API بدون کلید، محدودیت نرخ بسیار سختگیرانه دارد.
