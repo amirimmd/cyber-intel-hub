@@ -63,7 +63,7 @@ const useTypewriter = (text, speed = 50) => {
     }
   }, [text, isTyping, speed]);
 
-  return [displayText, startTyping];
+  return [displayText, startTypingProcess];
 };
 
 
