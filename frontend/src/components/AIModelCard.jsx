@@ -7,9 +7,10 @@ const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
-// [FIX] بازگشت به مسیر ریشه (root) - این مسیر بعد از فعال کردن .queue() در app.py کار خواهد کرد
-const QUEUE_JOIN_URL = `${BASE_API_URL}/queue/join`;
-const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/queue/data?session_hash=${sessionHash}`;
+// [FIX] استفاده از مسیر API صحیحی که از لاگ‌های شما پیدا شد
+const API_PREFIX = "/gradio_api"; 
+const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
+const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
 // --- خواندن توکن (روش استاندارد Vite) ---
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
@@ -193,7 +194,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                  detailedError += " Unauthorized. Check your VITE_HF_API_TOKEN.";
              } else if (joinResponse.status === 404) {
                  // [UPDATE] به‌روزرسانی پیام خطا
-                 detailedError += " Endpoint /queue/join not found. Ensure app.queue().launch() is used in your Space's app.py.";
+                 detailedError += ` Endpoint ${API_PREFIX}/queue/join not found. Check Space API path.`;
              } else if (joinResponse.status === 422) {
                  detailedError += " Validation Error. Check fn_index or data payload format.";
              } else if (errorText.includes("Internal Server Error") || joinResponse.status === 500) {
@@ -395,5 +396,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
+
 
 
