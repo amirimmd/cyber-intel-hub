@@ -6,43 +6,45 @@ import { Loader2 } from 'lucide-react';
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
-// [مهم] استفاده از نقطه پایانی صحیح برای شروع صف Gradio
 const QUEUE_JOIN_URL = `${BASE_API_URL}/queue/join`;
-// نقطه پایانی برای گوش دادن به نتایج (EventSource)
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/queue/data?session_hash=${sessionHash}`;
 
 // --- خواندن توکن (روش استاندارد Vite) ---
+// [اصلاح نهایی] بازگشت به import.meta.env
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
 // [DEBUG]
 if (!HF_API_TOKEN) {
   console.warn("⚠️ Hugging Face API Token (VITE_HF_API_TOKEN) is missing!");
 } else {
+  // Optional: Log only a portion for confirmation, not the whole token
   console.log("✅ Hugging Face API Token loaded (partially):", HF_API_TOKEN.substring(0, 5) + "...");
 }
+
 
 // Typewriter Hook (Refined)
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text);
+    const [internalText, setInternalText] = useState(text); // Store the full target text
     const [isTyping, setIsTyping] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null);
+    const intervalRef = useRef(null); // Ref to hold interval ID
 
     const startTypingProcess = useCallback((newText) => {
+        // Clear previous interval if any
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
         }
-        setInternalText(newText || '');
-        setDisplayText('');
-        setCurrentIndex(0);
+        setInternalText(newText || ''); // Update the target text
+        setDisplayText(''); // Clear display immediately
+        setCurrentIndex(0); // Reset index
         if (newText) {
-            setIsTyping(true);
+            setIsTyping(true); // Start typing if there is new text
         } else {
-            setIsTyping(false);
+            setIsTyping(false); // Stop typing if new text is empty
         }
-    }, []);
+    }, []); // No dependencies needed here if it only sets state
 
     useEffect(() => {
         // Clear interval from previous runs of this effect
@@ -53,23 +55,18 @@ const useTypewriter = (text, speed = 50) => {
 
         if (isTyping && internalText && currentIndex < internalText.length) {
             intervalRef.current = setInterval(() => {
-                // Check condition *inside* interval
-                setDisplayText(prev => {
-                    // Prevent adding characters if currentIndex has already reached the end
-                    if (currentIndex < internalText.length) {
-                         // IMPORTANT: Use substring based on the *next* index to avoid skipping
-                         const nextIndex = currentIndex + 1;
-                         setCurrentIndex(nextIndex); // Update index for the next run
-                         return internalText.substring(0, nextIndex);
-                    } else {
-                        // If somehow index is out of bounds, stop
-                        clearInterval(intervalRef.current);
-                        intervalRef.current = null;
-                        setIsTyping(false);
-                        return prev; // Return previous display text
-                    }
-                });
-
+                // Check condition *inside* interval callback
+                 if (currentIndex < internalText.length) {
+                    // Use substring based on the *next* index to avoid skipping
+                    const nextIndex = currentIndex + 1;
+                    setDisplayText(internalText.substring(0, nextIndex)); // More reliable update
+                    setCurrentIndex(nextIndex); // Update index for the next run
+                 } else {
+                    // If somehow index is out of bounds, stop
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                    setIsTyping(false);
+                 }
             }, speed);
         } else if (currentIndex >= (internalText?.length || 0)) {
             // Stop typing if done
@@ -85,7 +82,7 @@ const useTypewriter = (text, speed = 50) => {
         return () => {
              if (intervalRef.current) {
                 clearInterval(intervalRef.current);
-                intervalRef.current = null;
+                intervalRef.current = null; // Clear ref on cleanup too
              }
         };
     }, [isTyping, speed, internalText, currentIndex]); // Rerun effect if these change
@@ -107,11 +104,12 @@ const useTypewriter = (text, speed = 50) => {
 
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
-  const [output, setOutput] = useState('');
+  const [output, setOutput] = useState(''); // Stores the full response from API
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Get isTyping state from hook
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
-  const eventSourceRef = useRef(null);
+  const eventSourceRef = useRef(null); // Ref for EventSource
 
   // Simulation function (unchanged)
   const simulateAnalysis = (query, modelId) => {
@@ -213,9 +211,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         // 3. Listen for results using EventSource
         console.log("Step 3: Listening for results via EventSource...");
         const dataUrl = QUEUE_DATA_URL(sessionHash);
-         // Important: Handle potential CORS issues if the Space is private/gated
-        // EventSource does not support Authorization headers easily.
-        // If Space is private, consider making it public for testing or use a backend proxy.
         eventSourceRef.current = new EventSource(dataUrl);
 
         eventSourceRef.current.onmessage = (event) => {
@@ -285,8 +280,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         eventSourceRef.current.onerror = (error) => {
             console.error("EventSource Error:", error);
-            // Provide more context if possible (e.g., check network status)
-             let errorMsg = "Error connecting to API stream.";
+            let errorMsg = "Error connecting to API stream.";
              if (!navigator.onLine) {
                  errorMsg += " Check your network connection.";
              } else {
@@ -319,7 +313,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           eventSourceRef.current = null;
        }
     }
-     // setLoading(false) is now primarily handled by the EventSource onmessage/onerror handlers
+     // setLoading(false) is handled by EventSource
   };
 
   return (
