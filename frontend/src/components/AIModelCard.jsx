@@ -8,7 +8,7 @@ const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
 // [FIX] استفاده از مسیر API صحیحی که از لاگ‌های شما پیدا شد
-const API_PREFIX = "/gradio_api"; 
+const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
@@ -170,17 +170,19 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     }
 
     try {
-        console.log("Step 1: Joining Gradio Queue...");
+        console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         // 1. Join the queue, sending data and CORRECT fn_index
+        const fnIndexToUse = 2; // <<<=== !!! IMPORTANT: VERIFY THIS VALUE !!!
+        console.log(`Using fn_index: ${fnIndexToUse}`);
+
         const joinResponse = await fetch(QUEUE_JOIN_URL, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${HF_API_TOKEN}`,
                 'Content-Type': 'application/json',
             },
-            // [اصلاح نهایی] استفاده از fn_index: 2 بر اساس Payload شما
             body: JSON.stringify({
-                fn_index: 2, // <-- This is a critical value. Double-check if '2' is correct.
+                fn_index: fnIndexToUse, // <-- Use the variable
                 data: [query],
                 // session_hash در درخواست اولیه join نیاز نیست
             })
@@ -193,10 +195,9 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              if (joinResponse.status === 401) {
                  detailedError += " Unauthorized. Check your VITE_HF_API_TOKEN.";
              } else if (joinResponse.status === 404) {
-                 // [UPDATE] به‌روزرسانی پیام خطا
-                 detailedError += ` Endpoint ${API_PREFIX}/queue/join not found. Check Space API path.`;
+                 detailedError += ` Endpoint ${API_PREFIX}/queue/join not found. Ensure queue is enabled (.queue().launch()) and API path is correct.`;
              } else if (joinResponse.status === 422) {
-                 detailedError += " Validation Error. Check fn_index or data payload format.";
+                 detailedError += ` Validation Error. Check fn_index (currently ${fnIndexToUse}) or data payload format.`;
              } else if (errorText.includes("Internal Server Error") || joinResponse.status === 500) {
                 detailedError += " Internal Server Error. Space might be restarting or errored. Check Space logs.";
              } else if (joinResponse.status === 503) {
@@ -218,7 +219,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
 
         // 3. Listen for results using EventSource
-        console.log("Step 3: Listening for results via EventSource...");
+        console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
         const dataUrl = QUEUE_DATA_URL(sessionHash);
         eventSourceRef.current = new EventSource(dataUrl);
 
@@ -234,39 +235,48 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         break;
                     case "process_generating": break; // Handle if needed
                     case "process_completed":
-                        console.log("Processing completed.");
+                        console.log("Processing completed. Raw output:", JSON.stringify(message.output, null, 2)); // Log the raw output object
                         if (message.success && message.output && message.output.data) {
-                            // [اصلاح] دسترسی به خروجی مدل
-                            // خروجی شما ممکن است در data[0] یا data[0].label باشد
-                            const rawPrediction = message.output.data[0]; 
+                            // [اصلاح] دسترسی به خروجی مدل - با لاگ دقیق تر
+                            const rawPrediction = message.output.data[0];
+                            console.log("Extracted rawPrediction:", rawPrediction); // Log extracted data
                             let formattedOutput = "Error: Could not parse prediction result.";
-                             
+
                              if (rawPrediction !== null && rawPrediction !== undefined) {
                                 // اگر خروجی یک آبجکت با لیبل است
-                                if (typeof rawPrediction === 'object' && rawPrediction.label) {
+                                if (typeof rawPrediction === 'object' && rawPrediction.label !== undefined && rawPrediction.score !== undefined) {
                                      formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
-                                } 
+                                     console.log("Parsed as Label/Score object.");
+                                }
                                 // اگر خروجی یک رشته است (بر اساس کد قبلی شما)
                                 else if (typeof rawPrediction === 'string' && rawPrediction.startsWith("Exploitability Probability:")) {
                                     formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
-                                } 
+                                    console.log("Parsed as 'Exploitability Probability' string.");
+                                }
                                 // اگر خروجی فقط یک عدد است (بر اساس کد قبلی شما)
                                 else if (typeof rawPrediction === 'number') {
                                     formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
-                                } 
+                                     console.log("Parsed as number (probability).");
+                                }
                                 // اگر خروجی فقط یک رشته است
                                 else if (typeof rawPrediction === 'string') {
                                     formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
+                                    console.log("Parsed as generic string.");
                                 }
                                 else {
                                     formattedOutput = `[EXBERT_REPORT]: Raw output: ${JSON.stringify(rawPrediction)}`;
+                                    console.log("Could not parse, showing raw JSON.");
                                 }
+                            } else {
+                                console.warn("rawPrediction is null or undefined.");
+                                formattedOutput = "[EXBERT_REPORT]: Received empty result.";
                             }
 
                             setOutput(formattedOutput);
                             startTypingProcess(formattedOutput);
                         } else {
                              const errorMsg = message.output?.error || "Unknown server processing error.";
+                             console.error("Processing failed on server:", errorMsg);
                              setError(`Processing failed: ${errorMsg}`);
                              setOutput(''); startTypingProcess('');
                         }
@@ -275,6 +285,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         setLoading(false); // Stop loading indicator here
                         break;
                      case "queue_full":
+                         console.warn("Queue is full.");
                          setError("API Error: The queue is full, please try again later.");
                          if(eventSourceRef.current) eventSourceRef.current.close();
                          eventSourceRef.current = null;
@@ -285,11 +296,14 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                          const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
                          const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
                          const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
-                         setOutput(waitMsg);
-                         startTypingProcess(waitMsg);
+                         // فقط اگر هنوز در حال لود شدن هستیم، پیام صف را نشان بده
+                         if (loading) {
+                             setOutput(waitMsg);
+                             startTypingProcess(waitMsg);
+                         }
                          break;
                     default:
-                        console.warn("Received unknown message type:", message.msg);
+                        console.warn("Received unknown message type:", message.msg, message);
                         break;
                 }
             } catch (parseError) {
@@ -308,7 +322,8 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              if (!navigator.onLine) {
                  errorMsg += " Check your network connection.";
              } else {
-                 errorMsg += " The Space might be sleeping, restarting, or encountered an error. Check Space logs.";
+                 // خطای EventSource معمولاً وقتی رخ می‌دهد که Space در حال ری‌استارت، خاموش، یا دارای خطا باشد
+                 errorMsg += " Could not maintain connection. The Space might be sleeping, restarting, or encountered an internal error. Check Space logs.";
              }
             setError(errorMsg);
              if(eventSourceRef.current) eventSourceRef.current.close();
@@ -320,16 +335,22 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     } catch (err) {
       console.error("Error during Gradio Queue interaction:", err);
-      let displayError = err.message;
-       // [اصلاح] نمایش خطاهای واضح تر
-       if (err.message.includes("401")) {
-           displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN.";
+      let displayError = err.message || "An unknown error occurred.";
+       // نمایش خطاهای واضح تر
+       if (!(err instanceof Error)) { // Handle non-Error objects being thrown
+          displayError = `An unexpected issue occurred: ${JSON.stringify(err)}`;
+       } else if (err.message.includes("401")) {
+           displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN in Vercel/local env.";
        } else if (err.message.includes("422")) {
-           displayError = "API ERROR: 422 Validation Error. Check fn_index (is it 2?) or data format.";
+           displayError = `API ERROR: 422 Validation Error. Verify fn_index (is ${fnIndexToUse} correct?) and data format sent.`;
        } else if (err.message.includes("Failed to fetch")) {
-           displayError = "API ERROR: Network error or CORS issue. Check browser console.";
+           displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
        } else if (err.message.includes("404")) {
-            displayError = "API ERROR: 404 Endpoint Not Found. Check Space URL and API path.";
+            displayError = `API ERROR: 404 Endpoint Not Found (${API_PREFIX}/queue/join). Ensure queue is enabled in app.py and path is correct.`;
+       } else if (err.message.includes("500") || err.message.includes("Internal Server Error")) {
+            displayError = "API ERROR: 500 Internal Server Error on Hugging Face Space. Check Space logs for details.";
+       } else if (err.message.includes("503")) {
+            displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping, building, or overloaded. Wait and retry.";
        }
       setError(displayError);
       setLoading(false);
@@ -340,7 +361,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           eventSourceRef.current = null;
        }
     }
-     // setLoading(false) is handled by EventSource
+     // setLoading(false) is handled by EventSource messages (completed, queue_full, error)
   };
 
   return (
@@ -396,6 +417,4 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
-
-
 

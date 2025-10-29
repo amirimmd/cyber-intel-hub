@@ -4,7 +4,6 @@ import react from '@vitejs/plugin-react';
 
 // نیازی به 'define' برای متغیرهای import.meta.env نیست.
 // Vite به طور خودکار متغیرهایی که با VITE_ شروع می‌شوند را مدیریت می‌کند.
-// حذف 'define' که قبلاً اینجا بود.
 
 export default defineConfig({
   plugins: [react()],
