@@ -1,17 +1,20 @@
 // frontend/src/components/AIModelCard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 
-// --- Configuration for Hugging Face Inference API ---
-// نام مدل شما در هاگینگ فیس
-const HF_MODEL_NAME = "amirimmd/ExBERT-Classifier-CVE";
-// URL پایه برای Inference API
-// [اصلاح شده] استفاده از آدرس جدید Inference Providers API
-const API_URL = `https://router.huggingface.co/hf-inference/models/${HF_MODEL_NAME}`;
+// --- Configuration for Hugging Face Gradio Space API ---
+// نام کاربری شما در Hugging Face
+const HF_USER = "amirimmd"; 
+// نام Space که شما ایجاد کردید
+const HF_SPACE_NAME = "ExBERT-Classifier-Inference"; 
+
+// [مهم]: آدرس API Space برای فراخوانی تابع predict در Gradio
+// Gradio API از ساختار /run/predict برای فراخوانی تابع اصلی استفاده می کند.
+const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`; 
 
 // --- خواندن توکن از متغیرهای محیطی ---
-// !!! استفاده از process.env که در اکثر محیط‌های Build بهتر تزریق می‌شود.
-const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN;
+// توجه: ما از process.env استفاده می کنیم و فرض می کنیم Vercel آن را در Build Time تزریق می کند.
+const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN; 
 
 // [DEBUG] Check if token is loaded
 if (!HF_API_TOKEN) {
@@ -23,10 +26,31 @@ const useTypewriter = (text, speed = 50) => {
   const [displayText, setDisplayText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
+  const startTypingProcess = useCallback((newText) => {
+    if(newText){
+        setIsTyping(true);
+        // تنظیم خروجی کامل برای استفاده در useEffect
+        // استفاده از یک ترفند کوچک برای تغییر state تا useEffect trigger شود
+        // اگر متن یکسان باشد، مستقیماً state را تغییر نمی دهیم
+        if (newText === text) {
+             setDisplayText(newText + ' ');
+             setDisplayText(newText);
+        }
+        else {
+             setDisplayText(newText);
+        }
+    } else {
+        setIsTyping(false);
+        setDisplayText('');
+    }
+  }, [text]); // dependency array includes text
+
   useEffect(() => {
     if (isTyping && text) {
-      setDisplayText(''); // Clear previous text
       let i = 0;
+      // مطمئن شویم که متن نمایش داده شده را از ابتدا شروع می کنیم
+      setDisplayText('');
+      
       const intervalId = setInterval(() => {
         if (i < text.length) {
           setDisplayText(prev => prev + text.charAt(i));
@@ -37,21 +61,13 @@ const useTypewriter = (text, speed = 50) => {
         }
       }, speed);
       return () => clearInterval(intervalId);
-    } else if (!text) {
+    } else if (!text && isTyping) {
+        setIsTyping(false);
         setDisplayText('');
     }
-  }, [text, isTyping, speed]);
+  }, [text, isTyping, speed]); // Re-run when text changes
 
-  const startTypingProcess = (newText) => {
-    if(newText){
-        setIsTyping(true); 
-    } else {
-        setIsTyping(false); 
-        setDisplayText(''); 
-    }
-  };
-
-
+  // نکته: ما displayText را از useEffect می گیریم، اما تابع شروع را از useCallback
   return [displayText, startTypingProcess];
 };
 
@@ -63,44 +79,50 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [error, setError] = useState(null);
   const [typedOutput, startTyping] = useTypewriter(output, 20);
 
-  const simulateResponse = (id, text) => {
-    switch (id) {
-        case 'xai':
-            return `[EXBERT.XAI_REPORT]: Threat identified. EXPLANATION for "${text.substring(0, 20)}...": Model attention focused on token 'OR 1=1' (weight: 0.95) and 'admin' (weight: 0.7). Decision trace points to 'CLASSIC_SQLI' signature.`;
-        case 'other':
-            return `[GENERAL_MODEL_LOG]: Input string length: ${text.length} bytes. Token count: ${text.split(' ').length}. Hash signature: ${Math.random().toString(16).substring(2, 10)}. Operational status: NOMINAL.`;
-        default:
-            return "ERROR: Model not supported or input missing.";
+  // این تابع شبیه سازی است و فقط برای مدل های غیر از EXBERT استفاده می شود
+  const simulateAnalysis = (query, modelId) => {
+    let simulatedResponse = '';
+    switch (modelId) {
+      case 'xai':
+        simulatedResponse = `[EXBERT.XAI_REPORT]: Threat identified. EXPLANATION: Model attention focused on token 'OR 1=1' (weight: 0.95) and 'admin' (weight: 0.7). Decision trace points to 'CLASSIC_SQLI' signature.`;
+        break;
+      case 'other':
+        simulatedResponse = `[GENERAL_MODEL_LOG]: Input string length: ${query.length} bytes. Operational status: NOMINAL.`;
+        break;
+      default:
+        simulatedResponse = "ERROR: Model not found.";
     }
+    return simulatedResponse;
   };
 
-  const handleSubmit = async (e) => {
+
+  const handleModelQuery = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    const query = input.trim();
+    if (!query) return;
 
     setLoading(true);
     setOutput('');
     setError(null);
     startTyping('');
 
-    // --- 1. Simulation for Non-EXBERT Models ---
+    // --- مدیریت مدل های شبیه سازی شده ---
     if (modelId !== 'exbert') {
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
-        const simulated = simulateResponse(modelId, input);
-        setOutput(simulated);
-        startTyping(simulated);
-        setLoading(false);
-        return;
+      const response = simulateAnalysis(query, modelId);
+      // شبیه سازی تاخیر شبکه
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setOutput(response);
+      startTyping(response);
+      setLoading(false);
+      return;
     }
     
-    // --- 2. Live API Call for EXBERT Model ---
+    // --- اتصال واقعی به Gradio Space (فقط برای ExBERT) ---
     if (!HF_API_TOKEN) {
-        // اگر این بلاک اجرا شود، همچنان پیام هشدار را می‌دهیم
-        setError("Hugging Face API Token (VITE_HF_API_TOKEN) is missing. Cannot execute live query. Please configure in Vercel.");
+        setError("API Token Missing. Please configure VITE_HF_API_TOKEN.");
         setLoading(false);
         return;
     }
-
 
     try {
       const response = await fetch(API_URL, {
@@ -108,65 +130,58 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         headers: {
           'Authorization': `Bearer ${HF_API_TOKEN}`,
           'Content-Type': 'application/json',
-          'X-Wait-For-Model': 'true'
         },
+        // بدنه درخواست استاندارد Gradio API: یک آرایه از ورودی های تابع پایتون شما
         body: JSON.stringify({
-          inputs: input,
+          data: [query], // تابع پایتون predict_exploitability یک ورودی (description) دارد
         }),
       });
-      
-      // تلاش برای خواندن بدنه پاسخ قبل از بررسی .ok
-      const isJson = response.headers.get('content-type')?.includes('application/json');
-      const responseBody = isJson ? await response.json().catch(() => ({ error: "Could not parse JSON response" })) : { error: `Server returned non-JSON data (Status: ${response.status})` };
-      
-      
-      if (!response.ok) {
-        console.error("HF API Error Response:", responseBody);
-        
-        let errorMessage = `API request failed (Status: ${response.status}).`;
 
-        if (response.status === 404) {
-             // 404 اکنون ممکن است به دلیل استفاده از آدرس قدیمی (منسوخ شده) باشد یا مشکل در لود مدل
-             errorMessage = `404: Model Not Found. Ensure 'modeling_exbert.py' is uploaded and the model is loaded on HF.`;
-        } else if (response.status === 401 || response.status === 403) {
-             errorMessage = `401/403: Authorization Failed. Check VITE_HF_API_TOKEN and its permissions.`;
-        } else if (responseBody.error) {
-            errorMessage = responseBody.error;
-        }
+      if (!response.ok) {
+        // در صورت عدم موفقیت، سعی می کنیم پیام خطا را بخوانیم
+        const errorText = await response.text(); // خواندن پاسخ به صورت متن
+        console.error("HF API Error Text:", errorText);
+
+        // تلاش برای استخراج پیام خطا از بدنه
+        let errorMessage = `HTTP Error ${response.status}. Model may be loading.`;
+        try {
+             const errorJson = JSON.parse(errorText);
+             if (errorJson.error) errorMessage = errorJson.error;
+             if (errorText.includes("currently loading")) errorMessage = "Model is starting up (Cold Start). Please wait 30s and try again.";
+        } catch {}
 
         throw new Error(errorMessage);
       }
 
-      const result = responseBody; // responseBody اکنون همان result است
+      const result = await response.json();
 
-      console.log("HF API Success Response:", result);
+      console.log("HF Gradio API Success Response:", result);
 
-      // --- پردازش پاسخ (بخش حیاتی) ---
-      let formattedOutput = "Could not parse API response or model returned unexpected structure.";
+      // --- پردازش پاسخ Gradio ---
+      // Gradio API پاسخ را به شکل: { "data": [خروجی تابع پایتون شما] } برمی گرداند
+      let formattedOutput = "Error: Could not parse prediction result."; 
       
-      if (Array.isArray(result) && result.length > 0 && Array.isArray(result[0])) {
-          // فرض می‌کنیم لیبل با بالاترین امتیاز یا LABEL_1 مثبت است
-          const prediction = result[0].find(p => p.label && (p.label === 'LABEL_1' || p.label.toLowerCase() === 'exploitable'));
-          const score = prediction ? prediction.score : (result[0][0] ? 1.0 - result[0][0].score : 0);
-          const probability = (score * 100).toFixed(1);
+      if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+          // خروجی شما یک رشته یا عدد است که توسط تابع پایتون predict_exploitability برگردانده می شود
+          const rawPrediction = result.data[0]; 
 
-          formattedOutput = `[EXBERT_ANALYSIS]: Input processed. Exploitability Probability: ${probability}%.`;
-
-      } else if (result.error) {
-          formattedOutput = `[API_ERROR]: ${result.error}`;
-          if (result.error.includes("currently loading") && result.estimated_time) {
-              formattedOutput += ` Model is loading, please wait ~${Math.ceil(result.estimated_time)} seconds and try again.`;
-          } else if (result.error.includes("trust_remote_code")) {
-               formattedOutput += ` Model requires custom code ('modeling_exbert.py') to be present in your HF repository.`;
+          if (typeof rawPrediction === 'string') {
+               // اگر خروجی نهایی پایتون یک رشته متنی است
+               formattedOutput = rawPrediction;
+          } else if (typeof rawPrediction === 'number' && rawPrediction >= 0 && rawPrediction <= 1) {
+               // اگر خروجی یک عدد (احتمال) بین 0 و 1 است
+               formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
+          } else {
+               formattedOutput = `[EXBERT_REPORT]: Analysis received. Raw output: ${JSON.stringify(rawPrediction)}`;
           }
       }
-      
+
       setOutput(formattedOutput);
       startTyping(formattedOutput);
 
     } catch (err) {
       console.error("Error during API call:", err);
-      setError(`Error connecting to HF: ${err.message}`);
+      setError(`API ERROR: ${err.message}`);
       setOutput('');
       startTyping('');
     } finally {
@@ -180,20 +195,20 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
       
       {/* نمایش هشدار توکن */}
-      {(modelId === 'exbert' && !HF_API_TOKEN) && (
+      {modelId === 'exbert' && !HF_API_TOKEN && (
           <p className="text-xs text-cyber-yellow mb-2 p-2 bg-yellow-900/30 rounded border border-yellow-500/50">
-            ⚠️ Hugging Face API Token (VITE_HF_API_TOKEN) not configured. Live analysis is disabled.
+            ⚠️ Hugging Face API Token (VITE_HF_API_TOKEN) not configured. AI analysis is disabled.
           </p>
       )}
-
-      <form onSubmit={handleSubmit}>
+      
+      <form onSubmit={handleModelQuery}>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           rows="4"
           className="cyber-textarea w-full"
           placeholder={placeholder}
-          disabled={loading}
+          disabled={loading || (modelId === 'exbert' && !HF_API_TOKEN)}
         />
         <button type="submit" className="cyber-button w-full mt-3 flex items-center justify-center" disabled={loading}>
           {loading ? (
@@ -206,27 +221,27 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           )}
         </button>
       </form>
-
+      
       {/* نمایش خطا */}
       {error && (
         <p className="mt-2 text-xs text-cyber-red p-2 bg-red-900/30 rounded border border-red-500/50">
           {error}
         </p>
       )}
-
+      
       <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto">
         {/* نمایش خروجی تایپ شده */}
         {typedOutput ? (
           <span>
             {typedOutput}
-            {/* نمایش کرسر فقط اگر تایپ در حال انجام است */}
-            {!loading && typedOutput === output ? null : <span className="typing-cursor"></span>}
+            {/* نمایش کرسر فقط اگر تایپ در حال انجام نیست و خروجی کامل است */}
+            {!loading && typedOutput === output && output.length > 0 ? <span className="typing-cursor"></span> : null}
           </span>
         ) : (
             // اگر خطایی وجود ندارد و در حال لودینگ نیست، پیام آماده‌باش را نشان بده
             !error && !loading ? (
-                 <span className="text-gray-500">MODEL.RESPONSE.STANDBY_</span>
-            ) : null
+                 <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
+            ) : null 
         )}
       </div>
     </div>
