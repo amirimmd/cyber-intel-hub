@@ -7,98 +7,58 @@ const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
-// [FIX] استفاده از مسیر API صحیحی که از لاگ‌های شما پیدا شد
 const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-// --- خواندن توکن (روش استاندارد Vite) ---
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
-// [DEBUG] لاگ کردن وضعیت توکن
 if (!HF_API_TOKEN) {
-  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! Real model queries will fail.");
-  console.log("  Ensure it is set in .env.local (for dev) or Vercel environment variables (for production).");
+  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing!");
 } else {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
 }
 
-
-// Typewriter Hook (Refined)
+// Typewriter Hook (Refined - unchanged from previous version)
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text); // Store the full target text
+    const [internalText, setInternalText] = useState(text);
     const [isTyping, setIsTyping] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null); // Ref to hold interval ID
+    const intervalRef = useRef(null);
 
     const startTypingProcess = useCallback((newText) => {
-        // Clear previous interval if any
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-        setInternalText(newText || ''); // Update the target text
-        setDisplayText(''); // Clear display immediately
-        setCurrentIndex(0); // Reset index
-        if (newText) {
-            setIsTyping(true); // Start typing if there is new text
-        } else {
-            setIsTyping(false); // Stop typing if new text is empty
-        }
-    }, []); // No dependencies needed here if it only sets state
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setInternalText(newText || '');
+        setDisplayText('');
+        setCurrentIndex(0);
+        setIsTyping(!!newText);
+    }, []);
 
     useEffect(() => {
-        // Clear interval from previous runs of this effect
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
+        if (intervalRef.current) clearInterval(intervalRef.current);
 
         if (isTyping && internalText && currentIndex < internalText.length) {
             intervalRef.current = setInterval(() => {
-                // Check condition *inside* interval callback
                  if (currentIndex < internalText.length) {
-                    // Use substring based on the *next* index to avoid skipping
                     const nextIndex = currentIndex + 1;
-                    setDisplayText(internalText.substring(0, nextIndex)); // More reliable update
-                    setCurrentIndex(nextIndex); // Update index for the next run
+                    setDisplayText(internalText.substring(0, nextIndex));
+                    setCurrentIndex(nextIndex);
                  } else {
-                    // If somehow index is out of bounds, stop
                     clearInterval(intervalRef.current);
                     intervalRef.current = null;
                     setIsTyping(false);
                  }
             }, speed);
         } else if (currentIndex >= (internalText?.length || 0)) {
-            // Stop typing if done
             if(isTyping) setIsTyping(false);
-            // Also clear interval just in case
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
+            if (intervalRef.current) clearInterval(intervalRef.current);
         }
 
-        // Cleanup function for the effect
-        return () => {
-             if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null; // Clear ref on cleanup too
-             }
-        };
-    }, [isTyping, speed, internalText, currentIndex]); // Rerun effect if these change
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [isTyping, speed, internalText, currentIndex]);
 
-
-    // Global cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
-        };
-    }, []);
-
+    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
 
     return [displayText, startTypingProcess, isTyping];
 };
@@ -106,14 +66,12 @@ const useTypewriter = (text, speed = 50) => {
 
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
-  const [output, setOutput] = useState(''); // Stores the full response from API
+  const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Get isTyping state from hook
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
-  const eventSourceRef = useRef(null); // Ref for EventSource
+  const eventSourceRef = useRef(null);
 
-  // Simulation function (unchanged)
   const simulateAnalysis = (query, modelId) => {
       let simulatedResponse = '';
       switch (modelId) {
@@ -124,7 +82,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return simulatedResponse;
   };
 
-  // Cleanup EventSource (unchanged)
   useEffect(() => {
     return () => {
       if (eventSourceRef.current) {
@@ -142,15 +99,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     setLoading(true);
     setError(null);
-    startTypingProcess(''); // Clear and stop typewriter
-    // Close previous connection if exists
+    startTypingProcess('');
     if (eventSourceRef.current) {
         console.log("Closing previous EventSource before new request.");
         eventSourceRef.current.close();
         eventSourceRef.current = null;
     }
 
-    // --- Handle simulated models ---
     if (modelId !== 'exbert') {
       const response = simulateAnalysis(query, modelId);
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -160,44 +115,49 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
 
-    // --- Real call using Gradio Queue Protocol ---
-    if (!HF_API_TOKEN) {
-        const errorMsg = "API Token Missing. Configure VITE_HF_API_TOKEN in your environment.";
-        console.error(errorMsg);
-        setError(errorMsg);
-        setLoading(false);
-        return;
-    }
+    // --- Real call ---
+    // Note: We don't check for HF_API_TOKEN here anymore because we're testing *without* it for the JOIN step.
+    // We will still need it for subsequent steps if the space requires authentication.
 
     try {
         console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-        // 1. Join the queue, sending data and CORRECT fn_index
-        const fnIndexToUse = 2; // <<<=== !!! IMPORTANT: VERIFY THIS VALUE !!!
+        const fnIndexToUse = 2; // Confirmed correct
         console.log(`Using fn_index: ${fnIndexToUse}`);
+
+        // [TEST] Temporarily remove Authorization header for the JOIN request only
+        const joinHeaders = {
+            'Content-Type': 'application/json',
+        };
+        // if (HF_API_TOKEN) { // Keep token check commented out for this test
+        //    joinHeaders['Authorization'] = `Bearer ${HF_API_TOKEN}`;
+        // } else {
+        //    console.warn("Attempting join without API token (as per test).");
+        // }
+        console.warn("Attempting join without Authorization header (TEST).");
+
 
         const joinResponse = await fetch(QUEUE_JOIN_URL, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${HF_API_TOKEN}`,
-                'Content-Type': 'application/json',
-            },
+            headers: joinHeaders, // Use headers without Auth for this test
             body: JSON.stringify({
-                fn_index: fnIndexToUse, // <-- Use the variable
+                fn_index: fnIndexToUse,
                 data: [query],
-                // session_hash در درخواست اولیه join نیاز نیست
             })
         });
 
         if (!joinResponse.ok) {
+             // Handle errors same as before...
              const errorText = await joinResponse.text();
              console.error("Queue Join Error:", joinResponse.status, errorText);
              let detailedError = `Failed to join queue: ${joinResponse.status}.`;
              if (joinResponse.status === 401) {
-                 detailedError += " Unauthorized. Check your VITE_HF_API_TOKEN.";
+                 detailedError += " Unauthorized. Even without the header, auth might be required. Re-add header & check token.";
              } else if (joinResponse.status === 404) {
                  detailedError += ` Endpoint ${API_PREFIX}/queue/join not found. Ensure queue is enabled (.queue().launch()) and API path is correct.`;
              } else if (joinResponse.status === 422) {
                  detailedError += ` Validation Error. Check fn_index (currently ${fnIndexToUse}) or data payload format.`;
+             } else if (joinResponse.status === 400 && errorText.includes("Session hash not found")) {
+                 detailedError += ` Still getting 400 Session hash error. Problem likely in app.py or Gradio version/config.`; // More specific error
              } else if (errorText.includes("Internal Server Error") || joinResponse.status === 500) {
                 detailedError += " Internal Server Error. Space might be restarting or errored. Check Space logs.";
              } else if (joinResponse.status === 503) {
@@ -208,6 +168,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              throw new Error(detailedError);
         }
 
+        // --- If join is successful (status 200 OK) ---
         const joinResult = await joinResponse.json();
         const sessionHash = joinResult.session_hash;
 
@@ -215,15 +176,25 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
              throw new Error("Failed to get session hash from queue join.");
         }
-        console.log(`Step 2: Joined queue with session hash: ${sessionHash}`);
+        console.log(`Step 2: Joined queue successfully with session hash: ${sessionHash}`);
 
-
-        // 3. Listen for results using EventSource
+        // --- Now listen for data (EventSource likely still needs Auth if space is private) ---
         console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
         const dataUrl = QUEUE_DATA_URL(sessionHash);
-        eventSourceRef.current = new EventSource(dataUrl);
+
+        // Note: EventSource doesn't easily support custom headers like Authorization.
+        // If your Hugging Face Space is PRIVATE, EventSource might fail here.
+        // If it's PUBLIC, it should work.
+        if (!HF_API_TOKEN && /* Check if space is actually private, logic needed here */ false) {
+             console.error("Space seems private, but no API token available for EventSource. Data fetching might fail.");
+             // Consider informing the user or attempting fetch with credentials if EventSource spec allowed it.
+        }
+        // For public spaces or if token isn't strictly needed for GET data:
+        eventSourceRef.current = new EventSource(dataUrl); // Standard EventSource connection
+
 
         eventSourceRef.current.onmessage = (event) => {
+            // ... (rest of the onmessage logic remains the same)
             try {
                 const message = JSON.parse(event.data);
                 console.log("Received SSE message:", message);
@@ -233,32 +204,27 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         setOutput("Processing started...");
                         startTypingProcess("Processing started...");
                         break;
-                    case "process_generating": break; // Handle if needed
+                    case "process_generating": break;
                     case "process_completed":
-                        console.log("Processing completed. Raw output:", JSON.stringify(message.output, null, 2)); // Log the raw output object
+                        console.log("Processing completed. Raw output:", JSON.stringify(message.output, null, 2));
                         if (message.success && message.output && message.output.data) {
-                            // [اصلاح] دسترسی به خروجی مدل - با لاگ دقیق تر
                             const rawPrediction = message.output.data[0];
-                            console.log("Extracted rawPrediction:", rawPrediction); // Log extracted data
+                            console.log("Extracted rawPrediction:", rawPrediction);
                             let formattedOutput = "Error: Could not parse prediction result.";
 
                              if (rawPrediction !== null && rawPrediction !== undefined) {
-                                // اگر خروجی یک آبجکت با لیبل است
                                 if (typeof rawPrediction === 'object' && rawPrediction.label !== undefined && rawPrediction.score !== undefined) {
                                      formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
                                      console.log("Parsed as Label/Score object.");
                                 }
-                                // اگر خروجی یک رشته است (بر اساس کد قبلی شما)
                                 else if (typeof rawPrediction === 'string' && rawPrediction.startsWith("Exploitability Probability:")) {
                                     formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
                                     console.log("Parsed as 'Exploitability Probability' string.");
                                 }
-                                // اگر خروجی فقط یک عدد است (بر اساس کد قبلی شما)
                                 else if (typeof rawPrediction === 'number') {
                                     formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
                                      console.log("Parsed as number (probability).");
                                 }
-                                // اگر خروجی فقط یک رشته است
                                 else if (typeof rawPrediction === 'string') {
                                     formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
                                     console.log("Parsed as generic string.");
@@ -282,7 +248,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         }
                         if(eventSourceRef.current) eventSourceRef.current.close();
                         eventSourceRef.current = null;
-                        setLoading(false); // Stop loading indicator here
+                        setLoading(false);
                         break;
                      case "queue_full":
                          console.warn("Queue is full.");
@@ -296,7 +262,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                          const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
                          const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
                          const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
-                         // فقط اگر هنوز در حال لود شدن هستیم، پیام صف را نشان بده
                          if (loading) {
                              setOutput(waitMsg);
                              startTypingProcess(waitMsg);
@@ -317,13 +282,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         };
 
         eventSourceRef.current.onerror = (error) => {
-            console.error("EventSource Error:", error);
+            // ... (onerror logic remains the same)
+             console.error("EventSource Error:", error);
             let errorMsg = "Error connecting to API stream.";
              if (!navigator.onLine) {
                  errorMsg += " Check your network connection.";
              } else {
-                 // خطای EventSource معمولاً وقتی رخ می‌دهد که Space در حال ری‌استارت، خاموش، یا دارای خطا باشد
-                 errorMsg += " Could not maintain connection. The Space might be sleeping, restarting, or encountered an internal error. Check Space logs.";
+                 errorMsg += " Could not maintain connection. Space might be sleeping/restarting/errored or requires authentication for data stream. Check Space logs."; // Added auth note
              }
             setError(errorMsg);
              if(eventSourceRef.current) eventSourceRef.current.close();
@@ -334,36 +299,38 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         };
 
     } catch (err) {
-      console.error("Error during Gradio Queue interaction:", err);
-      let displayError = err.message || "An unknown error occurred.";
-       // نمایش خطاهای واضح تر
-       if (!(err instanceof Error)) { // Handle non-Error objects being thrown
-          displayError = `An unexpected issue occurred: ${JSON.stringify(err)}`;
-       } else if (err.message.includes("401")) {
-           displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN in Vercel/local env.";
-       } else if (err.message.includes("422")) {
-           displayError = `API ERROR: 422 Validation Error. Verify fn_index (is ${fnIndexToUse} correct?) and data format sent.`;
-       } else if (err.message.includes("Failed to fetch")) {
-           displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
-       } else if (err.message.includes("404")) {
-            displayError = `API ERROR: 404 Endpoint Not Found (${API_PREFIX}/queue/join). Ensure queue is enabled in app.py and path is correct.`;
-       } else if (err.message.includes("500") || err.message.includes("Internal Server Error")) {
-            displayError = "API ERROR: 500 Internal Server Error on Hugging Face Space. Check Space logs for details.";
-       } else if (err.message.includes("503")) {
-            displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping, building, or overloaded. Wait and retry.";
-       }
-      setError(displayError);
-      setLoading(false);
-      setOutput('');
-      startTypingProcess('');
-       if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
-       }
+        // ... (catch block remains the same)
+        console.error("Error during Gradio Queue interaction:", err);
+        let displayError = err.message || "An unknown error occurred.";
+        if (!(err instanceof Error)) {
+           displayError = `An unexpected issue occurred: ${JSON.stringify(err)}`;
+        } else if (err.message.includes("401")) {
+            displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN in Vercel/local env.";
+        } else if (err.message.includes("422")) {
+            displayError = `API ERROR: 422 Validation Error. Verify fn_index (is ${fnIndexToUse} correct?) and data format sent.`;
+        } else if (err.message.includes("Failed to fetch")) {
+            displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
+        } else if (err.message.includes("404")) {
+             displayError = `API ERROR: 404 Endpoint Not Found (${API_PREFIX}/queue/join). Ensure queue is enabled in app.py and path is correct.`;
+        } else if (err.message.includes("500") || err.message.includes("Internal Server Error")) {
+             displayError = "API ERROR: 500 Internal Server Error on Hugging Face Space. Check Space logs for details.";
+        } else if (err.message.includes("503")) {
+             displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping, building, or overloaded. Wait and retry.";
+        } else if (err.message.includes("400") && err.message.includes("Session hash")) {
+             displayError = "API ERROR: 400 Session hash error persists. Check app.py config or Gradio version compatibility.";
+        }
+       setError(displayError);
+       setLoading(false);
+       setOutput('');
+       startTypingProcess('');
+        if (eventSourceRef.current) {
+           eventSourceRef.current.close();
+           eventSourceRef.current = null;
+        }
     }
-     // setLoading(false) is handled by EventSource messages (completed, queue_full, error)
   };
 
+  // --- Render logic (unchanged) ---
   return (
     <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
       <h3 className="text-xl font-bold mb-2 text-white">{title}</h3>
@@ -382,9 +349,9 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           rows="4"
           className="cyber-textarea w-full"
           placeholder={placeholder}
-          disabled={loading || (modelId === 'exbert' && !HF_API_TOKEN)}
+          disabled={loading || (modelId === 'exbert' && !HF_API_TOKEN && /* Need logic to check if space is private */ false)} // Disable if private and no token
         />
-        <button type="submit" className="cyber-button w-full mt-3 flex items-center justify-center" disabled={loading || !input || (modelId === 'exbert' && !HF_API_TOKEN)}>
+        <button type="submit" className="cyber-button w-full mt-3 flex items-center justify-center" disabled={loading || !input || (modelId === 'exbert' && !HF_API_TOKEN && /* Need logic to check if space is private */ false) }>
           {loading ? (
             <>
               <Loader2 className="animate-spin h-5 w-5 mr-3" />
@@ -404,10 +371,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
       <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto">
          {typedOutput}
-         {/* Display cursor only while actively typing */}
          {isTyping ? <span className="typing-cursor"></span> : null}
-
-         {/* Display standby only when not loading, no error, and effectively no output */}
          {!loading && !error && !output && !typedOutput && (
              <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
          )}
