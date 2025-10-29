@@ -8,12 +8,11 @@ const HF_USER = "amirimmd";
 // نام Space که شما ایجاد کردید
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference"; 
 
-// [مهم]: آدرس API Space برای فراخوانی تابع predict در Gradio
-// Gradio API از ساختار /run/predict برای فراخوانی تابع اصلی استفاده می کند.
+// [مهم]: استفاده از آدرس استاندارد Gradio 4.0+.
+// راه حل: شاخص تابع (fn_index) را به بدنه درخواست اضافه می کنیم.
 const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`; 
 
 // --- خواندن توکن از متغیرهای محیطی ---
-// توجه: ما از process.env استفاده می کنیم و فرض می کنیم Vercel آن را در Build Time تزریق می کند.
 const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN; 
 
 // [DEBUG] Check if token is loaded
@@ -30,8 +29,6 @@ const useTypewriter = (text, speed = 50) => {
     if(newText){
         setIsTyping(true);
         // تنظیم خروجی کامل برای استفاده در useEffect
-        // استفاده از یک ترفند کوچک برای تغییر state تا useEffect trigger شود
-        // اگر متن یکسان باشد، مستقیماً state را تغییر نمی دهیم
         if (newText === text) {
              setDisplayText(newText + ' ');
              setDisplayText(newText);
@@ -43,12 +40,11 @@ const useTypewriter = (text, speed = 50) => {
         setIsTyping(false);
         setDisplayText('');
     }
-  }, [text]); // dependency array includes text
+  }, [text]);
 
   useEffect(() => {
     if (isTyping && text) {
       let i = 0;
-      // مطمئن شویم که متن نمایش داده شده را از ابتدا شروع می کنیم
       setDisplayText('');
       
       const intervalId = setInterval(() => {
@@ -65,10 +61,9 @@ const useTypewriter = (text, speed = 50) => {
         setIsTyping(false);
         setDisplayText('');
     }
-  }, [text, isTyping, speed]); // Re-run when text changes
+  }, [text, isTyping, speed]);
 
-  // نکته: ما displayText را از useEffect می گیریم، اما تابع شروع را از useCallback
-  return [displayText, startTypingProcess];
+  return [displayText, startTyping];
 };
 
 
@@ -131,22 +126,23 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           'Authorization': `Bearer ${HF_API_TOKEN}`,
           'Content-Type': 'application/json',
         },
-        // بدنه درخواست استاندارد Gradio API: یک آرایه از ورودی های تابع پایتون شما
+        // بدنه درخواست استاندارد Gradio API: اکنون fn_index اضافه شده است
         body: JSON.stringify({
+          fn_index: 0, // <--- این مهمترین اصلاح برای رفع خطای 404 است
           data: [query], // تابع پایتون predict_exploitability یک ورودی (description) دارد
         }),
       });
 
       if (!response.ok) {
         // در صورت عدم موفقیت، سعی می کنیم پیام خطا را بخوانیم
-        const errorText = await response.text(); // خواندن پاسخ به صورت متن
+        const errorText = await response.text(); 
         console.error("HF API Error Text:", errorText);
 
-        // تلاش برای استخراج پیام خطا از بدنه
         let errorMessage = `HTTP Error ${response.status}. Model may be loading.`;
         try {
              const errorJson = JSON.parse(errorText);
              if (errorJson.error) errorMessage = errorJson.error;
+             if (errorText.includes("Not Found")) errorMessage = "404 Error: Could not find the API endpoint. Please check the Gradio Space URL and if fn_index is correct.";
              if (errorText.includes("currently loading")) errorMessage = "Model is starting up (Cold Start). Please wait 30s and try again.";
         } catch {}
 
@@ -158,11 +154,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       console.log("HF Gradio API Success Response:", result);
 
       // --- پردازش پاسخ Gradio ---
-      // Gradio API پاسخ را به شکل: { "data": [خروجی تابع پایتون شما] } برمی گرداند
+      // Gradio API پاسخ را به شکل: { "data": [خروجی تابع پایتون شما] } برمی گردد
       let formattedOutput = "Error: Could not parse prediction result."; 
       
       if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-          // خروجی شما یک رشته یا عدد است که توسط تابع پایتون predict_exploitability برگردانده می شود
+          // خروجی شما یک رشته یا عدد است که توسط تابع پایتون برگردانده می شود
           const rawPrediction = result.data[0]; 
 
           if (typeof rawPrediction === 'string') {
