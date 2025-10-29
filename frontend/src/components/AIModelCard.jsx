@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 // --- Configuration ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
-// [مهم] تغییر آدرس API به /api/predict به عنوان آخرین تلاش
+// [مهم] تغییر آدرس API به /api/predict
 const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/api/predict`;
 
 // --- خواندن توکن ---
@@ -16,7 +16,7 @@ if (!HF_API_TOKEN) {
   console.warn("⚠️ Hugging Face API Token (VITE_HF_API_TOKEN) is missing!");
 }
 
-// Typewriter Hook
+// Typewriter Hook (Refined)
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
     const [internalText, setInternalText] = useState(text); // Store the full target text
@@ -32,7 +32,7 @@ const useTypewriter = (text, speed = 50) => {
         } else {
             setIsTyping(false); // Stop typing if new text is empty
         }
-    }, []); // No dependencies needed here if it only sets state
+    }, []);
 
     useEffect(() => {
         if (isTyping && internalText && currentIndex < internalText.length) {
@@ -40,29 +40,29 @@ const useTypewriter = (text, speed = 50) => {
                 setDisplayText(prev => prev + internalText.charAt(currentIndex));
                 setCurrentIndex(prevIndex => prevIndex + 1);
             }, speed);
-            return () => clearTimeout(timeoutId); // Cleanup timeout on change
+            return () => clearTimeout(timeoutId);
         } else if (currentIndex >= (internalText?.length || 0)) {
-            setIsTyping(false); // Stop typing when done
+            // Stop typing only when the entire text has been displayed
+             if(isTyping) setIsTyping(false);
         }
-        // Cleanup function for when component unmounts or dependencies change significantly
+         // Cleanup function in case dependencies change mid-typing
         return () => {
-             // Optional: Stop timeout if component unmounts while typing
+           // No explicit cleanup needed here unless managing intervals differently
         };
-    }, [isTyping, speed, internalText, currentIndex]); // Correct dependencies
-
+    }, [isTyping, speed, internalText, currentIndex]); // Effect depends on these states
 
     // Return the currently displayed text and the function to start typing
-    return [displayText, startTypingProcess];
+    return [displayText, startTypingProcess, isTyping]; // Return isTyping state as well
 };
 
 
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
-  const [output, setOutput] = useState(''); // Stores the full response from API
+  const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Use the refined typewriter hook
-  const [typedOutput, startTypingProcess] = useTypewriter(output, 20);
+  // Get isTyping state from hook
+  const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
 
   // Simulation function (unchanged)
   const simulateAnalysis = (query, modelId) => {
@@ -108,35 +108,35 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     }
 
     try {
-      console.log(`Sending request to: ${API_URL} with query: ${query}`); // Log before fetch
+      console.log(`Sending request to: ${API_URL} with query: ${query}`);
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${HF_API_TOKEN}`,
           'Content-Type': 'application/json',
         },
-        // [مهم] Gradio API payload (بدون تغییر، fn_index همچنان لازم است)
+        // [مهم] Gradio API payload with fn_index
         body: JSON.stringify({
           fn_index: 0,
           data: [query],
         }),
       });
 
-      console.log(`Received response status: ${response.status}`); // Log status
+      console.log(`Received response status: ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error("HF API Error Text:", errorText);
 
         let errorMessage = `HTTP Error ${response.status}.`;
-         try {
+        try {
              const errorJson = JSON.parse(errorText);
              if (errorJson.error) errorMessage = errorJson.error;
-             else if (errorJson.detail && response.status === 404) errorMessage = "404 Error: API endpoint not found. Tried /api/predict.";
+             else if (errorJson.detail && response.status === 404) errorMessage = "404 Error: API endpoint not found. Tried /api/predict. Check Space URL/logs.";
              else if (errorJson.detail) errorMessage = errorJson.detail;
 
         } catch {
-             if (response.status === 404) errorMessage = "404 Error: API endpoint not found. Tried /api/predict.";
+             if (response.status === 404) errorMessage = "404 Error: API endpoint not found. Tried /api/predict. Check Space URL/logs.";
              else if (errorText.includes("currently loading")) errorMessage = "Model is starting up (Cold Start). Please wait ~30s and try again.";
              else errorMessage = `Non-JSON Error Response: ${errorText.substring(0,100)}...`;
         }
@@ -225,8 +225,8 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
       <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto">
          {typedOutput}
-         {/* نمایش کرسر فقط در حین تایپ */}
-         {!loading && output && typedOutput !== output ? <span className="typing-cursor"></span> : null}
+         {/* Display cursor only while typing */}
+         {isTyping ? <span className="typing-cursor"></span> : null}
 
          {!loading && !error && !output && !typedOutput && (
              <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
