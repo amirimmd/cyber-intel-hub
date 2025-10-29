@@ -11,15 +11,17 @@ const QUEUE_JOIN_URL = `${BASE_API_URL}/queue/join`;
 // نقطه پایانی برای گوش دادن به نتایج (EventSource)
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/queue/data?session_hash=${sessionHash}`;
 
-// --- خواندن توکن ---
-const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN;
+// --- خواندن توکن (روش استاندارد Vite) ---
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
 // [DEBUG]
 if (!HF_API_TOKEN) {
   console.warn("⚠️ Hugging Face API Token (VITE_HF_API_TOKEN) is missing!");
+} else {
+  console.log("✅ Hugging Face API Token loaded (partially):", HF_API_TOKEN.substring(0, 5) + "...");
 }
 
-// Typewriter Hook (Refined) - بدون تغییر
+// Typewriter Hook (Refined)
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
     const [internalText, setInternalText] = useState(text);
@@ -43,28 +45,53 @@ const useTypewriter = (text, speed = 50) => {
     }, []);
 
     useEffect(() => {
+        // Clear interval from previous runs of this effect
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+
         if (isTyping && internalText && currentIndex < internalText.length) {
             intervalRef.current = setInterval(() => {
-                 if (currentIndex < internalText.length) {
-                    setDisplayText(prev => prev + internalText.charAt(currentIndex));
-                    setCurrentIndex(prevIndex => prevIndex + 1);
-                 } else {
-                     if(intervalRef.current) clearInterval(intervalRef.current);
-                     intervalRef.current = null;
-                     setIsTyping(false);
-                 }
-            }, speed);
-            return () => {
-                 if (intervalRef.current) {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                 }
-            };
-        } else if (currentIndex >= (internalText?.length || 0)) {
-             if(isTyping) setIsTyping(false);
-        }
-    }, [isTyping, speed, internalText, currentIndex]);
+                // Check condition *inside* interval
+                setDisplayText(prev => {
+                    // Prevent adding characters if currentIndex has already reached the end
+                    if (currentIndex < internalText.length) {
+                         // IMPORTANT: Use substring based on the *next* index to avoid skipping
+                         const nextIndex = currentIndex + 1;
+                         setCurrentIndex(nextIndex); // Update index for the next run
+                         return internalText.substring(0, nextIndex);
+                    } else {
+                        // If somehow index is out of bounds, stop
+                        clearInterval(intervalRef.current);
+                        intervalRef.current = null;
+                        setIsTyping(false);
+                        return prev; // Return previous display text
+                    }
+                });
 
+            }, speed);
+        } else if (currentIndex >= (internalText?.length || 0)) {
+            // Stop typing if done
+            if(isTyping) setIsTyping(false);
+            // Also clear interval just in case
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+            }
+        }
+
+        // Cleanup function for the effect
+        return () => {
+             if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+             }
+        };
+    }, [isTyping, speed, internalText, currentIndex]); // Rerun effect if these change
+
+
+    // Global cleanup on unmount
     useEffect(() => {
         return () => {
             if (intervalRef.current) {
@@ -72,6 +99,7 @@ const useTypewriter = (text, speed = 50) => {
             }
         };
     }, []);
+
 
     return [displayText, startTypingProcess, isTyping];
 };
@@ -114,8 +142,10 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     setLoading(true);
     setError(null);
-    startTypingProcess('');
+    startTypingProcess(''); // Clear and stop typewriter
+    // Close previous connection if exists
     if (eventSourceRef.current) {
+        console.log("Closing previous EventSource before new request.");
         eventSourceRef.current.close();
         eventSourceRef.current = null;
     }
@@ -150,19 +180,20 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
             body: JSON.stringify({
                 fn_index: 2, // <-- Correct index based on your inspection
                 data: [query],
-                // session_hash در درخواست اولیه join نیاز نیست، خود Gradio آن را برمی‌گرداند
+                // session_hash در درخواست اولیه join نیاز نیست
             })
         });
 
         if (!joinResponse.ok) {
              const errorText = await joinResponse.text();
              console.error("Queue Join Error:", errorText);
-             // تلاش برای تشخیص خطای رایج "Model is loading"
              let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-             if (errorText.includes("Internal Server Error") && errorText.includes("startup")) {
-                detailedError += " Space might be restarting or errored during startup. Check Space logs.";
+             if (joinResponse.status === 404) {
+                 detailedError += " Endpoint /queue/join not found. Check Space API path.";
+             } else if (errorText.includes("Internal Server Error")) {
+                detailedError += " Space might be restarting or errored. Check Space logs.";
              } else if (joinResponse.status === 503) {
-                detailedError += " Service Unavailable. Space might be sleeping or overloaded.";
+                detailedError += " Service Unavailable. Space might be sleeping/overloaded.";
              } else {
                  detailedError += ` ${errorText.substring(0, 150)}`;
              }
@@ -173,91 +204,95 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         const sessionHash = joinResult.session_hash;
 
         if (!sessionHash) {
-             // گاهی اوقات Gradio خطای دیگری را در قالب JSON برمی‌گرداند
-             if (joinResult.error) {
-                 throw new Error(`Queue join returned error: ${joinResult.error}`);
-             }
+             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
              throw new Error("Failed to get session hash from queue join.");
         }
         console.log(`Step 2: Joined queue with session hash: ${sessionHash}`);
 
 
-        // 3. Listen for results using EventSource (Server-Sent Events)
+        // 3. Listen for results using EventSource
         console.log("Step 3: Listening for results via EventSource...");
-        // [مهم] اطمینان از ارسال توکن برای EventSource (اگر Space خصوصی باشد)
-        // Note: EventSource doesn't easily support custom headers like Authorization.
-        // If your Space is private, making it public might be necessary for EventSource,
-        // OR you'd need a backend proxy to handle authentication.
-        // Assuming the Space is public or token is handled via cookies/other means by HF.
-        eventSourceRef.current = new EventSource(QUEUE_DATA_URL(sessionHash));
+        const dataUrl = QUEUE_DATA_URL(sessionHash);
+         // Important: Handle potential CORS issues if the Space is private/gated
+        // EventSource does not support Authorization headers easily.
+        // If Space is private, consider making it public for testing or use a backend proxy.
+        eventSourceRef.current = new EventSource(dataUrl);
 
         eventSourceRef.current.onmessage = (event) => {
-            const message = JSON.parse(event.data);
-            console.log("Received SSE message:", message);
+            try {
+                const message = JSON.parse(event.data);
+                console.log("Received SSE message:", message);
 
-            switch (message.msg) {
-                case "process_starts":
-                    setOutput("Processing started...");
-                    startTypingProcess("Processing started...");
-                    break;
-                case "process_generating":
-                    // (Handle intermediate results if needed)
-                    break;
-                case "process_completed":
-                    console.log("Processing completed.");
-                    if (message.success && message.output && message.output.data) {
-                        const rawPrediction = message.output.data[0];
-                        let formattedOutput = "Error: Could not parse prediction result.";
-                        // [اصلاح شده] بررسی دقیقتر نوع خروجی
-                        if (rawPrediction !== null && rawPrediction !== undefined) {
-                            if (typeof rawPrediction === 'string' && rawPrediction.startsWith("Exploitability Probability:")) {
-                                // اگر تابع پایتون رشته کامل را برمیگرداند
-                                formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
-                            } else if (typeof rawPrediction === 'number') {
-                                // اگر تابع پایتون فقط عدد احتمال را برمیگرداند
-                                formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
-                            } else {
-                                // برای سایر انواع خروجی
-                                formattedOutput = `[EXBERT_REPORT]: Analysis received. Raw output: ${JSON.stringify(rawPrediction)}`;
+                switch (message.msg) {
+                    case "process_starts":
+                        setOutput("Processing started...");
+                        startTypingProcess("Processing started...");
+                        break;
+                    case "process_generating": break; // Handle if needed
+                    case "process_completed":
+                        console.log("Processing completed.");
+                        if (message.success && message.output && message.output.data) {
+                            const rawPrediction = message.output.data[0];
+                            let formattedOutput = "Error: Could not parse prediction result.";
+                             if (rawPrediction !== null && rawPrediction !== undefined) {
+                                if (typeof rawPrediction === 'string' && rawPrediction.startsWith("Exploitability Probability:")) {
+                                    formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
+                                } else if (typeof rawPrediction === 'number') {
+                                    formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
+                                } else {
+                                    formattedOutput = `[EXBERT_REPORT]: Raw output: ${JSON.stringify(rawPrediction)}`;
+                                }
                             }
-                        }
 
-                        setOutput(formattedOutput);
-                        startTypingProcess(formattedOutput);
-                    } else {
-                         // اگر success=false بود یا output نداشت
-                         const errorMsg = message.output?.error || "Unknown processing error.";
-                         setError(`Processing failed on server: ${errorMsg}`);
-                         setOutput('');
-                         startTypingProcess('');
-                    }
-                    if(eventSourceRef.current) eventSourceRef.current.close();
-                    eventSourceRef.current = null;
-                    setLoading(false);
-                    break;
-                 case "queue_full":
-                     setError("API Error: The queue is full, please try again later.");
-                     if(eventSourceRef.current) eventSourceRef.current.close();
-                     eventSourceRef.current = null;
-                     setLoading(false);
-                     break;
-                 case "estimation":
-                     const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
-                     const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
-                     const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
-                     const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
-                     setOutput(waitMsg);
-                     startTypingProcess(waitMsg);
-                     break;
-                default:
-                    console.warn("Received unknown message type:", message.msg);
-                    break;
+                            setOutput(formattedOutput);
+                            startTypingProcess(formattedOutput);
+                        } else {
+                             const errorMsg = message.output?.error || "Unknown server processing error.";
+                             setError(`Processing failed: ${errorMsg}`);
+                             setOutput(''); startTypingProcess('');
+                        }
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        setLoading(false); // Stop loading indicator here
+                        break;
+                     case "queue_full":
+                         setError("API Error: The queue is full, please try again later.");
+                         if(eventSourceRef.current) eventSourceRef.current.close();
+                         eventSourceRef.current = null;
+                         setLoading(false);
+                         break;
+                     case "estimation":
+                         const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
+                         const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
+                         const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
+                         const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
+                         setOutput(waitMsg);
+                         startTypingProcess(waitMsg);
+                         break;
+                    default:
+                        console.warn("Received unknown message type:", message.msg);
+                        break;
+                }
+            } catch (parseError) {
+                 console.error("Failed to parse SSE message:", event.data, parseError);
+                 setError("Error receiving data from API stream.");
+                 if(eventSourceRef.current) eventSourceRef.current.close();
+                 eventSourceRef.current = null;
+                 setLoading(false);
+                 setOutput(''); startTypingProcess('');
             }
         };
 
         eventSourceRef.current.onerror = (error) => {
             console.error("EventSource Error:", error);
-            setError("Error connecting to the API stream. Check Space status or network.");
+            // Provide more context if possible (e.g., check network status)
+             let errorMsg = "Error connecting to API stream.";
+             if (!navigator.onLine) {
+                 errorMsg += " Check your network connection.";
+             } else {
+                 errorMsg += " The Space might be sleeping, restarting, or encountered an error. Check Space logs.";
+             }
+            setError(errorMsg);
              if(eventSourceRef.current) eventSourceRef.current.close();
             eventSourceRef.current = null;
             setLoading(false);
@@ -272,6 +307,8 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
            displayError = "API ERROR: Could not join the processing queue. Check Space status/logs.";
        } else if (err.message.includes("Failed to fetch")) {
            displayError = "API ERROR: Network error or CORS issue.";
+       } else if (err.message.includes("404")) {
+            displayError = "API ERROR: 404 Endpoint Not Found. Please double-check Space URL and API path.";
        }
       setError(displayError);
       setLoading(false);
@@ -282,6 +319,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           eventSourceRef.current = null;
        }
     }
+     // setLoading(false) is now primarily handled by the EventSource onmessage/onerror handlers
   };
 
   return (
@@ -324,10 +362,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
       <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto">
          {typedOutput}
-         {/* Display cursor only while typing */}
+         {/* Display cursor only while actively typing */}
          {isTyping ? <span className="typing-cursor"></span> : null}
 
-         {!loading && !error && !output && !typedOutput && (
+         {/* Display standby only when not loading, no error, and effectively no output */}
+         {!loading && !error && !internalText && !typedOutput && (
              <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
          )}
       </div>
