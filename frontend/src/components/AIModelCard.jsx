@@ -10,15 +10,14 @@ const QUEUE_JOIN_URL = `${BASE_API_URL}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/queue/data?session_hash=${sessionHash}`;
 
 // --- خواندن توکن (روش استاندارد Vite) ---
-// [اصلاح نهایی] بازگشت به import.meta.env
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
-// [DEBUG]
+// [DEBUG] لاگ کردن وضعیت توکن
 if (!HF_API_TOKEN) {
-  console.warn("⚠️ Hugging Face API Token (VITE_HF_API_TOKEN) is missing!");
+  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! Real model queries will fail.");
+  console.log("  Ensure it is set in .env.local (for dev) or Vercel environment variables (for production).");
 } else {
-  // Optional: Log only a portion for confirmation, not the whole token
-  console.log("✅ Hugging Face API Token loaded (partially):", HF_API_TOKEN.substring(0, 5) + "...");
+  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
 }
 
 
@@ -160,7 +159,9 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     // --- Real call using Gradio Queue Protocol ---
     if (!HF_API_TOKEN) {
-        setError("API Token Missing. Configure VITE_HF_API_TOKEN.");
+        const errorMsg = "API Token Missing. Configure VITE_HF_API_TOKEN in your environment.";
+        console.error(errorMsg);
+        setError(errorMsg);
         setLoading(false);
         return;
     }
@@ -176,7 +177,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
             },
             // [اصلاح نهایی] استفاده از fn_index: 2 بر اساس Payload شما
             body: JSON.stringify({
-                fn_index: 2, // <-- Correct index based on your inspection
+                fn_index: 2, // <-- This is a critical value. Double-check if '2' is correct.
                 data: [query],
                 // session_hash در درخواست اولیه join نیاز نیست
             })
@@ -184,14 +185,18 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         if (!joinResponse.ok) {
              const errorText = await joinResponse.text();
-             console.error("Queue Join Error:", errorText);
+             console.error("Queue Join Error:", joinResponse.status, errorText);
              let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-             if (joinResponse.status === 404) {
+             if (joinResponse.status === 401) {
+                 detailedError += " Unauthorized. Check your VITE_HF_API_TOKEN.";
+             } else if (joinResponse.status === 404) {
                  detailedError += " Endpoint /queue/join not found. Check Space API path.";
-             } else if (errorText.includes("Internal Server Error")) {
-                detailedError += " Space might be restarting or errored. Check Space logs.";
+             } else if (joinResponse.status === 422) {
+                 detailedError += " Validation Error. Check fn_index or data payload format.";
+             } else if (errorText.includes("Internal Server Error") || joinResponse.status === 500) {
+                detailedError += " Internal Server Error. Space might be restarting or errored. Check Space logs.";
              } else if (joinResponse.status === 503) {
-                detailedError += " Service Unavailable. Space might be sleeping/overloaded.";
+                detailedError += " Service Unavailable. Space might be sleeping/overloaded. Try again.";
              } else {
                  detailedError += ` ${errorText.substring(0, 150)}`;
              }
@@ -227,14 +232,29 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                     case "process_completed":
                         console.log("Processing completed.");
                         if (message.success && message.output && message.output.data) {
-                            const rawPrediction = message.output.data[0];
+                            // [اصلاح] دسترسی به خروجی مدل
+                            // خروجی شما ممکن است در data[0] یا data[0].label باشد
+                            const rawPrediction = message.output.data[0]; 
                             let formattedOutput = "Error: Could not parse prediction result.";
+                             
                              if (rawPrediction !== null && rawPrediction !== undefined) {
-                                if (typeof rawPrediction === 'string' && rawPrediction.startsWith("Exploitability Probability:")) {
+                                // اگر خروجی یک آبجکت با لیبل است
+                                if (typeof rawPrediction === 'object' && rawPrediction.label) {
+                                     formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
+                                } 
+                                // اگر خروجی یک رشته است (بر اساس کد قبلی شما)
+                                else if (typeof rawPrediction === 'string' && rawPrediction.startsWith("Exploitability Probability:")) {
                                     formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
-                                } else if (typeof rawPrediction === 'number') {
+                                } 
+                                // اگر خروجی فقط یک عدد است (بر اساس کد قبلی شما)
+                                else if (typeof rawPrediction === 'number') {
                                     formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
-                                } else {
+                                } 
+                                // اگر خروجی فقط یک رشته است
+                                else if (typeof rawPrediction === 'string') {
+                                    formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
+                                }
+                                else {
                                     formattedOutput = `[EXBERT_REPORT]: Raw output: ${JSON.stringify(rawPrediction)}`;
                                 }
                             }
@@ -297,12 +317,15 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     } catch (err) {
       console.error("Error during Gradio Queue interaction:", err);
       let displayError = err.message;
-       if (err.message.includes("Failed to join queue")) {
-           displayError = "API ERROR: Could not join the processing queue. Check Space status/logs.";
+       // [اصلاح] نمایش خطاهای واضح تر
+       if (err.message.includes("401")) {
+           displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN.";
+       } else if (err.message.includes("422")) {
+           displayError = "API ERROR: 422 Validation Error. Check fn_index (is it 2?) or data format.";
        } else if (err.message.includes("Failed to fetch")) {
-           displayError = "API ERROR: Network error or CORS issue.";
+           displayError = "API ERROR: Network error or CORS issue. Check browser console.";
        } else if (err.message.includes("404")) {
-            displayError = "API ERROR: 404 Endpoint Not Found. Please double-check Space URL and API path.";
+            displayError = "API ERROR: 404 Endpoint Not Found. Check Space URL and API path.";
        }
       setError(displayError);
       setLoading(false);
@@ -336,7 +359,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           placeholder={placeholder}
           disabled={loading || (modelId === 'exbert' && !HF_API_TOKEN)}
         />
-        <button type="submit" className="cyber-button w-full mt-3 flex items-center justify-center" disabled={loading || (modelId === 'exbert' && !HF_API_TOKEN)}>
+        <button type="submit" className="cyber-button w-full mt-3 flex items-center justify-center" disabled={loading || !input || (modelId === 'exbert' && !HF_API_TOKEN)}>
           {loading ? (
             <>
               <Loader2 className="animate-spin h-5 w-5 mr-3" />
@@ -360,7 +383,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
          {isTyping ? <span className="typing-cursor"></span> : null}
 
          {/* Display standby only when not loading, no error, and effectively no output */}
-         {!loading && !error && !internalText && !typedOutput && (
+         {!loading && !error && !output && !typedOutput && (
              <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
          )}
       </div>
@@ -369,4 +392,3 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
-
