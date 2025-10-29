@@ -6,6 +6,8 @@ import { Loader2 } from 'lucide-react';
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
+
+// [FIX] بازگشت به مسیر ریشه (root) - این مسیر بعد از فعال کردن .queue() در app.py کار خواهد کرد
 const QUEUE_JOIN_URL = `${BASE_API_URL}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/queue/data?session_hash=${sessionHash}`;
 
@@ -190,7 +192,8 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              if (joinResponse.status === 401) {
                  detailedError += " Unauthorized. Check your VITE_HF_API_TOKEN.";
              } else if (joinResponse.status === 404) {
-                 detailedError += " Endpoint /queue/join not found. Check Space API path.";
+                 // [UPDATE] به‌روزرسانی پیام خطا
+                 detailedError += " Endpoint /queue/join not found. Ensure app.queue().launch() is used in your Space's app.py.";
              } else if (joinResponse.status === 422) {
                  detailedError += " Validation Error. Check fn_index or data payload format.";
              } else if (errorText.includes("Internal Server Error") || joinResponse.status === 500) {
@@ -392,3 +395,5 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
+
+

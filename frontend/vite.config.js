@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react';
 
 // نیازی به 'define' برای متغیرهای import.meta.env نیست.
 // Vite به طور خودکار متغیرهایی که با VITE_ شروع می‌شوند را مدیریت می‌کند.
+// حذف 'define' که قبلاً اینجا بود.
+
 export default defineConfig({
   plugins: [react()],
   // [FIX] اضافه کردن این بخش برای رفع خطای "import.meta"
@@ -13,7 +15,6 @@ export default defineConfig({
     target: 'es2020'
   },
   // [FIX] همچنین برای سرور توسعه (dev server)
-  // (این ممکن است برای esbuild در حین 'npm run dev' لازم باشد)
   esbuild: {
     target: 'es2020'
   }
