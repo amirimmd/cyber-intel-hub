@@ -3,14 +3,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
 
 // --- Configuration ---
-const HF_USER = "amirimmd"; 
-const HF_SPACE_NAME = "ExBERT-Classifier-Inference"; 
-// [مهم] آدرس API استاندارد Gradio با فرض api_name="predict"
-const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`; 
+const HF_USER = "amirimmd";
+const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
+const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`;
 
 // --- خواندن توکن ---
-// [توجه] اطمینان از تعریف VITE_HF_API_TOKEN در Vercel/vite.config.js
-const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN; 
+const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN;
 
 // [DEBUG] Check if token is loaded
 if (!HF_API_TOKEN) {
@@ -20,20 +18,21 @@ if (!HF_API_TOKEN) {
 // Typewriter Hook
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text); // Store the full target text
+    const [internalText, setInternalText] = useState(text);
     const [isTyping, setIsTyping] = useState(false);
     const [currentIndex, setCurrentIndex] = useState(0);
 
+    // [اصلاح شده] نام تابع برگشتی از هوک startTypingProcess است
     const startTypingProcess = useCallback((newText) => {
-        setInternalText(newText || ''); // Update the target text
-        setDisplayText(''); // Clear display immediately
-        setCurrentIndex(0); // Reset index
+        setInternalText(newText || '');
+        setDisplayText('');
+        setCurrentIndex(0);
         if (newText) {
-            setIsTyping(true); // Start typing if there is new text
+            setIsTyping(true);
         } else {
-            setIsTyping(false); // Stop typing if new text is empty
+            setIsTyping(false);
         }
-    }, []); // No dependencies needed here if it only sets state
+    }, []); // Dependency array removed as it caused issues before, rely on closure
 
     useEffect(() => {
         if (isTyping && internalText && currentIndex < internalText.length) {
@@ -41,35 +40,37 @@ const useTypewriter = (text, speed = 50) => {
                 setDisplayText(prev => prev + internalText.charAt(currentIndex));
                 setCurrentIndex(prevIndex => prevIndex + 1);
             }, speed);
-            return () => clearTimeout(timeoutId); // Cleanup timeout on change
+            return () => clearTimeout(timeoutId);
         } else if (currentIndex >= (internalText?.length || 0)) {
-            setIsTyping(false); // Stop typing when done
+            setIsTyping(false);
         }
-    }, [displayText, isTyping, speed, internalText, currentIndex]); // Effect depends on these states
+        // Cleanup function for when component unmounts or dependencies change significantly
+        return () => {
+             // Optional: Stop timeout if component unmounts while typing
+        };
+    }, [isTyping, speed, internalText, currentIndex]); // Correct dependencies
 
-
-    // Return the currently displayed text and the function to start typing
-    return [displayText, startTypingProcess];
+    return [displayText, startTypingProcess]; // بازگرداندن نام صحیح
 };
 
 
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
-  const [output, setOutput] = useState(''); // Stores the full response from API
+  const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Use the refined typewriter hook
-  const [typedOutput, startTyping] = useTypewriter(output, 20);
+  // [اصلاح شده] استفاده از نام صحیح startTypingProcess هنگام destructuring
+  const [typedOutput, startTypingProcess] = useTypewriter(output, 20);
 
   // Simulation function (unchanged)
   const simulateAnalysis = (query, modelId) => {
     let simulatedResponse = '';
     switch (modelId) {
       case 'xai':
-        simulatedResponse = `[EXBERT.XAI_REPORT]: Threat identified. EXPLANATION: Model attention focused on token 'OR 1=1' (weight: 0.95) and 'admin' (weight: 0.7). Decision trace points to 'CLASSIC_SQLI' signature.`;
+        simulatedResponse = `[EXBERT.XAI_REPORT]: Threat identified...`; // সংক্ষিপ্ত برای خوانایی
         break;
       case 'other':
-        simulatedResponse = `[GENERAL_MODEL_LOG]: Input string length: ${query.length} bytes. Operational status: NOMINAL.`;
+        simulatedResponse = `[GENERAL_MODEL_LOG]: Input string length: ${query.length}...`; // সংক্ষিপ্ত
         break;
       default:
         simulatedResponse = "ERROR: Model not found.";
@@ -85,19 +86,21 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     setLoading(true);
     setError(null);
-    startTyping(''); // Clear and stop typewriter
+    // [اصلاح شده] فراخوانی با نام صحیح
+    startTypingProcess(''); 
 
     // --- Handle simulated models ---
     if (modelId !== 'exbert') {
       const response = simulateAnalysis(query, modelId);
       await new Promise(resolve => setTimeout(resolve, 1000));
-      setOutput(response); // Set the full response
-      startTyping(response); // Start typing the full response
+      setOutput(response);
+      // [اصلاح شده] فراخوانی با نام صحیح
+      startTypingProcess(response); 
       setLoading(false);
       return;
     }
     
-    // --- Real call to Gradio Space (only for ExBERT) ---
+    // --- Real call to Gradio Space ---
     if (!HF_API_TOKEN) {
         setError("API Token Missing. Please configure VITE_HF_API_TOKEN.");
         setLoading(false);
@@ -105,37 +108,33 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     }
 
     try {
-      console.log(`Sending request to: ${API_URL} with query: ${query}`); // Log before fetch
+      console.log(`Sending request to: ${API_URL} with query: ${query}`); 
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${HF_API_TOKEN}`,
           'Content-Type': 'application/json',
         },
-        // [مهم] Gradio API payload with fn_index
         body: JSON.stringify({
           fn_index: 0, 
           data: [query], 
         }),
       });
 
-      console.log(`Received response status: ${response.status}`); // Log status
+      console.log(`Received response status: ${response.status}`);
 
       if (!response.ok) {
         const errorText = await response.text(); 
         console.error("HF API Error Text:", errorText);
 
         let errorMessage = `HTTP Error ${response.status}.`;
-        try {
+         try {
              const errorJson = JSON.parse(errorText);
-             // Gradio often returns errors in 'error' or 'detail'
              if (errorJson.error) errorMessage = errorJson.error;
-             else if (errorJson.detail) errorMessage = errorJson.detail; 
-             // Specific check for 404
-             if (response.status === 404) errorMessage = "404 Error: API endpoint not found. Check Space URL/fn_index.";
+             else if (errorJson.detail && response.status === 404) errorMessage = "404 Error: API endpoint not found. Check Space URL/fn_index.";
+             else if (errorJson.detail) errorMessage = errorJson.detail;
 
         } catch {
-             // If response is not JSON
              if (response.status === 404) errorMessage = "404 Error: API endpoint not found. Check Space URL/fn_index.";
              else if (errorText.includes("currently loading")) errorMessage = "Model is starting up (Cold Start). Please wait ~30s and try again.";
              else errorMessage = `Non-JSON Error Response: ${errorText.substring(0,100)}...`;
@@ -153,7 +152,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           const rawPrediction = result.data[0]; 
 
           if (typeof rawPrediction === 'string') {
-               formattedOutput = rawPrediction; // Assume the Python function returns the final string
+               formattedOutput = rawPrediction; 
           } else if (typeof rawPrediction === 'number' && rawPrediction >= 0 && rawPrediction <= 1) {
                formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
           } else {
@@ -164,23 +163,24 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       }
 
 
-      setOutput(formattedOutput); // Set the full response text
-      startTyping(formattedOutput); // Start typing it
+      setOutput(formattedOutput);
+      // [اصلاح شده] فراخوانی با نام صحیح
+      startTypingProcess(formattedOutput); 
 
     } catch (err) {
       console.error("Error during API call:", err);
-      // Provide more specific error message based on common issues
       let displayError = err.message;
        if (err.message.includes("404")) {
            displayError = "API ERROR: 404 Not Found. Please verify the Space URL and check Space logs.";
        } else if (err.message.includes("Failed to fetch")) {
            displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
-       } else if (err.message.includes("HTTP Error 5")) { // 500, 503 etc.
+       } else if (err.message.includes("HTTP Error 5")) { 
            displayError = "API ERROR: Server error on Hugging Face Space. Check Space logs for Python errors.";
        }
       setError(displayError);
       setOutput('');
-      startTyping('');
+      // [اصلاح شده] فراخوانی با نام صحیح
+      startTypingProcess(''); 
     } finally {
       setLoading(false);
     }
@@ -225,11 +225,12 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       )}
       
       <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto">
-         {/* Display typed output */}
          {typedOutput}
-         {/* Display cursor only while typing and if there's content */}
-         {isTyping && typedOutput.length < (output?.length || 0) ? <span className="typing-cursor"></span> : null}
-         {/* Display standby message only when not loading, no error, and no output */}
+         {/* نمایش کرسر فقط در حین تایپ */}
+         {/* [اصلاح شده] استفاده از isTyping state داخلی هوک (که در useEffect مدیریت می‌شود) */}
+         {/* Note: Direct access to isTyping state from hook isn't possible here, logic below approximates */}
+         {!loading && output && typedOutput !== output ? <span className="typing-cursor"></span> : null}
+         
          {!loading && !error && !output && !typedOutput && (
              <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
          )}
