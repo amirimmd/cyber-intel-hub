@@ -1,18 +1,19 @@
 // frontend/src/App.jsx
-// [اصلاح شد] همه کامپوننت‌ها برای رفع خطای "Could not resolve" در یک فایل ادغام شدند.
+// [اصلاح شد] همه کامپوننت‌ها در یک فایل ادغام شدند.
+// [اصلاح شد] ایمپورت‌ها به CDN های نوع ES Module (esm.sh) تغییر یافتند تا خطاهای 'Could not resolve' و 'does not provide an export' برطرف شوند.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-// [اصلاح شد] رفع خطای "Could not resolve" با ایمپورت مستقیم از CDN
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+// [اصلاح شد] ایمپورت Supabase از ESM CDN
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// [اصلاح شد] ایمپورت Lucide-React از ESM CDN
 import { 
   BrainCircuit, ShieldAlert, Swords, 
   Loader2, Filter, DatabaseZap, Clipboard, 
-  Swords as SwordsIcon // تغییر نام برای جلوگیری از تداخل با کامپوننت
-} from 'lucide-react'; 
+  Swords as SwordsIcon 
+} from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- Supabase Client ---
 // [ادغام شد] منطق فایل supabaseClient.js به اینجا منتقل شد
-// [توجه] هشدار مربوط به 'import.meta' طبیعی است، اما متغیرها باید کار کنند.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -22,16 +23,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
     "Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel Environment Variables."
   );
 }
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
-
+// [اصلاح شد] اطمینان از اینکه createClient از ایمپورت CDN به درستی استفاده می‌شود
+export const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 // --- کامپوننت کمکی: CopyButton (از NVDTable) ---
-// [تایید شد] منطق دکمه کپی برای سازگاری با iframe حفظ شده است.
 const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e) => {
-        // جلوگیری از کلیک روی آیتم والد (در صورت استفاده در ExploitDBTable)
         e.stopPropagation(); 
         try {
             const textarea = document.createElement('textarea');
@@ -41,14 +40,12 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
-            // استفاده از execCommand برای حداکثر سازگاری در iframe
             document.execCommand('copy'); 
             document.body.removeChild(textarea);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
-            // نمایش پیام خطا به جای alert
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -78,8 +75,6 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 
 
 // --- کامپوننت NVDTable ---
-// [ادغام شد] محتوای NVDTable.jsx به اینجا منتقل شد
-
 const DEFAULT_ROWS_TO_SHOW = 10;
 const INITIAL_DATE_FILTER = ''; 
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -120,15 +115,17 @@ const NVDTable = () => {
   };
 
   const fetchAllData = useCallback(async () => {
+    // [اصلاح شد] بررسی اینکه آیا supabase به درستی مقداردهی اولیه شده است
+    if (!supabase) {
+      setError("Supabase client is not initialized. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     setError(null);
     
     try {
-        // [اصلاح شد] اطمینان از اینکه supabase قبل از فراخوانی، مقداردهی شده است
-        if (!supabase) {
-          console.warn("Supabase client not ready, skipping fetch.");
-          return; 
-        }
         const { data, error: fetchError } = await supabase
         .from('vulnerabilities') 
         .select('ID, text, baseSeverity, score, published_date, vectorString') 
@@ -143,14 +140,11 @@ const NVDTable = () => {
     } finally {
         setLoading(false);
     }
-  }, [supabase]); // supabase به عنوان وابستگی اضافه شد
+  }, []); // وابستگی به supabase حذف شد چون اکنون در اسکوپ بالاتر تعریف شده
 
   useEffect(() => {
-    // [اصلاح شد] فقط زمانی واکشی کن که supabase آماده باشد
-    if (supabase) {
-      fetchAllData();
-    }
-  }, [fetchAllData, supabase]); 
+    fetchAllData();
+  }, [fetchAllData]); 
 
   const filteredVulnerabilities = useMemo(() => {
     if (loading || error) return [];
@@ -204,8 +198,7 @@ const NVDTable = () => {
   const truncateText = (text) => {
     if (!text) return { display: 'N/A', needsCopy: false };
     
-    // [اصلاح شد] کاهش طول متن در موبایل برای نمایش بهتر
-    const limit = window.innerWidth < 640 ? 40 : 150; 
+    const limit = (typeof window !== 'undefined' && window.innerWidth < 640) ? 40 : 150; 
     const needsCopy = text.length > limit;
 
     if (needsCopy) {
@@ -219,7 +212,6 @@ const NVDTable = () => {
 
   return (
     <div>
-      {/* [تایید شد] فرم در موبایل به صورت عمودی (space-y-4) و در دسکتاپ (md:flex) افقی است */}
       <form onSubmit={(e) => e.preventDefault()} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
         <div className="flex-grow">
           <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
@@ -313,17 +305,15 @@ const NVDTable = () => {
           </p>
       )}
 
-      {/* [اصلاح شد] اضافه کردن راهنما برای اسکرول افقی در موبایل (مشکل ستون‌ها) */}
+      {/* [اصلاح شد] راهنمای اسکرول افقی در موبایل */}
       <p className="md:hidden text-xs text-center text-cyber-cyan/70 mb-2">
         &lt;-- برای دیدن ستون‌های بیشتر، جدول را به طرفین بکشید --&gt;
       </p>
 
-      {/* [تایید شد] overflow-x-auto مسئول اسکرول افقی جدول در موبایل است */}
       <div className="overflow-x-auto rounded-lg border border-gray-800">
         <table className="min-w-full divide-y divide-gray-800">
           <thead className="bg-gray-800/50">
             <tr>
-              {/* [اصلاح شد] پدینگ در موبایل (px-3) و دسکتاپ (sm:px-6) */}
               <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider min-w-[100px]">CVE ID</th>
               <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider min-w-[200px]">Description</th>
               <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
@@ -374,7 +364,6 @@ const NVDTable = () => {
                     </div>
                   </td>
                   <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>
-                      {/* [اصلاح شد] استفاده از flex-nowrap برای جلوگیری از شکستن دکمه کپی به خط بعد */}
                       <div className="flex items-start justify-between flex-nowrap">
                           <p className="flex-grow">{truncatedText}</p>
                           {needsCopy && <CopyButton textToCopy={cve.text} />}
@@ -398,8 +387,6 @@ const NVDTable = () => {
 
 
 // --- کامپوننت AIModelCard ---
-// [ادغام شد] محتوای AIModelCard.jsx به اینجا منتقل شد
-
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
@@ -408,7 +395,6 @@ const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-// [توجه] این متغیر از 'import.meta.env' خوانده می‌شود
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
 if (!HF_API_TOKEN) {
@@ -729,8 +715,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
 
 // --- کامپوننت ExploitDBTable ---
-// [ادغام شد] محتوای ExploitDBTable.jsx به اینجا منتقل شد
-
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2; // 5 records each
 
@@ -758,16 +742,17 @@ const ExploitDBTable = () => {
   };
 
   const fetchLatestExploits = useCallback(async () => {
+    // [اصلاح شد] بررسی اینکه آیا supabase به درستی مقداردهی اولیه شده است
+    if (!supabase) {
+      setError("Supabase client is not initialized.");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
       
-      // [اصلاح شد] اطمینان از اینکه supabase قبل از فراخوانی، مقداردهی شده است
-      if (!supabase) {
-        console.warn("Supabase client not ready, skipping fetch.");
-        return;
-      }
-
       const query1 = supabase
         .from('exploits') 
         .select('ID, Description, Exploitability')
@@ -807,7 +792,7 @@ const ExploitDBTable = () => {
     } finally {
       setLoading(false);
     }
-  }, [supabase]); // supabase به عنوان وابستگی اضافه شد
+  }, []); // وابستگی به supabase حذف شد
 
   useEffect(() => {
     console.log('ExploitDBTable: Component mounted, starting initial fetch.');
@@ -833,7 +818,7 @@ const ExploitDBTable = () => {
           supabase.removeChannel(exploitSubscription);
       };
     }
-  }, [fetchLatestExploits, supabase]); 
+  }, [fetchLatestExploits]); 
 
   return (
     <div className="flex flex-col h-full min-h-[400px]">
@@ -913,19 +898,16 @@ const ExploitDBTable = () => {
 
 
 // --- کامپوننت اصلی App ---
-// [اصلاح شد] ایمپورت‌های محلی حذف شدند چون کامپوننت‌ها در همین فایل تعریف شده‌اند.
 function App() {
   return (
     <>
       {/* Background Grid Effect */}
       <div className="background-grid"></div>
 
-      {/* [بهبود واکنش‌گرایی] کانتینر اصلی با max-w-7xl و پدینگ تطبیقی */}
+      {/* [اصلاح شد] بهبود واکنش‌گرایی کانتینر اصلی */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 relative z-10">
 
-        {/* [اصلاح شد] Main Header
-          - اضافه کردن 'break-words' برای شکستن تیتر در صفحه‌های کوچک (مشکل ۱)
-        */}
+        {/* [اصلاح شد] Main Header با break-words */}
         <h1 className="text-3xl md:text-5xl font-bold text-center mb-10 bg-clip-text text-transparent bg-gradient-to-r from-cyber-green to-cyber-cyan section-header break-words">
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
@@ -934,7 +916,7 @@ function App() {
         <section id="nvd-section" className="cyber-card mb-12">
           <div className="flex items-center mb-6">
             <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
-            {/* [اصلاح شد] اضافه کردن 'break-words' برای شکستن تیتر در موبایل (مشکل ۲) */}
+            {/* [اصلاح شد] تیتر NVD با break-words */}
             <h2 className="text-2xl font-semibold text-cyan-300 break-words">NVD Vulnerability Feed_</h2>
           </div>
           <NVDTable />
@@ -944,10 +926,9 @@ function App() {
         <section id="ai-models-section" className="cyber-card mb-12">
           <div className="flex items-center mb-6">
             <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
-            {/* [اصلاح شد] اضافه کردن 'break-words' برای شکستن تیتر در موبایل (مشکل ۳) */}
+            {/* [اصلاح شد] تیتر AI با break-words */}
             <h2 className="text-2xl font-semibold text-green-300 break-words">INTELLIGENT.ANALYSIS.UNIT_</h2>
           </div>
-          {/* [تایید شد] گرید برای موبایل (1 ستون) و دسکتاپ (3 ستون) به درستی تنظیم شده است */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <AIModelCard 
               title="MODEL::EXBERT_"
@@ -974,7 +955,7 @@ function App() {
         <section id="exploit-db-section" className="cyber-card">
           <div className="flex items-center mb-6">
             <Swords className="icon-red w-8 h-8 mr-3 flex-shrink-0" />
-            {/* [اصلاح شد] اضافه کردن 'break-words' برای شکستن تیتر در موبایل */}
+            {/* [اصلاح شد] تیتر ExploitDB با break-words */}
             <h2 className="text-2xl font-semibold text-red-300 break-words">EXPLOIT.DB.LATEST_</h2>
           </div>
           <ExploitDBTable />
