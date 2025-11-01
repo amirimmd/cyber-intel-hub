@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
-// [اصلاح جامع] همه کامپوننت‌ها در یک فایل ادغام شدند تا خطای 'Could not resolve' برطرف شود.
+// [اصلاح جامع] همه کامپوننت‌ها در یک فایل ادغام شدند
 // [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
-// [اصلاح شد] تمام اصلاحات واکنش‌گرایی (break-words) حفظ شدند.
+// [اصلاح شد] منطق AIModelCard برای فعال‌سازی باکس‌ها و فراخوانی صحیح API عمومی اصلاح شد.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // [اصلاح شد] ایمپورت Supabase از ESM CDN
@@ -15,8 +15,9 @@ import {
 
 // --- Supabase Client (ادغام شده از supabaseClient.js) ---
 // [WORKAROUND] استفاده از مقادیر موقت برای متغیرهای محیطی چون import.meta.env در این محیط کار نمی‌کند
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; // <-- URL موقت
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key"; // <-- Key موقت
+// شما باید این متغیرها را در Vercel تنظیم کنید
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; // <-- URL موقت - این را در Vercel تنظیم کنید
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key"; // <-- Key موقت - این را در Vercel تنظیم کنید
 
 if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.error(
@@ -193,7 +194,6 @@ const NVDTable = () => {
   const truncateText = (text) => {
     if (!text) return { display: 'N/A', needsCopy: false };
     
-    // [اصلاح شد] بررسی typeof window برای رندر سمت سرور یا محیط‌های تست
     const limit = (typeof window !== 'undefined' && window.innerWidth < 640) ? 40 : 150; 
     const needsCopy = text.length > limit;
 
@@ -304,7 +304,7 @@ const NVDTable = () => {
           </p>
       )}
 
-      {/* [اصلاح شد] راهنمای اسکرول افقی در موبایل */}
+      {/* راهنمای اسکرول افقی در موبایل */}
       <p className="md:hidden text-xs text-center text-cyber-cyan/70 mb-2">
         &lt;-- To see more columns, drag the table sideways --&gt;
       </p>
@@ -364,7 +364,6 @@ const NVDTable = () => {
                     </div>
                   </td>
                   <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>
-                      {/* [اصلاح شد] flex-nowrap اضافه شد تا دکمه کپی به خط بعد نرود */}
                       <div className="flex items-start justify-between flex-nowrap">
                           <p className="flex-grow">{truncatedText}</p>
                           {needsCopy && <CopyButton textToCopy={cve.text} />}
@@ -387,7 +386,8 @@ const NVDTable = () => {
 };
 
 
-// --- کامپوننت AIModelCard (ادغام شده از AIModelCard.jsx) ---
+// --- [START] کامپوننت اصلاح شده AIModelCard ---
+// --- Configuration ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
@@ -396,14 +396,24 @@ const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-// [WORKAROUND] استفاده از متغیر موقت برای توکن HF
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || "your-hf-token-placeholder"; // <-- Token موقت
+// [NOTE] این متغیر خوانده می‌شود اما چون Space شما public است، در هدر ارسال استفاده نمی‌شود.
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
-if (!import.meta.env.VITE_HF_API_TOKEN) {
-  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! Using placeholder.");
+if (!HF_API_TOKEN) {
+  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! (Using public mode)");
 } else {
-  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
+  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded (though likely not needed for public space).");
 }
+
+// --- Helper Functions ---
+const generateSessionHash = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 11; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
 
 // Typewriter Hook
 const useTypewriter = (text, speed = 50) => {
@@ -458,7 +468,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
   const eventSourceRef = useRef(null);
 
-  // منطق شبیه‌سازی
+  // منطق شبیه‌سازی برای مدل‌های غیر از ExBERT
   const simulateAnalysis = (query, modelId) => {
       let simulatedResponse = '';
       switch (modelId) {
@@ -493,6 +503,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         eventSourceRef.current = null;
     }
 
+    // شبیه‌سازی برای مدل‌های دیگر
     if (modelId !== 'exbert') {
       const response = simulateAnalysis(query, modelId);
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -502,32 +513,31 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
     
-    // [اصلاح شد] بررسی توکن (حتی اگر موقت باشد)
-    if (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")) {
-        setError("API Error: VITE_HF_API_TOKEN is missing or is a placeholder.");
-        setLoading(false);
-        return;
-    }
-
-
-    // --- Real Gradio Queue Call ---
+    // --- [START] پیاده‌سازی منطق فراخوانی API عمومی ---
+    const sessionHash = generateSessionHash(); // 1. تولید هش محلی
+    
     try {
         console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-        const fnIndexToUse = 2; 
-        console.log(`Using fn_index: ${fnIndexToUse}`);
-
+        
+        // 2. ساخت هدرها (بدون نیاز به توکن Auth برای Space عمومی)
         const joinHeaders = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${HF_API_TOKEN}`, 
+            // 'Authorization': `Bearer ${HF_API_TOKEN}`, // حذف شد - Space پابلیک است
         };
         
+        // 3. ساخت Payload دقیقاً مطابق اسکریپت پایتون
+        const payload = {
+            "data": [query],
+            "event_data": null,
+            "fn_index": 2,       // مطابق اسکریپت پایتون
+            "trigger_id": 12,    // مطابق اسکریپت پایتون
+            "session_hash": sessionHash
+        };
+
         const joinResponse = await fetch(QUEUE_JOIN_URL, {
             method: 'POST',
             headers: joinHeaders, 
-            body: JSON.stringify({
-                fn_index: fnIndexToUse,
-                data: [query],
-            })
+            body: JSON.stringify(payload) // 4. ارسال Payload
         });
 
         if (!joinResponse.ok) {
@@ -535,9 +545,9 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              console.error("Queue Join Error:", joinResponse.status, errorText);
              let detailedError = `Failed to join queue: ${joinResponse.status}.`;
              if (joinResponse.status === 401) {
-                 detailedError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN.";
+                 detailedError = "API ERROR: 401 Unauthorized. Check Space permissions (should be public).";
              } else if (joinResponse.status === 422) {
-                 detailedError = `API ERROR: 422 Validation Error. Check fn_index or data payload.`;
+                 detailedError = `API ERROR: 422 Validation Error. Check fn_index/trigger_id.`;
              } else {
                  detailedError += ` ${errorText.substring(0, 150)}`;
              }
@@ -545,15 +555,16 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         }
 
         const joinResult = await joinResponse.json();
-        const sessionHash = joinResult.session_hash;
-
-        if (!sessionHash) {
+        
+        // 5. بررسی event_id
+        if (!joinResult.event_id) {
              if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
-             throw new Error("Failed to get session hash from queue join.");
+             throw new Error("Failed to get event_id from queue join.");
         }
-        console.log(`Step 2: Joined queue successfully with session hash: ${sessionHash}`);
+        console.log(`Step 2: Joined queue successfully with event_id: ${joinResult.event_id} and session_hash: ${sessionHash}`);
 
         // --- Listening for data (EventSource) ---
+        // 6. گوش دادن به /queue/data با استفاده از session_hash
         console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
         const dataUrl = QUEUE_DATA_URL(sessionHash);
 
@@ -561,8 +572,9 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         eventSourceRef.current.onmessage = (event) => {
             try {
+                // 7. دریافت جریان داده‌ها
                 const message = JSON.parse(event.data);
-                console.log("Received SSE message:", message);
+                console.log("Parsed SSE message:", message);
 
                 switch (message.msg) {
                     case "process_starts":
@@ -571,27 +583,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         break;
                     case "process_generating": break;
                     case "process_completed":
+                        // 8. دریافت نتیجه نهایی
                         console.log("Processing completed. Raw output:", JSON.stringify(message.output, null, 2));
-                        if (message.success && message.output && message.output.data) {
+                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                            
+                            // 9. استخراج خروجی
                             const rawPrediction = message.output.data[0];
-                            let formattedOutput = "Error: Could not parse prediction result.";
-
-                            if (rawPrediction !== null && rawPrediction !== undefined) {
-                                if (typeof rawPrediction === 'object' && rawPrediction.label !== undefined && rawPrediction.score !== undefined) {
-                                     formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
-                                }
-                                else if (typeof rawPrediction === 'string') {
-                                    formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
-                                }
-                                else if (typeof rawPrediction === 'number') {
-                                    formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
-                                }
-                                else {
-                                    formattedOutput = `[EXBERT_REPORT]: Raw output: ${JSON.stringify(rawPrediction)}`;
-                                }
-                            } else {
-                                formattedOutput = "[EXBERT_REPORT]: Received empty result.";
-                            }
+                            let formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
 
                             setOutput(formattedOutput);
                             startTypingProcess(formattedOutput);
@@ -620,21 +618,28 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                              startTypingProcess(waitMsg);
                          }
                          break;
+                    case "close_stream":
+                        console.log("Stream closed by server.");
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        if (loading) { // اگر هنوز در حال بارگذاری بودیم و نتیجه نیامد
+                            setLoading(false);
+                            if (!output && !error) {
+                                setError("Stream closed unexpectedly before result.");
+                            }
+                        }
+                        break;
                     default:
                         break;
                 }
             } catch (parseError) {
-                 setError("Error receiving data from API stream.");
-                 if(eventSourceRef.current) eventSourceRef.current.close();
-                 eventSourceRef.current = null;
-                 setLoading(false);
-                 setOutput(''); startTypingProcess('');
+                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
             }
         };
 
         eventSourceRef.current.onerror = (error) => {
             let errorMsg = "Error connecting to API stream.";
-             if (navigator.onLine) {
+             if (!navigator.onLine) {
                  errorMsg += " Check your network connection.";
              } else {
                  errorMsg += " Could not maintain connection. Check Space status/logs."; 
@@ -649,9 +654,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     } catch (err) {
         let displayError = err.message || "An unknown error occurred.";
-        if (err.message.includes("401")) {
-            displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN in Vercel/local env.";
-        } else if (err.message.includes("Failed to fetch")) {
+        if (err.message.includes("Failed to fetch")) {
             displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
         } else if (err.message.includes("503")) {
              displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
@@ -665,21 +668,16 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
            eventSourceRef.current = null;
         }
     }
+    // --- [END] پیاده‌سازی ---
   };
 
-  // --- Render logic ---
+  // --- Render logic (اصلاح شده) ---
   return (
     <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
-      {/* [اصلاح شد] اضافه کردن break-words برای شکستن تیتر در موبایل */}
       <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
 
-      {/* [اصلاح شد] بررسی توکن (حتی اگر موقت باشد) */}
-      {modelId === 'exbert' && (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")) && (
-          <p className="text-xs text-cyber-yellow mb-2 p-2 bg-yellow-900/30 rounded border border-yellow-500/50">
-            ⚠️ HF Token (VITE_HF_API_TOKEN) missing. AI analysis is disabled.
-          </p>
-      )}
+      {/* پیام هشدار توکن حذف شد چون دیگر نیازی به آن نیست */}
 
       <form onSubmit={handleModelQuery}>
         <textarea
@@ -688,12 +686,14 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           rows="4"
           className="cyber-textarea w-full"
           placeholder={placeholder}
-          disabled={loading || !input.trim() || (modelId === 'exbert' && (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")))} 
+          // [اصلاح شد] منطق غیرفعال سازی ساده شد
+          disabled={loading} 
         />
         <button 
             type="submit" 
             className="cyber-button w-full mt-3 flex items-center justify-center" 
-            disabled={loading || !input.trim() || (modelId === 'exbert' && (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")))}
+            // [اصلاح شد] منطق غیرفعال سازی ساده شد
+            disabled={loading || !input.trim()}
         >
           {loading ? (
             <>
@@ -722,6 +722,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     </div>
   );
 };
+// --- [END] کامپوننت اصلاح شده AIModelCard ---
 
 
 // --- کامپوننت ExploitDBTable (ادغام شده از ExploitDBTable.jsx) ---
@@ -914,29 +915,26 @@ function App() {
       {/* Background Grid Effect */}
       <div className="background-grid"></div>
 
-      {/* [اصلاح شد] کانتینر اصلی برای واکنش‌گرایی بهتر در موبایل و دسکتاپ بهینه شد */}
+      {/* کانتینر اصلی برای واکنش‌گرایی */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 relative z-10">
 
-        {/* [اصلاح شد] Main Header - کلاس 'break-words' اضافه شد تا از بیرون زدن متن جلوگیری شود */}
+        {/* Main Header */}
         <h1 className="text-3xl md:text-5xl font-bold text-center mb-10 bg-clip-text text-transparent bg-gradient-to-r from-cyber-green to-cyber-cyan section-header break-words">
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
 
         {/* Section 1: NVD Table (Existing) */}
         <section id="nvd-section" className="cyber-card mb-12">
-          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
           <div className="flex items-center mb-6">
             <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
             <h2 className="text-2xl font-semibold text-cyan-300 break-words min-w-0">NVD Vulnerability Feed_</h2>
           </div>
           
-          {/* جدول فیلتردار NVD */}
           <NVDTable />
         </section>
 
         {/* Section 2: AI Models */}
         <section id="ai-models-section" className="cyber-card mb-12">
-          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' و 'min-w-0' گرفت */}
           <div className="flex items-center mb-6">
             <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
             <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
@@ -965,7 +963,6 @@ function App() {
 
         {/* Section 3: Exploit DB */}
         <section id="exploit-db-section" className="cyber-card">
-          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' و 'min-w-0' گرفت */}
           <div className="flex items-center mb-6">
             <Swords className="icon-red w-8 h-8 mr-3 flex-shrink-0" />
             <h2 className="text-2xl font-semibold text-red-300 break-words min-w-0">EXPLOIT.DB.LATEST_</h2>
@@ -979,4 +976,3 @@ function App() {
 }
 
 export default App;
-
