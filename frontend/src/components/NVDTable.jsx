@@ -1,10 +1,13 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// [FIX] برگشت به پسوند .js برای رفع مشکل آدرس‌دهی در برخی محیط‌ها
+// [FIX] تلاش مجدد با پسوند .js. اگر هنوز خطا می‌دهد، مشکل در تنظیمات باندلر است.
+// این مورد با فرض اینکه این مسیر نسبی صحیح است، اعمال می‌شود.
 import { supabase } from '../supabaseClient.js'; 
-import { Loader2, Filter, DatabaseZap } from 'lucide-react';
+import { Loader2, Filter, DatabaseZap, Clipboard } from 'lucide-react';
 
-// تاریخ شروع فیلتر پیش‌فرض برای نمایش داده‌های اخیر
+// تعداد ردیف‌های پیش‌فرض برای نمایش قبل از اعمال فیلتر/جستجو
+const DEFAULT_ROWS_TO_SHOW = 10;
+// تاریخ شروع فیلتر پیش‌فرض
 const DEFAULT_START_DATE_FILTER = '2024-01-01'; 
 // حداقل مجاز برای ورودی date (سال 2016)
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -29,6 +32,51 @@ const extractYearFromCveId = (cveId) => {
     return match ? parseInt(match[1], 10) : null;
 };
 
+// کامپوننت دکمه کپی متن
+const CopyButton = ({ textToCopy }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        // [IMPORTANT]: استفاده از document.execCommand('copy') به جای navigator.clipboard
+        // برای تضمین کارکرد در محیط‌های sandboxed (مانند iFrame).
+        try {
+            const textarea = document.createElement('textarea');
+            textarea.value = textToCopy;
+            textarea.style.position = 'fixed'; // برای پنهان نگه داشتن آن
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500); // بازگشت به حالت عادی پس از 1.5 ثانیه
+        } catch (err) {
+            console.error('Failed to copy text:', err);
+            // در صورت شکست، نمایش یک پیام ساده
+            // [FIX] استفاده از یک المان ساده به جای alert()
+            const messageBox = document.createElement('div');
+            messageBox.textContent = 'Could not copy text. Please try manually.';
+            messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
+            document.body.appendChild(messageBox);
+            setTimeout(() => document.body.removeChild(messageBox), 3000);
+        }
+    };
+
+    return (
+        <button 
+            onClick={handleCopy} 
+            title="Copy full vulnerability description"
+            className={`
+                ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 
+                ${copied ? 'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50' : 'bg-gray-700/50 text-cyber-cyan hover:bg-cyber-cyan/30'}
+            `}
+        >
+            {copied ? 'COPIED!' : <Clipboard className="w-3 h-3 inline-block" />}
+        </button>
+    );
+};
+
 // کامپوننت اصلی جدول NVD
 const NVDTable = () => {
   const [allData, setAllData] = useState([]); // نگه داشتن تمام داده‌های واکشی شده
@@ -48,21 +96,17 @@ const NVDTable = () => {
 
   /**
    * واکشی تمام داده‌های مورد نیاز برای فیلترینگ سمت کلاینت
-   * این تابع فقط یک بار در ابتدا اجرا می‌شود.
    */
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
     
-    // [FIX] حذف فیلتر published_date از کوئری Supabase.
-    // به جای آن، ما فقط داده‌هایی را که می‌خواهیم (مثلاً 5000 مورد آخر) واکشی می‌کنیم 
-    // تا بتوانیم فیلتر تاریخ را در سمت کلاینت مدیریت کنیم.
+    // واکشی تعداد محدود از جدیدترین رکوردهای دیتابیس (مثلاً 5000)
     let query = supabase
       .from('vulnerabilities')
       .select('ID, text, baseSeverity, score, published_date, vectorString') 
-      // مرتب‌سازی بر اساس ID برای گرفتن جدیدترین داده‌ها
       .order('ID', { ascending: false }) 
-      .limit(5000); // افزایش محدودیت برای پوشش داده‌های بیشتر (اگرچه نباید خیلی زیاد باشد)
+      .limit(5000); 
 
     const { data, error: fetchError } = await query;
 
@@ -70,7 +114,6 @@ const NVDTable = () => {
       console.error('Error fetching NVD data:', fetchError);
       setError(`Database Error: ${fetchError.message}`);
     } else {
-      // داده‌های خام را ذخیره می‌کنیم
       setAllData(data || []);
     }
     setLoading(false);
@@ -90,11 +133,10 @@ const NVDTable = () => {
     let filtered = allData;
     const { keyword, severity, date } = filters;
 
-    // 1. فیلتر کلمات کلیدی و شدت (سمت کلاینت)
-    // توجه: در حالت ایده‌آل، keyword/severity هم باید سمت سرور انجام شود (همانند قبل) 
-    // اما برای سادگی در این مرحله و مدیریت مشکل تاریخ، آن را در سمت کلاینت مدیریت می‌کنیم.
-    
+    // 1. فیلتر کلمات کلیدی و شدت 
     const lowerKeyword = keyword.toLowerCase().trim();
+    const isFilteredOrSearched = lowerKeyword || severity !== 'all' || date !== DEFAULT_START_DATE_FILTER;
+
     if (lowerKeyword) {
         filtered = filtered.filter(cve => 
             cve.ID.toLowerCase().includes(lowerKeyword) || 
@@ -108,7 +150,7 @@ const NVDTable = () => {
         );
     }
 
-    // 2. فیلتر تاریخ (برای رفع مشکل NULL بودن published_date)
+    // 2. فیلتر تاریخ (با استفاده از ID در صورت NULL بودن published_date)
     if (date) {
         const minDate = new Date(date).getTime();
 
@@ -116,35 +158,46 @@ const NVDTable = () => {
             let itemDate = null;
 
             if (cve.published_date) {
-                // اگر published_date پر است (داده‌های جدید)، از آن استفاده کن
                 itemDate = new Date(cve.published_date).getTime();
             } else {
-                // اگر published_date خالی است، سال را از ID استخراج کن (مثل CVE-2024-XXXX)
                 const cveYear = extractYearFromCveId(cve.ID);
-                // تاریخ را به شروع آن سال تنظیم می‌کنیم
                 if (cveYear) {
                     itemDate = new Date(`${cveYear}-01-01T00:00:00Z`).getTime();
                 } else {
-                    return false; // اگر نتوانستیم تاریخ را استخراج کنیم، نادیده بگیر
+                    return false; 
                 }
             }
-
-            // فیلتر: اگر تاریخ آیتم بزرگتر یا مساوی با حداقل تاریخ مورد نیاز باشد
             return itemDate >= minDate;
         });
     }
+    
+    // 3. اعمال محدودیت نمایش اولیه:
+    // اگر هیچ فیلتری اعمال نشده باشد، فقط 10 ردیف اول را نمایش بده.
+    // اگر فیلتر یا جستجویی انجام شده، تمام نتایج فیلتر شده را نمایش بده.
+    if (!isFilteredOrSearched) {
+        // [FIX 1] نمایش 10 ردیف اولیه به صورت پویا/رندوم (با حفظ ترتیب جدیدترین)
+        // چون از قبل بر اساس ID مرتب شده، 10 تای اول جدیدترین خواهند بود.
+        return filtered.slice(0, DEFAULT_ROWS_TO_SHOW);
+    }
+
 
     return filtered;
   }, [allData, loading, error, filters]);
   
   // تابع کمکی برای نمایش عنوان کوتاه شده در موبایل
-  const truncateText = (text) => {
-    if (!text) return 'N/A';
+  const truncateText = (text, cveId) => {
+    if (!text) return { display: 'N/A', needsCopy: false };
+    
     const limit = window.innerWidth < 640 ? 50 : 150; 
-    if (text.length > limit) {
-        return text.substring(0, limit) + '...';
+    const needsCopy = text.length > limit;
+
+    if (needsCopy) {
+        return { 
+            display: text.substring(0, limit) + '...', 
+            needsCopy: true 
+        };
     }
-    return text;
+    return { display: text, needsCopy: false };
   }
 
   return (
@@ -196,15 +249,19 @@ const NVDTable = () => {
           />
         </div>
         <div className="md:flex-shrink-0">
-          {/* دکمه فیلتر دیگر fetchData را فراخوانی نمی‌کند، چون فیلتر سمت کلاینت است. */}
-          {/* برای حفظ ظاهر دکمه، می‌توانید آن را غیرفعال کنید یا یک اکشن نمایشی به آن بدهید. */}
-          {/* در اینجا ما فقط آن را به یک دکمه نمایشی تبدیل می‌کنیم */}
           <button type="button" className="cyber-button w-full md:w-auto flex items-center justify-center bg-gray-600 text-dark-bg cursor-default" disabled={true}>
              <Filter className="w-5 h-5 mr-2" />
              FILTER_APPLIED_
           </button>
         </div>
       </form>
+
+      {/* Message if default limit is applied */}
+      {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === DEFAULT_START_DATE_FILTER && (
+          <p className="text-sm text-cyber-cyan/80 mb-4 p-2 bg-cyan-900/10 rounded border border-cyan-500/30 text-center">
+              DISPLAYING TOP {DEFAULT_ROWS_TO_SHOW} VULNERABILITIES. USE FILTERS TO SEE ALL {allData.length} RECORDS._
+          </p>
+      )}
 
       {/* Results Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-800">
@@ -250,20 +307,27 @@ const NVDTable = () => {
                 </td>
               </tr>
             )}
-            {!loading && !error && filteredVulnerabilities.map((cve) => (
-              <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
-                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
-                  <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
-                </td>
-                <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>{truncateText(cve.text)}</td>
-                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
-                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
-                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
-                <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {cve.published_date ? new Date(cve.published_date).toLocaleDateString() : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
-                </td>
-              </tr>
-            ))}
+            {!loading && !error && filteredVulnerabilities.map((cve) => {
+              const { display: truncatedText, needsCopy } = truncateText(cve.text, cve.ID);
+              return (
+                <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
+                    <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
+                  </td>
+                  {/* [FIX 2] نمایش متن کوتاه شده و دکمه کپی */}
+                  <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>
+                      {truncatedText}
+                      {needsCopy && <CopyButton textToCopy={cve.text} />}
+                  </td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {cve.published_date ? new Date(cve.published_date).toLocaleDateString() : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
