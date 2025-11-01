@@ -927,7 +927,7 @@ function App() {
           {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
           <div className="flex items-center mb-6">
             <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
-            <h2 className="text-2xl font-semibold text-cyan-300 break-words">NVD Vulnerability Feed_</h2>
+            <h2 className="text-2xl font-semibold text-cyan-300 break-words min-w-0">NVD Vulnerability Feed_</h2>
           </div>
           
           {/* جدول فیلتردار NVD */}
@@ -936,10 +936,10 @@ function App() {
 
         {/* Section 2: AI Models */}
         <section id="ai-models-section" className="cyber-card mb-12">
-          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
+          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' و 'min-w-0' گرفت */}
           <div className="flex items-center mb-6">
             <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
-            <h2 className="text-2xl font-semibold text-green-300 break-words">INTELLIGENT.ANALYSIS.UNIT_</h2>
+            <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <AIModelCard 
@@ -965,10 +965,10 @@ function App() {
 
         {/* Section 3: Exploit DB */}
         <section id="exploit-db-section" className="cyber-card">
-          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
+          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' و 'min-w-0' گرفت */}
           <div className="flex items-center mb-6">
             <Swords className="icon-red w-8 h-8 mr-3 flex-shrink-0" />
-            <h2 className="text-2xl font-semibold text-red-300 break-words">EXPLOIT.DB.LATEST_</h2>
+            <h2 className="text-2xl font-semibold text-red-300 break-words min-w-0">EXPLOIT.DB.LATEST_</h2>
           </div>
           <ExploitDBTable />
        </section>
