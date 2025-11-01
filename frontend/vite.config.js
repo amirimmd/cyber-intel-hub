@@ -7,15 +7,11 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // [FIX] اضافه کردن این بخش برای رفع خطای "import.meta"
-  // این به Vite می‌گوید که کد را برای مرورگرهای مدرن‌تری (es2020) که
-  // import.meta را پشتیبانی می‌کنند، کامپایل کند.
+  // [FIX] اطمینان از تنظیم هدف کامپایل به ES2020 یا بالاتر برای پشتیبانی از import.meta.env
   build: {
     target: 'es2020'
   },
-  // [FIX] همچنین برای سرور توسعه (dev server)
   esbuild: {
     target: 'es2020'
   }
 });
-
