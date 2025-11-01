@@ -353,3 +353,4 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
+
