@@ -1,384 +1,202 @@
-// frontend/src/components/NVDTable.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// [FIX] حذف نهایی پسوند برای حل مشکل Could not resolve
-import { supabase } from '../supabaseClient'; 
-import { Loader2, Filter, DatabaseZap, Clipboard } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient.js';
+import { Link } from 'react-router-dom';
 
-// تعداد ردیف‌های پیش‌فرض برای نمایش قبل از اعمال فیلتر/جستجو
-const DEFAULT_ROWS_TO_SHOW = 10;
-// مقدار اولیه فیلتر تاریخ (برای فعال کردن حالت "همه آسیب‌پذیری‌ها")
-const INITIAL_DATE_FILTER = ''; 
-// حداقل مجاز برای ورودی date (سال 2016)
-const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
-
-// Helper for severity badges
-const SeverityBadge = ({ severity }) => {
-  let badgeClass = 'badge-unknown';
-  switch (String(severity).toUpperCase()) {
-    case 'CRITICAL': badgeClass = 'badge-critical'; break;
-    case 'HIGH': badgeClass = 'badge-high'; break;
-    case 'MEDIUM': badgeClass = 'badge-medium'; break;
-    case 'LOW': badgeClass = 'badge-low'; break;
-    case 'NONE': badgeClass = 'badge-low'; break; 
-    default: badgeClass = 'badge-unknown'; break;
-  }
-  return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
-};
-
-// تابع کمکی برای استخراج سال از CVE ID (مثلاً CVE-2024-3839 -> 2024)
-const extractYearFromCveId = (cveId) => {
-    const match = cveId?.match(/CVE-(\d{4})-\d+/);
-    return match ? parseInt(match[1], 10) : null;
-};
-
-// کامپوننت دکمه کپی متن (به عنوان یک ماژول فرعی قابل استفاده برای ID و Description)
-const CopyButton = ({ textToCopy, isId = false }) => {
-    const [copied, setCopied] = useState(false);
-
-    const handleCopy = () => {
-        try {
-            const textarea = document.createElement('textarea');
-            textarea.value = textToCopy;
-            textarea.style.position = 'fixed'; 
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.focus();
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500); 
-        } catch (err) {
-            console.error('Failed to copy text:', err);
-            const messageBox = document.createElement('div');
-            messageBox.textContent = 'Could not copy text. Please try manually.';
-            messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
-            document.body.appendChild(messageBox);
-            setTimeout(() => document.body.removeChild(messageBox), 3000);
-        }
-    };
-
-    // استایل‌های دکمه کپی: کوچک‌تر برای ID
-    const buttonClass = isId ? 
-        'ml-1 px-1 py-0.5 text-xs rounded transition-all duration-150' : 
-        'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150';
-    
-    const baseStyle = copied ? 
-        'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50' : 
-        'bg-gray-700/50 text-cyber-cyan hover:bg-cyber-cyan/30';
-
-    return (
-        <button 
-            onClick={handleCopy} 
-            title={isId ? `Copy ${textToCopy}` : "Copy full vulnerability description"}
-            className={`flex items-center justify-center ${buttonClass} ${baseStyle}`}
-        >
-            {copied ? (isId ? 'OK' : 'COPIED!') : <Clipboard className="w-3 h-3 inline-block" />}
-        </button>
-    );
-};
-
-// کامپوننت اصلی جدول NVD
 const NVDTable = () => {
-  const [allData, setAllData] = useState([]); // نگه داشتن تمام داده‌های واکشی شده
+  const [cveData, setCveData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  const [filters, setFilters] = useState({ 
-    keyword: '', 
-    severity: 'all', 
-    date: INITIAL_DATE_FILTER // مقدار اولیه برای نمایش همه
-  });
+  const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [cvesPerPage] = useState(10);
+  const [sortConfig, setSortConfig] = useState({ key: 'publishedDate', direction: 'descending' });
 
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    // اگر مقدار 'all_dates' انتخاب شد، آن را به رشته خالی ('') تبدیل می‌کنیم تا فیلتر تاریخ غیرفعال شود.
-    setFilters(prev => ({ ...prev, [name]: value === 'all_dates' ? INITIAL_DATE_FILTER : value }));
-  };
-
-  /**
-   * واکشی تمام داده‌های مورد نیاز برای فیلترینگ سمت کلاینت
-   */
-  const fetchAllData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    
-    // واکشی تعداد محدود از جدیدترین رکوردهای دیتابیس (مثلاً 5000)
-    let query = supabase
-      .from('vulnerabilities')
-      .select('ID, text, baseSeverity, score, published_date, vectorString') 
-      // [NOTE] همچنان از ID بزرگ استفاده می‌کنیم چون ستون شما اینگونه تعریف شده است.
-      .order('ID', { ascending: false }) 
-      .limit(5000); 
-
-    const { data, error: fetchError } = await query;
-
-    if (fetchError) {
-      console.error('Error fetching NVD data:', fetchError);
-      setError(`Database Error: ${fetchError.message}`);
-    } else {
-      setAllData(data || []);
-    }
-    setLoading(false);
+  useEffect(() => {
+    fetchCveData();
   }, []);
 
-  // اجرای واکشی اولیه
-  useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]); 
+  const fetchCveData = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('nvd_cve')
+        .select('*');
 
-  /**
-   * اعمال فیلترهای کلاینت بر روی داده‌های واکشی شده
-   */
-  const filteredVulnerabilities = useMemo(() => {
-    if (loading || error) return [];
+      if (error) {
+        throw error;
+      }
 
-    let filtered = allData;
-    const { keyword, severity, date } = filters;
-    
-    // بررسی می‌کنیم که آیا هر فیلتری غیر از حالت پیش‌فرض اعمال شده است یا خیر
-    const isFilteredOrSearched = keyword.toLowerCase().trim() || severity !== 'all' || date; // اگر date خالی باشد، فیلتر تاریخ اعمال نمی‌شود
+      // Pre-sort the data by publishedDate descending initially
+      const sortedData = [...data].sort((a, b) => {
+        if (a.publishedDate < b.publishedDate) return 1;
+        if (a.publishedDate > b.publishedDate) return -1;
+        return 0;
+      });
 
-    // 1. فیلتر کلمات کلیدی و شدت 
-    const lowerKeyword = keyword.toLowerCase().trim();
-
-    if (lowerKeyword) {
-        filtered = filtered.filter(cve => 
-            cve.ID.toLowerCase().includes(lowerKeyword) || 
-            cve.text?.toLowerCase().includes(lowerKeyword)
-        );
+      setCveData(sortedData);
+    } catch (error) {
+      console.error('Error fetching NVD data:', error.message);
+      setError('Error fetching NVD data: ' + error.message);
+    } finally {
+      setLoading(false);
     }
-    
-    if (severity !== 'all') {
-        filtered = filtered.filter(cve => 
-            String(cve.baseSeverity).toUpperCase() === severity.toUpperCase()
-        );
+  };
+
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (
+      sortConfig.key === key &&
+      sortConfig.direction === 'ascending'
+    ) {
+      direction = 'descending';
     }
+    setSortConfig({ key, direction });
+  };
 
-    // 2. فیلتر تاریخ (با استفاده از ID در صورت NULL بودن published_date)
-    // تنها در صورتی فیلتر تاریخ را اعمال می‌کنیم که یک تاریخ مشخص انتخاب شده باشد (date خالی نباشد)
-    if (date) {
-        const minDate = new Date(date).getTime();
-
-        filtered = filtered.filter(cve => {
-            let itemDate = null;
-
-            if (cve.published_date) {
-                itemDate = new Date(cve.published_date).getTime();
-            } else {
-                const cveYear = extractYearFromCveId(cve.ID);
-                if (cveYear) {
-                    // ساخت تاریخ تخمینی با استفاده از سال CVE
-                    itemDate = new Date(`${cveYear}-01-01T00:00:00Z`).getTime();
-                } else {
-                    return false; // اگر سالی در ID نبود، فیلتر می‌شود
-                }
-            }
-            return itemDate >= minDate;
-        });
+  const sortedCveData = React.useMemo(() => {
+    let sortableItems = [...cveData];
+    if (sortConfig !== null) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
     }
-    
-    // 3. اعمال محدودیت نمایش اولیه:
-    // اگر هیچ فیلتری اعمال نشده باشد (isFilteredOrSearched = false)، فقط 10 ردیف اول را نمایش بده.
-    if (!isFilteredOrSearched) {
-        return filtered.slice(0, DEFAULT_ROWS_TO_SHOW);
+    return sortableItems;
+  }, [cveData, sortConfig]);
+
+  const filteredCves = sortedCveData.filter(cve =>
+    cve.cveId.toLowerCase().includes(search.toLowerCase()) ||
+    cve.description.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Pagination logic
+  const indexOfLastCve = currentPage * cvesPerPage;
+  const indexOfFirstCve = indexOfLastCve - cvesPerPage;
+  const currentCves = filteredCves.slice(indexOfFirstCve, indexOfLastCve);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const totalPages = Math.ceil(filteredCves.length / cvesPerPage);
+
+  const renderSortIndicator = (key) => {
+    if (sortConfig.key !== key) {
+      return null;
     }
-
-
-    return filtered;
-  }, [allData, loading, error, filters]);
-  
-  // تابع کمکی برای نمایش عنوان کوتاه شده در موبایل
-  const truncateText = (text, cveId) => {
-    if (!text) return { display: 'N/A', needsCopy: false };
-    
-    // محدودیت کاراکتر در موبایل و دسکتاپ
-    const limit = window.innerWidth < 640 ? 50 : 150; 
-    const needsCopy = text.length > limit;
-
-    if (needsCopy) {
-        return { 
-            display: text.substring(0, limit) + '...', 
-            needsCopy: true 
-        };
+    if (sortConfig.direction === 'ascending') {
+      return ' 🔼';
     }
-    return { display: text, needsCopy: false };
-  }
+    return ' 🔽';
+  };
+
+  const getSeverityColor = (score) => {
+    if (score >= 9.0) return 'bg-red-600';
+    if (score >= 7.0) return 'bg-red-500';
+    if (score >= 4.0) return 'bg-yellow-500';
+    if (score > 0.0) return 'bg-blue-500';
+    return 'bg-gray-500';
+  };
+
+  if (loading) return <div className="text-center p-8 text-gray-500">در حال بارگذاری داده‌های NVD...</div>;
+  if (error) return <div className="text-center p-8 text-red-500">خطا: {error}</div>;
 
   return (
-    <div>
-      {/* Filter Form */}
-      <form onSubmit={(e) => e.preventDefault()} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
-        <div className="flex-grow">
-          <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
-          <input 
-            type="text" 
-            name="keyword" 
-            id="nvd-keyword" 
-            value={filters.keyword} 
-            onChange={handleFilterChange} 
-            placeholder="e.g., SQLI, RCE, Apache..." 
-            className="cyber-input" 
-            disabled={loading || !!error}
-          />
-        </div>
-        <div>
-          <label htmlFor="nvd-severity" className="block text-sm font-medium text-gray-400 mb-1">Severity:</label>
-          <select 
-            name="severity" 
-            id="nvd-severity" 
-            value={filters.severity} 
-            onChange={handleFilterChange} 
-            className="cyber-select w-full md:w-48"
-            disabled={loading || !!error}
-          >
-            <option value="all">::ALL::</option>
-            <option value="CRITICAL">CRITICAL</option>
-            <option value="HIGH">HIGH</option>
-            <option value="MEDIUM">MEDIUM</option>
-            <option value="LOW">LOW</option>
-            <option value="NONE">NONE</option>
-          </select>
-        </div>
-        {/* فیلتر تاریخ با گزینه "همه آسیب‌پذیری‌ها" */}
-        <div>
-            <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After (Estimated):</label>
-            {filters.date ? (
-                // حالت انتخاب تاریخ
-                <input 
-                    type="date" 
-                    name="date" 
-                    id="nvd-date" 
-                    value={filters.date} 
-                    onChange={handleFilterChange} 
-                    min={EARLIEST_MANUAL_DATA_YEAR}
-                    className="cyber-input w-full md:w-48" 
-                    disabled={loading || !!error}
-                />
-            ) : (
-                // حالت نمایش "همه"
-                <select
-                    name="date"
-                    id="nvd-date"
-                    value={INITIAL_DATE_FILTER} 
-                    onChange={handleFilterChange}
-                    className="cyber-select w-full md:w-48"
-                    disabled={loading || !!error}
-                >
-                    <option value={INITIAL_DATE_FILTER}>::ALL VULNERABILITIES::</option>
-                    <option value={DEFAULT_START_DATE_FILTER}>SELECT DATE...</option>
-                </select>
-            )}
-            
-            {/* دکمه‌های سوئیچ بین حالت "همه" و "انتخاب تاریخ" */}
-            {filters.date === INITIAL_DATE_FILTER && (
-                 <button
-                    type="button"
-                    onClick={() => setFilters(prev => ({ ...prev, date: DEFAULT_START_DATE_FILTER }))} 
-                    className="mt-1 text-xs text-cyber-cyan hover:underline"
-                 >
-                    - Select a specific date -
-                 </button>
-            )}
-            {filters.date !== INITIAL_DATE_FILTER && (
-                 <button
-                    type="button"
-                    onClick={() => setFilters(prev => ({ ...prev, date: INITIAL_DATE_FILTER }))}
-                    className="mt-1 text-xs text-cyber-cyan hover:underline"
-                 >
-                    - Show All -
-                 </button>
-            )}
+    <div className="bg-white shadow-xl rounded-xl p-6 lg:p-8">
+      <h2 className="text-3xl font-bold mb-6 text-gray-800 border-b pb-3">جدول آسیب‌پذیری‌های ملی (NVD)</h2>
 
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+        <input
+          type="text"
+          placeholder="جستجو بر اساس CVE ID یا توضیحات..."
+          className="p-3 border border-gray-300 rounded-lg w-full md:w-1/3 focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out shadow-sm"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1); // Reset to first page on search
+          }}
+        />
+        <div className="text-sm text-gray-600">
+          تعداد کل آسیب‌پذیری‌ها: <span className="font-semibold text-gray-800">{filteredCves.length}</span>
         </div>
-        <div className="md:flex-shrink-0">
-          <button type="button" className="cyber-button w-full md:w-auto flex items-center justify-center bg-gray-600 text-dark-bg cursor-default" disabled={true}>
-             <Filter className="w-5 h-5 mr-2" />
-             FILTER_APPLIED_
-          </button>
-        </div>
-      </form>
+      </div>
 
-      {/* Message if default limit is applied */}
-      {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === INITIAL_DATE_FILTER && (
-          <p className="text-sm text-cyber-cyan/80 mb-4 p-2 bg-cyan-900/10 rounded border border-cyan-500/30 text-center">
-              DISPLAYING TOP {DEFAULT_ROWS_TO_SHOW} VULNERABILITIES. USE FILTERS TO SEE ALL {allData.length} RECORDS._
-          </p>
-      )}
-
-      {/* Results Table */}
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
-        <table className="min-w-full divide-y divide-gray-800">
-          <thead className="bg-gray-800/50">
+      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-lg">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
             <tr>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider min-w-[100px]">CVE ID</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider min-w-[200px]">Description</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Severity</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider">Score</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider min-w-[150px]">Vector</th>
-              <th scope="col" className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-cyber-cyan uppercase tracking-wider min-w-[100px]">Published</th>
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition duration-150"
+                onClick={() => requestSort('cveId')}
+              >
+                شناسه CVE {renderSortIndicator('cveId')}
+              </th>
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition duration-150"
+                onClick={() => requestSort('cvssV3Score')}
+              >
+                امتیاز CVSS v3 {renderSortIndicator('cvssV3Score')}
+              </th>
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                خلاصه توضیحات
+              </th>
+              <th
+                className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition duration-150"
+                onClick={() => requestSort('publishedDate')}
+              >
+                تاریخ انتشار {renderSortIndicator('publishedDate')}
+              </th>
             </tr>
           </thead>
-          <tbody className="bg-cyber-card divide-y divide-gray-800">
-            {loading && (
-              <tr>
-                <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
-                  <div className="flex justify-center items-center text-cyber-cyan">
-                    <Loader2 className="animate-spin h-6 w-6 mr-3" />
-                    <span>LOADING NVD_DATA_STREAM (Fetching All Required Data)...</span>
-                  </div>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {currentCves.map((cve) => (
+              <tr key={cve.cveId} className="hover:bg-gray-50 transition duration-150 ease-in-out">
+                <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
+                  <Link to={`/nvd/${cve.cveId}`}>{cve.cveId}</Link>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm">
+                  <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full text-white ${getSeverityColor(cve.cvssV3Score)}`}>
+                    {cve.cvssV3Score || 'N/A'}
+                  </span>
+                </td>
+                <td className="px-4 py-4 text-sm text-gray-700 max-w-lg truncate">
+                  {cve.description.substring(0, 150)}...
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {new Date(cve.publishedDate).toLocaleDateString('fa-IR')}
                 </td>
               </tr>
-            )}
-            {!loading && error && (
-              <tr>
-                <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
-                  <div className="text-cyber-red">
-                    <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
-                    <span>ERROR: {error}</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {!loading && !error && filteredVulnerabilities.length === 0 && (
-              <tr>
-                <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
-                  <div className="text-gray-500">
-                    <DatabaseZap className="w-10 h-10 mx-auto mb-2" />
-                    <span>NO MATCHING VULNERABILITIES FOUND_</span>
-                  </div>
-                </td>
-              </tr>
-            )}
-            {!loading && !error && filteredVulnerabilities.map((cve) => {
-              const { display: truncatedText, needsCopy } = truncateText(cve.text, cve.ID);
-              return (
-                <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
-                  {/* [FIX 1] دکمه کپی برای CVE ID */}
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
-                    <div className="flex items-center space-x-1">
-                        <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
-                        <CopyButton textToCopy={cve.ID} isId={true} />
-                    </div>
-                  </td>
-                  {/* نمایش متن کوتاه شده و دکمه کپی */}
-                  <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>
-                      <div className="flex items-start">
-                          <p>{truncatedText}</p>
-                          {needsCopy && <CopyButton textToCopy={cve.text} />}
-                      </div>
-                  </td>
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + '...' : 'N/A'}</td>
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {cve.published_date ? new Date(cve.published_date).toLocaleDateString() : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
-                  </td>
-                </tr>
-              );
-            })}
+            ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center mt-6">
+        <button
+          onClick={() => paginate(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-50 transition duration-150"
+        >
+          قبلی
+        </button>
+
+        <span className="text-sm text-gray-700">
+          صفحه <span className="font-semibold">{currentPage}</span> از <span className="font-semibold">{totalPages}</span>
+        </span>
+
+        <button
+          onClick={() => paginate(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-50 transition duration-150"
+        >
+          بعدی
+        </button>
       </div>
     </div>
   );
