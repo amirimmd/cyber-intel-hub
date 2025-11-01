@@ -306,7 +306,7 @@ const NVDTable = () => {
 
       {/* [اصلاح شد] راهنمای اسکرول افقی در موبایل */}
       <p className="md:hidden text-xs text-center text-cyber-cyan/70 mb-2">
-        &lt;-- برای دیدن ستون‌های بیشتر، جدول را به طرفین بکشید --&gt;
+        &lt;-- To see more columns, drag the table sideways --&gt;
       </p>
 
       {/* Results Table */}
