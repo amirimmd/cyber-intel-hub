@@ -1,8 +1,7 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// [FIX] تلاش مجدد با پسوند .js. اگر هنوز خطا می‌دهد، مشکل در تنظیمات باندلر است.
-// این مورد با فرض اینکه این مسیر نسبی صحیح است، اعمال می‌شود.
-import { supabase } from '../supabaseClient.js'; 
+// [FIX] حذف پسوند .js برای رفع خطای "Could not resolve" در برخی از محیط‌های باندلینگ
+import { supabase } from '../supabaseClient'; 
 import { Loader2, Filter, DatabaseZap, Clipboard } from 'lucide-react';
 
 // تعداد ردیف‌های پیش‌فرض برای نمایش قبل از اعمال فیلتر/جستجو
@@ -53,8 +52,7 @@ const CopyButton = ({ textToCopy }) => {
             setTimeout(() => setCopied(false), 1500); // بازگشت به حالت عادی پس از 1.5 ثانیه
         } catch (err) {
             console.error('Failed to copy text:', err);
-            // در صورت شکست، نمایش یک پیام ساده
-            // [FIX] استفاده از یک المان ساده به جای alert()
+            // در صورت شکست، نمایش یک المان ساده به جای alert()
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -105,6 +103,7 @@ const NVDTable = () => {
     let query = supabase
       .from('vulnerabilities')
       .select('ID, text, baseSeverity, score, published_date, vectorString') 
+      // [NOTE] همچنان از ID بزرگ استفاده می‌کنیم چون ستون شما اینگونه تعریف شده است.
       .order('ID', { ascending: false }) 
       .limit(5000); 
 
@@ -162,9 +161,10 @@ const NVDTable = () => {
             } else {
                 const cveYear = extractYearFromCveId(cve.ID);
                 if (cveYear) {
+                    // ساخت تاریخ تخمینی با استفاده از سال CVE
                     itemDate = new Date(`${cveYear}-01-01T00:00:00Z`).getTime();
                 } else {
-                    return false; 
+                    return false; // اگر سالی در ID نبود، فیلتر می‌شود
                 }
             }
             return itemDate >= minDate;
@@ -173,10 +173,7 @@ const NVDTable = () => {
     
     // 3. اعمال محدودیت نمایش اولیه:
     // اگر هیچ فیلتری اعمال نشده باشد، فقط 10 ردیف اول را نمایش بده.
-    // اگر فیلتر یا جستجویی انجام شده، تمام نتایج فیلتر شده را نمایش بده.
     if (!isFilteredOrSearched) {
-        // [FIX 1] نمایش 10 ردیف اولیه به صورت پویا/رندوم (با حفظ ترتیب جدیدترین)
-        // چون از قبل بر اساس ID مرتب شده، 10 تای اول جدیدترین خواهند بود.
         return filtered.slice(0, DEFAULT_ROWS_TO_SHOW);
     }
 
@@ -188,6 +185,7 @@ const NVDTable = () => {
   const truncateText = (text, cveId) => {
     if (!text) return { display: 'N/A', needsCopy: false };
     
+    // محدودیت کاراکتر در موبایل و دسکتاپ
     const limit = window.innerWidth < 640 ? 50 : 150; 
     const needsCopy = text.length > limit;
 
@@ -249,6 +247,7 @@ const NVDTable = () => {
           />
         </div>
         <div className="md:flex-shrink-0">
+          {/* دکمه اعمال فیلتر دیگر لازم نیست چون با تغییر فیلترها، useMemo به طور خودکار بروزرسانی می‌شود */}
           <button type="button" className="cyber-button w-full md:w-auto flex items-center justify-center bg-gray-600 text-dark-bg cursor-default" disabled={true}>
              <Filter className="w-5 h-5 mr-2" />
              FILTER_APPLIED_

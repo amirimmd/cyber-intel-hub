@@ -1,6 +1,9 @@
 // frontend/src/components/AIModelCard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
+// [FIX]: حذف پسوند .js برای رفع خطای "Could not resolve"
+// هرچند در این کامپوننت supabase مستقیما استفاده نمی‌شود، اما برای هماهنگی اصلاح می‌شود
+import { supabase } from '../supabaseClient'; 
 
 // --- Configuration ---
 const HF_USER = "amirimmd";
@@ -381,4 +384,3 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
-
