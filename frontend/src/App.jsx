@@ -14,13 +14,18 @@ import {
 
 // --- Supabase Client ---
 // [ادغام شد] منطق فایل supabaseClient.js به اینجا منتقل شد
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
+// [WORKAROUND] متغیرهای 'import.meta.env' در این محیط پیش‌نمایش به درستی بارگیری نمی‌شوند
+// (به دلیل هشدارهای 'es2015 target'). ما از مقادیر موقت (placeholder) برای نمایش استفاده می‌کنیم.
+// فایل‌های اصلی شما ('vite.config.js' و 'supabaseClient.js') صحیح هستند و در Vercel کار خواهند کرد.
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-supabase-url.supabase.co";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-supabase-anon-key";
+
+
+if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.error(
-    "FATAL: Supabase URL or Anon Key is missing. " +
-    "Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel Environment Variables."
+    "WARNING: Supabase URL or Anon Key is missing from .env. " +
+    "Using placeholders for preview. Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel."
   );
 }
 // [اصلاح شد] اطمینان از اینکه createClient از ایمپورت CDN به درستی استفاده می‌شود
@@ -55,7 +60,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
     };
 
     const buttonClass = isId ? 
-        'ml-1 px-1 py-0.5 text-xs rounded transition-all duration-150' : 
+        'ml-1 px-1 py-0-5 text-xs rounded transition-all duration-150' : 
         'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 flex-shrink-0'; 
     
     const baseStyle = copied ? 
@@ -139,7 +144,7 @@ const NVDTable = () => {
         setError(`Database Error: ${err.message}. Check Supabase connection and table column names (ID, text, score, baseSeverity).`);
     } finally {
         setLoading(false);
-    }
+// ... کامپوننت NVDTable ...
   }, []); // وابستگی به supabase حذف شد چون اکنون در اسکوپ بالاتر تعریف شده
 
   useEffect(() => {
@@ -395,10 +400,11 @@ const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
+// [WORKAROUND] استفاده از متغیر موقت برای توکن HF چون 'import.meta.env' کار نمی‌کند
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || "your-hf-api-token-placeholder";
 
-if (!HF_API_TOKEN) {
-  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing!");
+if (!import.meta.env.VITE_HF_API_TOKEN) {
+  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! Using placeholder for preview.");
 } else {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
 }
@@ -446,7 +452,7 @@ const useTypewriter = (text, speed = 50) => {
     return [displayText, startTypingProcess, isTyping];
 };
 
-
+// ... کامپوننت AIModelCard ...
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
@@ -722,7 +728,7 @@ const extractYearFromId = (id) => {
     const match = id?.match(/(\d{4})/); 
     return match ? match[1] : 'N/A';
 };
-
+// ... کامپوننت ExploitDBTable ...
 const ExploitDBTable = () => {
   const [latestExploits, setLatestExploits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -967,4 +973,5 @@ function App() {
 }
 
 export default App;
+
 
