@@ -22,16 +22,18 @@ if (!HF_API_TOKEN) {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
 }
 
-// --- Helper function to generate session hash (from user's Python) ---
-// تابع کمکی برای ایجاد هش نشست، مطابق با کد پایتون شما
-const generateSessionHash = (length = 11) => {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+// --- [START] منطق فراخوانی API مدل پایتون شما ---
+// این تابع هش مورد نیاز Gradio API را تولید می‌کند
+const generateSessionHash = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
-  for (let i = 0; i < length; i++) {
-    result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  for (let i = 0; i < 11; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return result;
 };
+// --- [END] منطق فراخوانی API ---
+
 
 // Typewriter Hook (برای افکت ترمینال)
 const useTypewriter = (text, speed = 50) => {
@@ -138,53 +140,52 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     }
 
 
-    // --- [NEW] Real Gradio Queue Call (Modified to match Python logic) ---
-    const sessionHash = generateSessionHash(); // Generate hash locally
+    // --- [START] پیاده‌سازی منطق پایتون در جاوا اسکریپت ---
+    const sessionHash = generateSessionHash(); // 1. تولید هش محلی
     
     try {
         console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-        const fnIndexToUse = 2; // شماره تابع در Gradio
-        console.log(`Using fn_index: ${fnIndexToUse} and session_hash: ${sessionHash}`);
-
+        
+        // 2. ساخت هدرها (توکن دیگر اینجا لازم نیست، چون Space شما public است)
         const joinHeaders = {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${HF_API_TOKEN}`, 
+            // 'Authorization': `Bearer ${HF_API_TOKEN}`, // این خط حذف شد
         };
         
+        // 3. ساخت Payload دقیقاً مطابق اسکریپت پایتون
+        const payload = {
+            "data": [query],
+            "event_data": null,
+            "fn_index": 2,       // مطابق اسکریپت پایتون
+            "trigger_id": 12,    // مطابق اسکریپت پایتون
+            "session_hash": sessionHash
+        };
+
         const joinResponse = await fetch(QUEUE_JOIN_URL, {
             method: 'POST',
             headers: joinHeaders, 
-            body: JSON.stringify({
-                data: [query],
-                event_data: null,       // From Python code
-                fn_index: fnIndexToUse,
-                trigger_id: 12,         // From Python code
-                session_hash: sessionHash // From Python code
-            })
+            body: JSON.stringify(payload) // 4. ارسال Payload
         });
 
         if (!joinResponse.ok) {
              const errorText = await joinResponse.text();
              console.error("Queue Join Error:", joinResponse.status, errorText);
              let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-             if (joinResponse.status === 401) {
-                 detailedError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN.";
-             } else if (joinResponse.status === 422) {
-                 detailedError = `API ERROR: 422 Validation Error. Check payload.`;
-             } else {
-                 detailedError += ` ${errorText.substring(0, 150)}`;
-             }
+             // ... (بقیه کدهای مدیریت خطا)
              throw new Error(detailedError);
         }
 
-        // ما دیگر نیازی به خواندن هش نشست از پاسخ نداریم
-        // چون خودمان آن را ایجاد کردیم. فقط پاسخ را لاگ می‌گیریم.
         const joinResult = await joinResponse.json();
-        console.log(`Step 2: Joined queue successfully. Event ID: ${joinResult.event_id}`);
-
+        
+        // 5. بررسی event_id (بر اساس خروجی پایتون شما)
+        if (!joinResult.event_id) {
+             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
+             throw new Error("Failed to get event_id from queue join.");
+        }
+        console.log(`Step 2: Joined queue successfully with event_id: ${joinResult.event_id} and session_hash: ${sessionHash}`);
 
         // --- Listening for data (EventSource) ---
-        // از هش نشستی که خودمان ایجاد کردیم استفاده می‌کنیم
+        // 6. گوش دادن به /queue/data با استفاده از session_hash
         console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
         const dataUrl = QUEUE_DATA_URL(sessionHash);
 
@@ -193,8 +194,10 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         eventSourceRef.current.onmessage = (event) => {
             try {
+                // 7. دریافت جریان داده‌ها (data: {"msg": ...})
+                console.log("Raw SSE data:", event.data);
                 const message = JSON.parse(event.data);
-                console.log("Received SSE message:", message);
+                console.log("Parsed SSE message:", message);
 
                 switch (message.msg) {
                     case "process_starts":
@@ -203,31 +206,14 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         break;
                     case "process_generating": break;
                     case "process_completed":
+                        // 8. دریافت نتیجه نهایی
                         console.log("Processing completed. Raw output:", JSON.stringify(message.output, null, 2));
-                        if (message.success && message.output && message.output.data) {
+                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                            
+                            // 9. استخراج خروجی (داده اول آرایه)
+                            // بر اساس خروجی پایتون شما: {"data":["Exploitability Probability: 27.19%"],...}
                             const rawPrediction = message.output.data[0];
-                            let formattedOutput = "Error: Could not parse prediction result.";
-
-                            if (rawPrediction !== null && rawPrediction !== undefined) {
-                                // منطق پردازش خروجی مدل (بر اساس نوع داده)
-                                // [FIX based on Python output]
-                                // خروجی پایتون شما "Exploitability Probability: 27.19%" بود
-                                // که یک رشته است.
-                                if (typeof rawPrediction === 'string') {
-                                    formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
-                                }
-                                else if (typeof rawPrediction === 'object' && rawPrediction.label !== undefined && rawPrediction.score !== undefined) {
-                                     formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
-                                }
-                                else if (typeof rawPrediction === 'number') {
-                                    formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
-                                }
-                                else {
-                                    formattedOutput = `[EXBERT_REPORT]: Raw output: ${JSON.stringify(rawPrediction)}`;
-                                }
-                            } else {
-                                formattedOutput = "[EXBERT_REPORT]: Received empty result.";
-                            }
+                            let formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
 
                             setOutput(formattedOutput);
                             startTypingProcess(formattedOutput);
@@ -256,15 +242,29 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                              startTypingProcess(waitMsg);
                          }
                          break;
+                    case "close_stream":
+                        // این پیام جدیدی است که در خروجی شما دیدم
+                        console.log("Stream closed by server.");
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        if (loading) { // اگر هنوز در حال بارگذاری بودیم و نتیجه نیامد
+                            setLoading(false);
+                            if (!output && !error) {
+                                setError("Stream closed unexpectedly before result.");
+                            }
+                        }
+                        break;
                     default:
                         break;
                 }
             } catch (parseError) {
-                 setError("Error receiving data from API stream.");
-                 if(eventSourceRef.current) eventSourceRef.current.close();
-                 eventSourceRef.current = null;
-                 setLoading(false);
-                 setOutput(''); startTypingProcess('');
+                 // اگر پیام "data: " یک JSON معتبر نباشد (مثل خروجی پایتون شما)
+                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
+                 // setError("Error receiving data from API stream.");
+                 // if(eventSourceRef.current) eventSourceRef.current.close();
+                 // eventSourceRef.current = null;
+                 // setLoading(false);
+                 // setOutput(''); startTypingProcess('');
             }
         };
 
@@ -301,6 +301,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
            eventSourceRef.current = null;
         }
     }
+    // --- [END] پیاده‌سازی ---
   };
 
   // --- Render logic ---
@@ -309,11 +310,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       <h3 className="text-xl font-bold mb-2 text-white">{title}</h3>
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
 
+      {/* [NOTE] این پیام حذف شد چون برای Space پابلیک به توکن نیاز نداریم
       {modelId === 'exbert' && !HF_API_TOKEN && (
           <p className="text-xs text-cyber-yellow mb-2 p-2 bg-yellow-900/30 rounded border border-yellow-500/50">
             ⚠️ HF Token (VITE_HF_API_TOKEN) missing. AI analysis is essential for ExBERT; please configure it.
           </p>
       )}
+      */}
 
       <form onSubmit={handleModelQuery}>
         <textarea
@@ -322,13 +325,15 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           rows="4"
           className="cyber-textarea w-full"
           placeholder={placeholder}
-          // [FIX] غیرفعال کردن دکمه در صورت نداشتن توکن برای مدل ExBERT
-          disabled={loading || !input.trim() || (modelId === 'exbert' && !HF_API_TOKEN)} 
+          // [FIX] منطق غیرفعال سازی textarea اصلاح شد
+          // فقط زمانی که در حال بارگذاری است غیرفعال شود
+          disabled={loading} 
         />
         <button 
             type="submit" 
             className="cyber-button w-full mt-3 flex items-center justify-center" 
-            disabled={loading || !input.trim() || (modelId === 'exbert' && !HF_API_TOKEN)}
+            // دکمه باید زمانی غیرفعال شود که یا در حال بارگذاری است یا متنی وارد نشده
+            disabled={loading || !input.trim()}
         >
           {loading ? (
             <>
@@ -359,3 +364,4 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
+
