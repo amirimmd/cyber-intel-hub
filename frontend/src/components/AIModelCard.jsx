@@ -1,8 +1,8 @@
 // frontend/src/components/AIModelCard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
-// [FIX]: ایمپورت به فایل JSX تغییر یافت
-import { supabase } from '../supabaseClient.jsx'; 
+// [FIX] حذف نهایی پسوند برای حل مشکل Could not resolve
+import { supabase } from '../supabaseClient'; 
 
 // --- Configuration ---
 const HF_USER = "amirimmd";
