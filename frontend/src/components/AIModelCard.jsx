@@ -22,6 +22,17 @@ if (!HF_API_TOKEN) {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
 }
 
+// --- Helper function to generate session hash (from user's Python) ---
+// تابع کمکی برای ایجاد هش نشست، مطابق با کد پایتون شما
+const generateSessionHash = (length = 11) => {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  }
+  return result;
+};
+
 // Typewriter Hook (برای افکت ترمینال)
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
@@ -127,15 +138,16 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     }
 
 
-    // --- Real Gradio Queue Call ---
+    // --- [NEW] Real Gradio Queue Call (Modified to match Python logic) ---
+    const sessionHash = generateSessionHash(); // Generate hash locally
+    
     try {
         console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         const fnIndexToUse = 2; // شماره تابع در Gradio
-        console.log(`Using fn_index: ${fnIndexToUse}`);
+        console.log(`Using fn_index: ${fnIndexToUse} and session_hash: ${sessionHash}`);
 
         const joinHeaders = {
             'Content-Type': 'application/json',
-            // [FIX] اضافه کردن توکن به هدر برای احراز هویت
             'Authorization': `Bearer ${HF_API_TOKEN}`, 
         };
         
@@ -143,8 +155,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
             method: 'POST',
             headers: joinHeaders, 
             body: JSON.stringify({
-                fn_index: fnIndexToUse,
                 data: [query],
+                event_data: null,       // From Python code
+                fn_index: fnIndexToUse,
+                trigger_id: 12,         // From Python code
+                session_hash: sessionHash // From Python code
             })
         });
 
@@ -155,29 +170,24 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              if (joinResponse.status === 401) {
                  detailedError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN.";
              } else if (joinResponse.status === 422) {
-                 detailedError = `API ERROR: 422 Validation Error. Check fn_index or data payload.`;
+                 detailedError = `API ERROR: 422 Validation Error. Check payload.`;
              } else {
                  detailedError += ` ${errorText.substring(0, 150)}`;
              }
              throw new Error(detailedError);
         }
 
+        // ما دیگر نیازی به خواندن هش نشست از پاسخ نداریم
+        // چون خودمان آن را ایجاد کردیم. فقط پاسخ را لاگ می‌گیریم.
         const joinResult = await joinResponse.json();
-        const sessionHash = joinResult.session_hash;
+        console.log(`Step 2: Joined queue successfully. Event ID: ${joinResult.event_id}`);
 
-        if (!sessionHash) {
-             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
-             throw new Error("Failed to get session hash from queue join.");
-        }
-        console.log(`Step 2: Joined queue successfully with session hash: ${sessionHash}`);
 
         // --- Listening for data (EventSource) ---
+        // از هش نشستی که خودمان ایجاد کردیم استفاده می‌کنیم
         console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
         const dataUrl = QUEUE_DATA_URL(sessionHash);
 
-        // EventSource supports credentials but not custom headers directly (like Authorization).
-        // Since we MUST use the token, we rely on the Gradio space being public or the token being 
-        // managed by the HF infrastructure (which is often the case).
         eventSourceRef.current = new EventSource(dataUrl); 
 
 
@@ -200,11 +210,14 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
                             if (rawPrediction !== null && rawPrediction !== undefined) {
                                 // منطق پردازش خروجی مدل (بر اساس نوع داده)
-                                if (typeof rawPrediction === 'object' && rawPrediction.label !== undefined && rawPrediction.score !== undefined) {
-                                     formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
-                                }
-                                else if (typeof rawPrediction === 'string') {
+                                // [FIX based on Python output]
+                                // خروجی پایتون شما "Exploitability Probability: 27.19%" بود
+                                // که یک رشته است.
+                                if (typeof rawPrediction === 'string') {
                                     formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
+                                }
+                                else if (typeof rawPrediction === 'object' && rawPrediction.label !== undefined && rawPrediction.score !== undefined) {
+                                     formattedOutput = `[EXBERT_REPORT]: Label: ${rawPrediction.label}, Score: ${(rawPrediction.score * 100).toFixed(1)}%`;
                                 }
                                 else if (typeof rawPrediction === 'number') {
                                     formattedOutput = `[EXBERT_REPORT]: Analysis complete. Exploitability Probability: ${(rawPrediction * 100).toFixed(1)}%.`;
