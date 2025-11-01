@@ -1,6 +1,7 @@
 // frontend/src/App.jsx
-// [اصلاح شد] همه کامپوننت‌ها در یک فایل ادغام شدند.
-// [اصلاح شد] ایمپورت‌ها به CDN های نوع ES Module (esm.sh) تغییر یافتند تا خطاهای 'Could not resolve' و 'does not provide an export' برطرف شوند.
+// [اصلاح جامع] همه کامپوننت‌ها در یک فایل ادغام شدند تا خطای 'Could not resolve' برطرف شود.
+// [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
+// [اصلاح شد] تمام اصلاحات واکنش‌گرایی (break-words) حفظ شدند.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // [اصلاح شد] ایمپورت Supabase از ESM CDN
@@ -12,21 +13,21 @@ import {
   Swords as SwordsIcon 
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
-// --- Supabase Client ---
-// [ادغام شد] منطق فایل supabaseClient.js به اینجا منتقل شد
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+// --- Supabase Client (ادغام شده از supabaseClient.js) ---
+// [WORKAROUND] استفاده از مقادیر موقت برای متغیرهای محیطی چون import.meta.env در این محیط کار نمی‌کند
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; // <-- URL موقت
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key"; // <-- Key موقت
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.error(
     "FATAL: Supabase URL or Anon Key is missing. " +
-    "Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel Environment Variables."
+    "Using placeholders for preview. Ensure VITE_... variables are set in Vercel."
   );
 }
-// [اصلاح شد] اطمینان از اینکه createClient از ایمپورت CDN به درستی استفاده می‌شود
-export const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// --- کامپوننت کمکی: CopyButton (از NVDTable) ---
+
+// --- کامپوننت کمکی: CopyButton (مورد نیاز NVDTable و ExploitDBTable) ---
 const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
@@ -46,6 +47,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
+            // نمایش پیام خطا به جای alert
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -56,7 +58,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 
     const buttonClass = isId ? 
         'ml-1 px-1 py-0.5 text-xs rounded transition-all duration-150' : 
-        'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 flex-shrink-0'; 
+        'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 flex-shrink-0'; // flex-shrink-0 اضافه شد
     
     const baseStyle = copied ? 
         'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50' : 
@@ -74,7 +76,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 };
 
 
-// --- کامپوننت NVDTable ---
+// --- کامپوننت NVDTable (ادغام شده از NVDTable.jsx) ---
 const DEFAULT_ROWS_TO_SHOW = 10;
 const INITIAL_DATE_FILTER = ''; 
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -115,13 +117,6 @@ const NVDTable = () => {
   };
 
   const fetchAllData = useCallback(async () => {
-    // [اصلاح شد] بررسی اینکه آیا supabase به درستی مقداردهی اولیه شده است
-    if (!supabase) {
-      setError("Supabase client is not initialized. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.");
-      setLoading(false);
-      return;
-    }
-    
     setLoading(true);
     setError(null);
     
@@ -140,7 +135,7 @@ const NVDTable = () => {
     } finally {
         setLoading(false);
     }
-  }, []); // وابستگی به supabase حذف شد چون اکنون در اسکوپ بالاتر تعریف شده
+  }, []);
 
   useEffect(() => {
     fetchAllData();
@@ -198,6 +193,7 @@ const NVDTable = () => {
   const truncateText = (text) => {
     if (!text) return { display: 'N/A', needsCopy: false };
     
+    // [اصلاح شد] بررسی typeof window برای رندر سمت سرور یا محیط‌های تست
     const limit = (typeof window !== 'undefined' && window.innerWidth < 640) ? 40 : 150; 
     const needsCopy = text.length > limit;
 
@@ -212,6 +208,7 @@ const NVDTable = () => {
 
   return (
     <div>
+      {/* Filter Form */}
       <form onSubmit={(e) => e.preventDefault()} className="mb-6 space-y-4 md:space-y-0 md:flex md:items-end md:space-x-4 md:gap-4">
         <div className="flex-grow">
           <label htmlFor="nvd-keyword" className="block text-sm font-medium text-gray-400 mb-1">Keyword / CVE ID:</label>
@@ -244,6 +241,7 @@ const NVDTable = () => {
             <option value="NONE">NONE</option>
           </select>
         </div>
+        {/* فیلتر تاریخ */}
         <div>
             <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After (Estimated):</label>
             {filters.date ? (
@@ -299,6 +297,7 @@ const NVDTable = () => {
         </div>
       </form>
 
+      {/* Message if default limit is applied */}
       {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === INITIAL_DATE_FILTER && (
           <p className="text-sm text-cyber-cyan/80 mb-4 p-2 bg-cyan-900/10 rounded border border-cyan-500/30 text-center">
               DISPLAYING TOP {DEFAULT_ROWS_TO_SHOW} VULNERABILITIES. USE FILTERS TO SEE ALL {allData.length} RECORDS._
@@ -310,6 +309,7 @@ const NVDTable = () => {
         &lt;-- برای دیدن ستون‌های بیشتر، جدول را به طرفین بکشید --&gt;
       </p>
 
+      {/* Results Table */}
       <div className="overflow-x-auto rounded-lg border border-gray-800">
         <table className="min-w-full divide-y divide-gray-800">
           <thead className="bg-gray-800/50">
@@ -328,7 +328,7 @@ const NVDTable = () => {
                 <td colSpan="6" className="px-3 sm:px-6 py-10 text-center">
                   <div className="flex justify-center items-center text-cyber-cyan">
                     <Loader2 className="animate-spin h-6 w-6 mr-3" />
-                    <span>LOADING NVD_DATA_STREAM (Fetching All Required Data)...</span>
+                    <span>LOADING NVD_DATA_STREAM...</span>
                   </div>
                 </td>
               </tr>
@@ -364,6 +364,7 @@ const NVDTable = () => {
                     </div>
                   </td>
                   <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>
+                      {/* [اصلاح شد] flex-nowrap اضافه شد تا دکمه کپی به خط بعد نرود */}
                       <div className="flex items-start justify-between flex-nowrap">
                           <p className="flex-grow">{truncatedText}</p>
                           {needsCopy && <CopyButton textToCopy={cve.text} />}
@@ -386,7 +387,7 @@ const NVDTable = () => {
 };
 
 
-// --- کامپوننت AIModelCard ---
+// --- کامپوننت AIModelCard (ادغام شده از AIModelCard.jsx) ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
@@ -395,14 +396,16 @@ const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
+// [WORKAROUND] استفاده از متغیر موقت برای توکن HF
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || "your-hf-token-placeholder"; // <-- Token موقت
 
-if (!HF_API_TOKEN) {
-  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing!");
+if (!import.meta.env.VITE_HF_API_TOKEN) {
+  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! Using placeholder.");
 } else {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
 }
 
+// Typewriter Hook
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
     const [internalText, setInternalText] = useState(text);
@@ -455,6 +458,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
   const eventSourceRef = useRef(null);
 
+  // منطق شبیه‌سازی
   const simulateAnalysis = (query, modelId) => {
       let simulatedResponse = '';
       switch (modelId) {
@@ -498,12 +502,15 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
     
-    if (!HF_API_TOKEN) {
-        setError("API Error: VITE_HF_API_TOKEN is missing. Please check Vercel/local env.");
+    // [اصلاح شد] بررسی توکن (حتی اگر موقت باشد)
+    if (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")) {
+        setError("API Error: VITE_HF_API_TOKEN is missing or is a placeholder.");
         setLoading(false);
         return;
     }
 
+
+    // --- Real Gradio Queue Call ---
     try {
         console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         const fnIndexToUse = 2; 
@@ -546,6 +553,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         }
         console.log(`Step 2: Joined queue successfully with session hash: ${sessionHash}`);
 
+        // --- Listening for data (EventSource) ---
         console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
         const dataUrl = QUEUE_DATA_URL(sessionHash);
 
@@ -626,7 +634,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         eventSourceRef.current.onerror = (error) => {
             let errorMsg = "Error connecting to API stream.";
-             if (!navigator.onLine) {
+             if (navigator.onLine) {
                  errorMsg += " Check your network connection.";
              } else {
                  errorMsg += " Could not maintain connection. Check Space status/logs."; 
@@ -659,15 +667,17 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     }
   };
 
+  // --- Render logic ---
   return (
     <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
       {/* [اصلاح شد] اضافه کردن break-words برای شکستن تیتر در موبایل */}
       <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
 
-      {modelId === 'exbert' && !HF_API_TOKEN && (
+      {/* [اصلاح شد] بررسی توکن (حتی اگر موقت باشد) */}
+      {modelId === 'exbert' && (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")) && (
           <p className="text-xs text-cyber-yellow mb-2 p-2 bg-yellow-900/30 rounded border border-yellow-500/50">
-            ⚠️ HF Token (VITE_HF_API_TOKEN) missing. AI analysis is essential for ExBERT; please configure it.
+            ⚠️ HF Token (VITE_HF_API_TOKEN) missing. AI analysis is disabled.
           </p>
       )}
 
@@ -678,12 +688,12 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           rows="4"
           className="cyber-textarea w-full"
           placeholder={placeholder}
-          disabled={loading || !input.trim() || (modelId === 'exbert' && !HF_API_TOKEN)} 
+          disabled={loading || !input.trim() || (modelId === 'exbert' && (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")))} 
         />
         <button 
             type="submit" 
             className="cyber-button w-full mt-3 flex items-center justify-center" 
-            disabled={loading || !input.trim() || (modelId === 'exbert' && !HF_API_TOKEN)}
+            disabled={loading || !input.trim() || (modelId === 'exbert' && (!HF_API_TOKEN || HF_API_TOKEN.includes("placeholder")))}
         >
           {loading ? (
             <>
@@ -714,10 +724,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 
-// --- کامپوننت ExploitDBTable ---
+// --- کامپوننت ExploitDBTable (ادغام شده از ExploitDBTable.jsx) ---
 const EXPLOITS_TO_SHOW = 10;
-const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2; // 5 records each
+const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
 
+// تابع کمکی برای استخراج سال
 const extractYearFromId = (id) => {
     const match = id?.match(/(\d{4})/); 
     return match ? match[1] : 'N/A';
@@ -742,7 +753,6 @@ const ExploitDBTable = () => {
   };
 
   const fetchLatestExploits = useCallback(async () => {
-    // [اصلاح شد] بررسی اینکه آیا supabase به درستی مقداردهی اولیه شده است
     if (!supabase) {
       setError("Supabase client is not initialized.");
       setLoading(false);
@@ -788,16 +798,15 @@ const ExploitDBTable = () => {
 
     } catch (error) {
       console.error('Error fetching Exploit-DB feed:', error.message);
-      setError(`Database Query Error: ${error.message}. Please check RLS, the 'exploits' table structure, and data content.`);
+      setError(`Database Query Error: ${error.message}. Check RLS, the 'exploits' table structure, and data content.`);
     } finally {
       setLoading(false);
     }
-  }, []); // وابستگی به supabase حذف شد
+  }, []); // supabase از وابستگی‌ها حذف شد
 
   useEffect(() => {
     console.log('ExploitDBTable: Component mounted, starting initial fetch.');
     
-    // [اصلاح شد] فقط زمانی واکشی کن و سابسکرایب شو که supabase آماده باشد
     if (supabase) {
       fetchLatestExploits();
       
@@ -807,8 +816,8 @@ const ExploitDBTable = () => {
               'postgres_changes', 
               { event: '*', schema: 'public', table: 'exploits' }, 
               (payload) => {
-                  console.log('ExploitDBTable: Realtime change detected, refetching...');
-                  fetchLatestExploits(); 
+                 console.log('ExploitDBTable: Realtime change detected, refetching...');
+                 fetchLatestExploits(); 
               }
           )
           .subscribe();
@@ -843,7 +852,7 @@ const ExploitDBTable = () => {
           <span className="block mb-2 text-sm text-gray-400">NO LATEST EXPLOITS FOUND_ (TABLE EMPTY)</span>
           <p className="text-xs text-cyber-text/70 px-4">
             If this message persists, please ensure your Exploit-DB synchronization script is running correctly 
-            and that Supabase Row Level Security (RLS) allows anonymous reads on the 'exploits' table.
+            and that Supabase RLS allows anonymous reads.
           </p>
         </div>
       )}
@@ -882,6 +891,7 @@ const ExploitDBTable = () => {
         </ul>
       )}
 
+       {/* دکمه Refresh */}
        <div className="mt-4 pt-4 border-t border-gray-800/50">
           <button 
             onClick={fetchLatestExploits} 
@@ -897,36 +907,38 @@ const ExploitDBTable = () => {
 };
 
 
-// --- کامپوننت اصلی App ---
+// --- کامپوننت اصلی App (بر اساس آخرین نسخه شما) ---
 function App() {
   return (
     <>
       {/* Background Grid Effect */}
       <div className="background-grid"></div>
 
-      {/* [اصلاح شد] بهبود واکنش‌گرایی کانتینر اصلی */}
+      {/* [اصلاح شد] کانتینر اصلی برای واکنش‌گرایی بهتر در موبایل و دسکتاپ بهینه شد */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 relative z-10">
 
-        {/* [اصلاح شد] Main Header با break-words */}
+        {/* [اصلاح شد] Main Header - کلاس 'break-words' اضافه شد تا از بیرون زدن متن جلوگیری شود */}
         <h1 className="text-3xl md:text-5xl font-bold text-center mb-10 bg-clip-text text-transparent bg-gradient-to-r from-cyber-green to-cyber-cyan section-header break-words">
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
 
         {/* Section 1: NVD Table (Existing) */}
         <section id="nvd-section" className="cyber-card mb-12">
+          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
           <div className="flex items-center mb-6">
             <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
-            {/* [اصلاح شد] تیتر NVD با break-words */}
             <h2 className="text-2xl font-semibold text-cyan-300 break-words">NVD Vulnerability Feed_</h2>
           </div>
+          
+          {/* جدول فیلتردار NVD */}
           <NVDTable />
         </section>
 
         {/* Section 2: AI Models */}
         <section id="ai-models-section" className="cyber-card mb-12">
+          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
           <div className="flex items-center mb-6">
             <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
-            {/* [اصلاح شد] تیتر AI با break-words */}
             <h2 className="text-2xl font-semibold text-green-300 break-words">INTELLIGENT.ANALYSIS.UNIT_</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -953,9 +965,9 @@ function App() {
 
         {/* Section 3: Exploit DB */}
         <section id="exploit-db-section" className="cyber-card">
+          {/* [اصلاح شد] آیکون 'flex-shrink-0' گرفت و تیتر 'break-words' گرفت */}
           <div className="flex items-center mb-6">
             <Swords className="icon-red w-8 h-8 mr-3 flex-shrink-0" />
-            {/* [اصلاح شد] تیتر ExploitDB با break-words */}
             <h2 className="text-2xl font-semibold text-red-300 break-words">EXPLOIT.DB.LATEST_</h2>
           </div>
           <ExploitDBTable />
