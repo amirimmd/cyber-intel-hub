@@ -14,12 +14,13 @@ const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
 // [NOTE] این توکن باید در متغیرهای محیطی Vercel تنظیم شود (VITE_HF_API_TOKEN)
+// [UPDATE] این متغیر خوانده می‌شود اما چون Space شما public است، در هدر ارسال استفاده نمی‌شود.
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
 if (!HF_API_TOKEN) {
-  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing!");
+  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! (Using public mode)");
 } else {
-  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded successfully.");
+  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded (though likely not needed for public space).");
 }
 
 // --- [START] منطق فراخوانی API مدل پایتون شما ---
@@ -123,6 +124,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         eventSourceRef.current = null;
     }
 
+    // شبیه‌سازی برای مدل‌های دیگر
     if (modelId !== 'exbert') {
       const response = simulateAnalysis(query, modelId);
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -132,24 +134,16 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
     
-    // اگر توکن نباشد، تلاش برای اتصال به Gradio امکان‌پذیر نیست
-    if (!HF_API_TOKEN) {
-        setError("API Error: VITE_HF_API_TOKEN is missing. Please check Vercel/local env.");
-        setLoading(false);
-        return;
-    }
-
-
     // --- [START] پیاده‌سازی منطق پایتون در جاوا اسکریپت ---
     const sessionHash = generateSessionHash(); // 1. تولید هش محلی
     
     try {
         console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         
-        // 2. ساخت هدرها (توکن دیگر اینجا لازم نیست، چون Space شما public است)
+        // 2. ساخت هدرها (بر اساس اسکریپت پایتون شما، نیاز به توکن Auth نیست)
         const joinHeaders = {
             'Content-Type': 'application/json',
-            // 'Authorization': `Bearer ${HF_API_TOKEN}`, // این خط حذف شد
+            // 'Authorization': `Bearer ${HF_API_TOKEN}`, // حذف شد - Space پابلیک است
         };
         
         // 3. ساخت Payload دقیقاً مطابق اسکریپت پایتون
@@ -171,7 +165,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
              const errorText = await joinResponse.text();
              console.error("Queue Join Error:", joinResponse.status, errorText);
              let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-             // ... (بقیه کدهای مدیریت خطا)
+             if (joinResponse.status === 401) {
+                 detailedError = "API ERROR: 401 Unauthorized. Check Space permissions.";
+             } else if (joinResponse.status === 422) {
+                 detailedError = `API ERROR: 422 Validation Error. Check fn_index/trigger_id.`;
+             } else {
+                 detailedError += ` ${errorText.substring(0, 150)}`;
+             }
              throw new Error(detailedError);
         }
 
@@ -191,11 +191,10 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         eventSourceRef.current = new EventSource(dataUrl); 
 
-
         eventSourceRef.current.onmessage = (event) => {
             try {
                 // 7. دریافت جریان داده‌ها (data: {"msg": ...})
-                console.log("Raw SSE data:", event.data);
+                // خروجی پایتون شما نشان می‌دهد که هر خط یک JSON جداگانه است
                 const message = JSON.parse(event.data);
                 console.log("Parsed SSE message:", message);
 
@@ -243,7 +242,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                          }
                          break;
                     case "close_stream":
-                        // این پیام جدیدی است که در خروجی شما دیدم
+                        // این پیام در خروجی پایتون شما بود
                         console.log("Stream closed by server.");
                         if(eventSourceRef.current) eventSourceRef.current.close();
                         eventSourceRef.current = null;
@@ -255,16 +254,12 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
                         }
                         break;
                     default:
+                        // نادیده گرفتن پیام‌های ناشناخته
                         break;
                 }
             } catch (parseError) {
-                 // اگر پیام "data: " یک JSON معتبر نباشد (مثل خروجی پایتون شما)
                  console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
-                 // setError("Error receiving data from API stream.");
-                 // if(eventSourceRef.current) eventSourceRef.current.close();
-                 // eventSourceRef.current = null;
-                 // setLoading(false);
-                 // setOutput(''); startTypingProcess('');
+                 // خطا را نادیده می‌گیریم چون ممکن است پیام‌های غیر JSON هم در استریم باشند
             }
         };
 
@@ -285,9 +280,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
     } catch (err) {
         let displayError = err.message || "An unknown error occurred.";
-        if (err.message.includes("401")) {
-            displayError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN in Vercel/local env.";
-        } else if (err.message.includes("Failed to fetch")) {
+        if (err.message.includes("Failed to fetch")) {
             displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
         } else if (err.message.includes("503")) {
              displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
@@ -310,13 +303,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       <h3 className="text-xl font-bold mb-2 text-white">{title}</h3>
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
 
-      {/* [NOTE] این پیام حذف شد چون برای Space پابلیک به توکن نیاز نداریم
-      {modelId === 'exbert' && !HF_API_TOKEN && (
-          <p className="text-xs text-cyber-yellow mb-2 p-2 bg-yellow-900/30 rounded border border-yellow-500/50">
-            ⚠️ HF Token (VITE_HF_API_TOKEN) missing. AI analysis is essential for ExBERT; please configure it.
-          </p>
-      )}
-      */}
+      {/* پیام مربوط به توکن HF حذف شد چون Space شما Public است و نیازی به توکن ندارد */}
 
       <form onSubmit={handleModelQuery}>
         <textarea
@@ -326,13 +313,15 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           className="cyber-textarea w-full"
           placeholder={placeholder}
           // [FIX] منطق غیرفعال سازی textarea اصلاح شد
-          // فقط زمانی که در حال بارگذاری است غیرفعال شود
+          // فقط زمانی که در حال بارگذاری است (loading) غیرفعال شود
           disabled={loading} 
         />
         <button 
             type="submit" 
             className="cyber-button w-full mt-3 flex items-center justify-center" 
-            // دکمه باید زمانی غیرفعال شود که یا در حال بارگذاری است یا متنی وارد نشده
+            // [FIX] دکمه باید زمانی غیرفعال شود که:
+            // 1. در حال بارگذاری (loading) باشد
+            // 2. یا متنی وارد نشده باشد (!input.trim())
             disabled={loading || !input.trim()}
         >
           {loading ? (
