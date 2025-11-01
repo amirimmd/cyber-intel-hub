@@ -1,7 +1,7 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// [FIX] ایمپورت به فایل JSX تغییر یافت تا مشکلات حل شود
-import { supabase } from '../supabaseClient.jsx'; 
+// [FIX] حذف نهایی پسوند برای حل مشکل Could not resolve
+import { supabase } from '../supabaseClient'; 
 import { Loader2, Filter, DatabaseZap, Clipboard } from 'lucide-react';
 
 // تعداد ردیف‌های پیش‌فرض برای نمایش قبل از اعمال فیلتر/جستجو
@@ -71,7 +71,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
         <button 
             onClick={handleCopy} 
             title={isId ? `Copy ${textToCopy}` : "Copy full vulnerability description"}
-            className={`${buttonClass} ${baseStyle}`}
+            className={`flex items-center justify-center ${buttonClass} ${baseStyle}`}
         >
             {copied ? (isId ? 'OK' : 'COPIED!') : <Clipboard className="w-3 h-3 inline-block" />}
         </button>
@@ -87,13 +87,13 @@ const NVDTable = () => {
   const [filters, setFilters] = useState({ 
     keyword: '', 
     severity: 'all', 
-    date: INITIAL_DATE_FILTER // [FIX 2] مقدار اولیه برای نمایش همه
+    date: INITIAL_DATE_FILTER // مقدار اولیه برای نمایش همه
   });
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    // [FIX 2] اگر مقدار خالی باشد، آن را به null/'' تنظیم می‌کنیم تا فیلتر اعمال نشود
-    setFilters(prev => ({ ...prev, [name]: value === 'all_dates' ? '' : value }));
+    // اگر مقدار 'all_dates' انتخاب شد، آن را به رشته خالی ('') تبدیل می‌کنیم تا فیلتر تاریخ غیرفعال شود.
+    setFilters(prev => ({ ...prev, [name]: value === 'all_dates' ? INITIAL_DATE_FILTER : value }));
   };
 
   /**
@@ -156,7 +156,7 @@ const NVDTable = () => {
     }
 
     // 2. فیلتر تاریخ (با استفاده از ID در صورت NULL بودن published_date)
-    // [FIX 2] تنها در صورتی فیلتر تاریخ را اعمال می‌کنیم که یک تاریخ مشخص انتخاب شده باشد (date خالی نباشد)
+    // تنها در صورتی فیلتر تاریخ را اعمال می‌کنیم که یک تاریخ مشخص انتخاب شده باشد (date خالی نباشد)
     if (date) {
         const minDate = new Date(date).getTime();
 
@@ -240,11 +240,11 @@ const NVDTable = () => {
             <option value="NONE">NONE</option>
           </select>
         </div>
-        {/* [FIX 2] فیلتر تاریخ با گزینه "همه آسیب‌پذیری‌ها" */}
+        {/* فیلتر تاریخ با گزینه "همه آسیب‌پذیری‌ها" */}
         <div>
             <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After (Estimated):</label>
             {filters.date ? (
-                // اگر تاریخی انتخاب شده باشد، ورودی تاریخ را نشان می‌دهیم
+                // حالت انتخاب تاریخ
                 <input 
                     type="date" 
                     name="date" 
@@ -256,35 +256,34 @@ const NVDTable = () => {
                     disabled={loading || !!error}
                 />
             ) : (
-                // اگر فیلتر تاریخ غیرفعال باشد، یک دکمه برای تنظیم تاریخ یا گزینه "همه" نمایش می‌دهیم
+                // حالت نمایش "همه"
                 <select
                     name="date"
                     id="nvd-date"
-                    value={'all_dates'} // مقدار ثابت برای نمایش در حالت "همه"
+                    value={INITIAL_DATE_FILTER} 
                     onChange={handleFilterChange}
                     className="cyber-select w-full md:w-48"
                     disabled={loading || !!error}
                 >
-                    {/* این گزینه مقدار خالی تنظیم می‌کند که در منطق useMemo نادیده گرفته می‌شود */}
-                    <option value={'all_dates'}>::ALL VULNERABILITIES::</option>
-                    {/* این گزینه باعث می‌شود کاربر تاریخ را انتخاب کند */}
+                    <option value={INITIAL_DATE_FILTER}>::ALL VULNERABILITIES::</option>
                     <option value={DEFAULT_START_DATE_FILTER}>SELECT DATE...</option>
                 </select>
             )}
-            {/* دکمه کوچکی برای رفتن از حالت "همه" به انتخاب تاریخ و برعکس */}
-            {filters.date === '' && (
+            
+            {/* دکمه‌های سوئیچ بین حالت "همه" و "انتخاب تاریخ" */}
+            {filters.date === INITIAL_DATE_FILTER && (
                  <button
                     type="button"
-                    onClick={() => setFilters(prev => ({ ...prev, date: '2024-01-01' }))} // تنظیم به یک تاریخ پیش‌فرض (نه فقط DEFAULT_START_DATE_FILTER)
+                    onClick={() => setFilters(prev => ({ ...prev, date: DEFAULT_START_DATE_FILTER }))} 
                     className="mt-1 text-xs text-cyber-cyan hover:underline"
                  >
                     - Select a specific date -
                  </button>
             )}
-            {filters.date !== '' && (
+            {filters.date !== INITIAL_DATE_FILTER && (
                  <button
                     type="button"
-                    onClick={() => setFilters(prev => ({ ...prev, date: '' }))}
+                    onClick={() => setFilters(prev => ({ ...prev, date: INITIAL_DATE_FILTER }))}
                     className="mt-1 text-xs text-cyber-cyan hover:underline"
                  >
                     - Show All -
@@ -293,7 +292,6 @@ const NVDTable = () => {
 
         </div>
         <div className="md:flex-shrink-0">
-          {/* دکمه اعمال فیلتر دیگر لازم نیست چون با تغییر فیلترها، useMemo به طور خودکار بروزرسانی می‌شود */}
           <button type="button" className="cyber-button w-full md:w-auto flex items-center justify-center bg-gray-600 text-dark-bg cursor-default" disabled={true}>
              <Filter className="w-5 h-5 mr-2" />
              FILTER_APPLIED_
@@ -302,7 +300,7 @@ const NVDTable = () => {
       </form>
 
       {/* Message if default limit is applied */}
-      {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === '' && (
+      {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === INITIAL_DATE_FILTER && (
           <p className="text-sm text-cyber-cyan/80 mb-4 p-2 bg-cyan-900/10 rounded border border-cyan-500/30 text-center">
               DISPLAYING TOP {DEFAULT_ROWS_TO_SHOW} VULNERABILITIES. USE FILTERS TO SEE ALL {allData.length} RECORDS._
           </p>
@@ -363,10 +361,12 @@ const NVDTable = () => {
                         <CopyButton textToCopy={cve.ID} isId={true} />
                     </div>
                   </td>
-                  {/* [FIX 2] نمایش متن کوتاه شده و دکمه کپی */}
+                  {/* نمایش متن کوتاه شده و دکمه کپی */}
                   <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>
-                      {truncatedText}
-                      {needsCopy && <CopyButton textToCopy={cve.text} />}
+                      <div className="flex items-start">
+                          <p>{truncatedText}</p>
+                          {needsCopy && <CopyButton textToCopy={cve.text} />}
+                      </div>
                   </td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
