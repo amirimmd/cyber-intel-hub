@@ -1,13 +1,13 @@
 // frontend/src/components/NVDTable.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-// [FIX] حذف پسوند .js برای رفع خطای "Could not resolve" در برخی از محیط‌های باندلینگ
-import { supabase } from '../supabaseClient'; 
+// [FIX] ایمپورت به فایل JSX تغییر یافت تا مشکلات حل شود
+import { supabase } from '../supabaseClient.jsx'; 
 import { Loader2, Filter, DatabaseZap, Clipboard } from 'lucide-react';
 
 // تعداد ردیف‌های پیش‌فرض برای نمایش قبل از اعمال فیلتر/جستجو
 const DEFAULT_ROWS_TO_SHOW = 10;
-// تاریخ شروع فیلتر پیش‌فرض
-const DEFAULT_START_DATE_FILTER = '2024-01-01'; 
+// مقدار اولیه فیلتر تاریخ (برای فعال کردن حالت "همه آسیب‌پذیری‌ها")
+const INITIAL_DATE_FILTER = ''; 
 // حداقل مجاز برای ورودی date (سال 2016)
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
 
@@ -31,17 +31,15 @@ const extractYearFromCveId = (cveId) => {
     return match ? parseInt(match[1], 10) : null;
 };
 
-// کامپوننت دکمه کپی متن
-const CopyButton = ({ textToCopy }) => {
+// کامپوننت دکمه کپی متن (به عنوان یک ماژول فرعی قابل استفاده برای ID و Description)
+const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = () => {
-        // [IMPORTANT]: استفاده از document.execCommand('copy') به جای navigator.clipboard
-        // برای تضمین کارکرد در محیط‌های sandboxed (مانند iFrame).
         try {
             const textarea = document.createElement('textarea');
             textarea.value = textToCopy;
-            textarea.style.position = 'fixed'; // برای پنهان نگه داشتن آن
+            textarea.style.position = 'fixed'; 
             textarea.style.opacity = '0';
             document.body.appendChild(textarea);
             textarea.focus();
@@ -49,10 +47,9 @@ const CopyButton = ({ textToCopy }) => {
             document.execCommand('copy');
             document.body.removeChild(textarea);
             setCopied(true);
-            setTimeout(() => setCopied(false), 1500); // بازگشت به حالت عادی پس از 1.5 ثانیه
+            setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
-            // در صورت شکست، نمایش یک المان ساده به جای alert()
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -61,16 +58,22 @@ const CopyButton = ({ textToCopy }) => {
         }
     };
 
+    // استایل‌های دکمه کپی: کوچک‌تر برای ID
+    const buttonClass = isId ? 
+        'ml-1 px-1 py-0.5 text-xs rounded transition-all duration-150' : 
+        'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150';
+    
+    const baseStyle = copied ? 
+        'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50' : 
+        'bg-gray-700/50 text-cyber-cyan hover:bg-cyber-cyan/30';
+
     return (
         <button 
             onClick={handleCopy} 
-            title="Copy full vulnerability description"
-            className={`
-                ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 
-                ${copied ? 'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50' : 'bg-gray-700/50 text-cyber-cyan hover:bg-cyber-cyan/30'}
-            `}
+            title={isId ? `Copy ${textToCopy}` : "Copy full vulnerability description"}
+            className={`${buttonClass} ${baseStyle}`}
         >
-            {copied ? 'COPIED!' : <Clipboard className="w-3 h-3 inline-block" />}
+            {copied ? (isId ? 'OK' : 'COPIED!') : <Clipboard className="w-3 h-3 inline-block" />}
         </button>
     );
 };
@@ -84,12 +87,13 @@ const NVDTable = () => {
   const [filters, setFilters] = useState({ 
     keyword: '', 
     severity: 'all', 
-    date: DEFAULT_START_DATE_FILTER 
+    date: INITIAL_DATE_FILTER // [FIX 2] مقدار اولیه برای نمایش همه
   });
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
+    // [FIX 2] اگر مقدار خالی باشد، آن را به null/'' تنظیم می‌کنیم تا فیلتر اعمال نشود
+    setFilters(prev => ({ ...prev, [name]: value === 'all_dates' ? '' : value }));
   };
 
   /**
@@ -131,10 +135,12 @@ const NVDTable = () => {
 
     let filtered = allData;
     const { keyword, severity, date } = filters;
+    
+    // بررسی می‌کنیم که آیا هر فیلتری غیر از حالت پیش‌فرض اعمال شده است یا خیر
+    const isFilteredOrSearched = keyword.toLowerCase().trim() || severity !== 'all' || date; // اگر date خالی باشد، فیلتر تاریخ اعمال نمی‌شود
 
     // 1. فیلتر کلمات کلیدی و شدت 
     const lowerKeyword = keyword.toLowerCase().trim();
-    const isFilteredOrSearched = lowerKeyword || severity !== 'all' || date !== DEFAULT_START_DATE_FILTER;
 
     if (lowerKeyword) {
         filtered = filtered.filter(cve => 
@@ -150,6 +156,7 @@ const NVDTable = () => {
     }
 
     // 2. فیلتر تاریخ (با استفاده از ID در صورت NULL بودن published_date)
+    // [FIX 2] تنها در صورتی فیلتر تاریخ را اعمال می‌کنیم که یک تاریخ مشخص انتخاب شده باشد (date خالی نباشد)
     if (date) {
         const minDate = new Date(date).getTime();
 
@@ -172,7 +179,7 @@ const NVDTable = () => {
     }
     
     // 3. اعمال محدودیت نمایش اولیه:
-    // اگر هیچ فیلتری اعمال نشده باشد، فقط 10 ردیف اول را نمایش بده.
+    // اگر هیچ فیلتری اعمال نشده باشد (isFilteredOrSearched = false)، فقط 10 ردیف اول را نمایش بده.
     if (!isFilteredOrSearched) {
         return filtered.slice(0, DEFAULT_ROWS_TO_SHOW);
     }
@@ -233,18 +240,57 @@ const NVDTable = () => {
             <option value="NONE">NONE</option>
           </select>
         </div>
+        {/* [FIX 2] فیلتر تاریخ با گزینه "همه آسیب‌پذیری‌ها" */}
         <div>
-          <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After (Estimated):</label>
-          <input 
-            type="date" 
-            name="date" 
-            id="nvd-date" 
-            value={filters.date} 
-            onChange={handleFilterChange} 
-            min={EARLIEST_MANUAL_DATA_YEAR}
-            className="cyber-input w-full md:w-48" 
-            disabled={loading || !!error}
-          />
+            <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After (Estimated):</label>
+            {filters.date ? (
+                // اگر تاریخی انتخاب شده باشد، ورودی تاریخ را نشان می‌دهیم
+                <input 
+                    type="date" 
+                    name="date" 
+                    id="nvd-date" 
+                    value={filters.date} 
+                    onChange={handleFilterChange} 
+                    min={EARLIEST_MANUAL_DATA_YEAR}
+                    className="cyber-input w-full md:w-48" 
+                    disabled={loading || !!error}
+                />
+            ) : (
+                // اگر فیلتر تاریخ غیرفعال باشد، یک دکمه برای تنظیم تاریخ یا گزینه "همه" نمایش می‌دهیم
+                <select
+                    name="date"
+                    id="nvd-date"
+                    value={'all_dates'} // مقدار ثابت برای نمایش در حالت "همه"
+                    onChange={handleFilterChange}
+                    className="cyber-select w-full md:w-48"
+                    disabled={loading || !!error}
+                >
+                    {/* این گزینه مقدار خالی تنظیم می‌کند که در منطق useMemo نادیده گرفته می‌شود */}
+                    <option value={'all_dates'}>::ALL VULNERABILITIES::</option>
+                    {/* این گزینه باعث می‌شود کاربر تاریخ را انتخاب کند */}
+                    <option value={DEFAULT_START_DATE_FILTER}>SELECT DATE...</option>
+                </select>
+            )}
+            {/* دکمه کوچکی برای رفتن از حالت "همه" به انتخاب تاریخ و برعکس */}
+            {filters.date === '' && (
+                 <button
+                    type="button"
+                    onClick={() => setFilters(prev => ({ ...prev, date: '2024-01-01' }))} // تنظیم به یک تاریخ پیش‌فرض (نه فقط DEFAULT_START_DATE_FILTER)
+                    className="mt-1 text-xs text-cyber-cyan hover:underline"
+                 >
+                    - Select a specific date -
+                 </button>
+            )}
+            {filters.date !== '' && (
+                 <button
+                    type="button"
+                    onClick={() => setFilters(prev => ({ ...prev, date: '' }))}
+                    className="mt-1 text-xs text-cyber-cyan hover:underline"
+                 >
+                    - Show All -
+                 </button>
+            )}
+
         </div>
         <div className="md:flex-shrink-0">
           {/* دکمه اعمال فیلتر دیگر لازم نیست چون با تغییر فیلترها، useMemo به طور خودکار بروزرسانی می‌شود */}
@@ -256,7 +302,7 @@ const NVDTable = () => {
       </form>
 
       {/* Message if default limit is applied */}
-      {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === DEFAULT_START_DATE_FILTER && (
+      {filteredVulnerabilities.length === DEFAULT_ROWS_TO_SHOW && allData.length > DEFAULT_ROWS_TO_SHOW && filters.keyword === '' && filters.severity === 'all' && filters.date === '' && (
           <p className="text-sm text-cyber-cyan/80 mb-4 p-2 bg-cyan-900/10 rounded border border-cyan-500/30 text-center">
               DISPLAYING TOP {DEFAULT_ROWS_TO_SHOW} VULNERABILITIES. USE FILTERS TO SEE ALL {allData.length} RECORDS._
           </p>
@@ -310,8 +356,12 @@ const NVDTable = () => {
               const { display: truncatedText, needsCopy } = truncateText(cve.text, cve.ID);
               return (
                 <tr key={cve.ID} className="hover:bg-gray-800/50 transition-colors duration-150">
+                  {/* [FIX 1] دکمه کپی برای CVE ID */}
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-cyber-cyan">
-                    <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
+                    <div className="flex items-center space-x-1">
+                        <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noopener noreferrer" className="hover:underline">{cve.ID}</a>
+                        <CopyButton textToCopy={cve.ID} isId={true} />
+                    </div>
                   </td>
                   {/* [FIX 2] نمایش متن کوتاه شده و دکمه کپی */}
                   <td className="px-3 sm:px-6 py-4 text-sm text-cyber-text max-w-xs min-w-40" title={cve.text}>

@@ -1,4 +1,4 @@
-// frontend/src/supabaseClient.js
+// frontend/src/supabaseClient.jsx
 import { createClient } from '@supabase/supabase-js'
 
 // Read public keys from .env.local or Vercel environment variables (MUST be prefixed with VITE_)
@@ -21,4 +21,3 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Export the Supabase client, even if keys are missing initially,
 // so the app doesn't crash immediately. The components will handle the error.
 export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '')
-
