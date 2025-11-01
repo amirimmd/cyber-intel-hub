@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  // [CRITICAL FIX] تنظیم target به es2020 برای پشتیبانی از import.meta.env
+  // [CRITICAL FIX] تنظیم target به es2020 یا esnext برای پشتیبانی از import.meta.env
   // این کار اخطار "import.meta is not available in es2015" را برطرف می‌کند.
   build: {
     target: 'es2020'
@@ -17,4 +17,3 @@ export default defineConfig({
     target: 'es2020'
   }
 });
-
