@@ -1,7 +1,10 @@
 // frontend/src/App.jsx
-// [فایل کامل] ادغام همه کامپوننت‌ها و رفع خطای قبلی
-// [اصلاح شد] منطق ExploitDB برای استفاده از ID برای فیلتر تاریخ (2023+) در سمت کلاینت
-// [اصلاح شد] بازگشت کامل AIModelCard به منطق /queue/join برای حل خطای 404
+// [بازطراحی کامل تب AI]
+// - کامپوننت AIModels به یک رابط چت تمام صفحه تبدیل شد.
+// - کامپوننت AIModelCard حذف شد و منطق API آن (useTypewriter, API calls) مستقیماً در AIModels جدید ادغام شد.
+// - رابط چت در دسکتاپ دارای سایدبار جمع‌شونده در سمت چپ برای انتخاب مدل است.
+// - رابط چت در موبایل دارای انتخاب‌گر مدل جمع‌شونده در هدر است.
+// - سایر تب‌ها (NVD, ExploitDB) بدون تغییر باقی ماندند.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
@@ -10,10 +13,16 @@ import {
   BrainCircuit, ShieldAlert, Swords, 
   Loader2, Filter, DatabaseZap, Clipboard, 
   User, Database, BarChart2,
-  Swords as SwordsIcon 
+  Swords as SwordsIcon,
+  Menu, // برای سایدبار دسکتاپ
+  X, // برای بستن سایدبار
+  Send, // دکمه ارسال چت
+  Bot, // آیکون AI
+  ChevronDown, // برای انتخاب‌گر موبایل
+  ArrowLeft // برای بازگشت از چت در موبایل
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
-// --- Supabase Client (ادغام شده) ---
+// --- Supabase Client (ادغام شده - بدون تغییر) ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
 
@@ -55,7 +64,7 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== "https://your-project-url.
 }
 
 
-// --- کامپوننت کمکی: CopyButton ---
+// --- کامپوننت کمکی: CopyButton (بدون تغییر) ---
 const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
@@ -75,6 +84,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
+            // از alert استفاده نکنید
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -103,7 +113,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 };
 
 
-// --- کامپوننت NVDTable ---
+// --- کامپوننت NVDTable (بدون تغییر) ---
 const DEFAULT_ROWS_TO_SHOW = 10;
 const INITIAL_DATE_FILTER = ''; 
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -410,316 +420,7 @@ const NVDTable = () => {
 };
 
 
-// --- کامپوننت AIModelCard (بازگشت به API قدیمی /queue/join) ---
-const HF_USER = "amirimmd";
-const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
-const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
-
-// [بازگشت به API قدیمی] استفاده از /queue/join
-const API_PREFIX = "/gradio_api";
-const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
-const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
-
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
-
-const generateSessionHash = () => {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 11; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
-// Typewriter Hook 
-const useTypewriter = (text, speed = 50) => {
-    const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text);
-    const [isTyping, setIsTyping] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null);
-
-    const startTypingProcess = useCallback((newText) => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setInternalText(newText || '');
-        setDisplayText('');
-        setCurrentIndex(0);
-        setIsTyping(!!newText);
-    }, []);
-
-    useEffect(() => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-
-        if (isTyping && internalText && currentIndex < internalText.length) {
-            intervalRef.current = setInterval(() => {
-                 if (currentIndex < internalText.length) {
-                    const nextIndex = currentIndex + 1;
-                    setDisplayText(internalText.substring(0, nextIndex));
-                    setCurrentIndex(nextIndex);
-                 } else {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                    setIsTyping(false);
-                 }
-            }, speed);
-        } else if (currentIndex >= (internalText?.length || 0)) {
-            if(isTyping) setIsTyping(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isTyping, speed, internalText, currentIndex]);
-
-    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
-
-    return [displayText, startTypingProcess, isTyping];
-};
-
-
-const AIModelCard = ({ title, description, placeholder, modelId }) => {
-  const [input, setInput] = useState('');
-  const [output, setOutput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
-  const eventSourceRef = useRef(null); 
-
-  const simulateAnalysis = (query, modelId) => {
-      let simulatedResponse = '';
-      switch (modelId) {
-        case 'xai': simulatedResponse = `[SIMULATED_XAI_REPORT]:\nAnalysis for "${query.substring(0,15)}..." shows high attention on token [X].\nPredicted Label: 1\nConfidence: 0.85`; break;
-        case 'other': simulatedResponse = `[SIMULATED_GENERAL_REPORT]:\nQuery processed by General Purpose Model.\nInput Length: ${query.length} chars.\nStatus: OK`; break;
-        default: simulatedResponse = "ERROR: Simulated model not found.";
-      }
-      return simulatedResponse;
-  };
-
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        console.log("Closing existing EventSource connection.");
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleModelQuery = async (e) => {
-    e.preventDefault();
-    const query = input.trim();
-    if (!query) return;
-
-    setLoading(true);
-    setError(null);
-    startTypingProcess('');
-    
-    if (eventSourceRef.current) {
-        console.log("Closing previous EventSource before new request.");
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-    }
-
-    if (modelId !== 'exbert') {
-      const response = simulateAnalysis(query, modelId);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setOutput(response);
-      startTypingProcess(response);
-      setLoading(false);
-      return;
-    }
-    
-    // --- [START] منطق /queue/join (مطابق اسکریپت پایتون شما) ---
-    const sessionHash = generateSessionHash(); 
-    
-    try {
-        console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-        
-        const joinHeaders = {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-        };
-        
-        // [مهم] این مقادیر مطابق اسکریپت پایتون شما تنظیم شده‌اند
-        const payload = {
-            "data": [query],
-            "event_data": null,
-            "fn_index": 2,       
-            "trigger_id": 12,    
-            "session_hash": sessionHash
-        };
-
-        const joinResponse = await fetch(QUEUE_JOIN_URL, {
-            method: 'POST',
-            headers: joinHeaders, 
-            body: JSON.stringify(payload) 
-        });
-
-        if (!joinResponse.ok) {
-             const errorText = await joinResponse.text();
-             console.error("Queue Join Error:", joinResponse.status, errorText);
-             let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-             if (joinResponse.status === 404) { // اگر Gradio /queue/join را نشناسد
-                 detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
-             }
-             throw new Error(detailedError);
-        }
-
-        const joinResult = await joinResponse.json();
-        
-        if (!joinResult.event_id) {
-             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
-             throw new Error("Failed to get event_id from queue join.");
-        }
-        console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
-
-        // --- Listening for data (EventSource) ---
-        const dataUrl = QUEUE_DATA_URL(sessionHash);
-        eventSourceRef.current = new EventSource(dataUrl); 
-
-        eventSourceRef.current.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
-
-                switch (message.msg) {
-                    case "process_starts":
-                        setOutput("Processing started...");
-                        startTypingProcess("Processing started...");
-                        break;
-                    case "process_completed":
-                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
-                            const rawPrediction = message.output.data[0];
-                            const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
-
-                            setOutput(formattedOutput);
-                            startTypingProcess(formattedOutput);
-                        } else {
-                             const errorMsg = message.output?.error || "Unknown server processing error.";
-                             setError(`Processing failed: ${errorMsg}`);
-                             setOutput(''); startTypingProcess('');
-                        }
-                        if(eventSourceRef.current) eventSourceRef.current.close();
-                        eventSourceRef.current = null;
-                        setLoading(false);
-                        break;
-                     case "queue_full":
-                         setError("API Error: The queue is full, please try again later.");
-                         if(eventSourceRef.current) eventSourceRef.current.close();
-                         eventSourceRef.current = null;
-                         setLoading(false);
-                         break;
-                     case "estimation":
-                         const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
-                         const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
-                         const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
-                         const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
-                         if (loading) {
-                             setOutput(waitMsg);
-                             startTypingProcess(waitMsg);
-                         }
-                         break;
-                    case "close_stream":
-                        if(eventSourceRef.current) eventSourceRef.current.close();
-                        eventSourceRef.current = null;
-                        if (loading) { 
-                            setLoading(false);
-                            if (!output && !error) {
-                                setError("Stream closed unexpectedly before result.");
-                            }
-                        }
-                        break;
-                    default:
-                        break;
-                }
-            } catch (parseError) {
-                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
-            }
-        };
-
-        eventSourceRef.current.onerror = (error) => {
-            let errorMsg = "Error connecting to API stream.";
-             if (!navigator.onLine) {
-                 errorMsg += " Check your network connection.";
-             } else {
-                 errorMsg += " Could not maintain connection. Check Space status/logs."; 
-             }
-            setError(errorMsg);
-             if(eventSourceRef.current) eventSourceRef.current.close();
-            eventSourceRef.current = null;
-            setLoading(false);
-            setOutput('');
-            startTypingProcess('');
-        };
-
-    } catch (err) {
-        let displayError = err.message || "An unknown error occurred.";
-        if (err.message.includes("Failed to fetch")) {
-            displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
-        } else if (err.message.includes("503")) {
-             displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
-        }
-       setError(displayError);
-       setLoading(false);
-       setOutput('');
-       startTypingProcess('');
-        if (eventSourceRef.current) {
-           eventSourceRef.current.close();
-           eventSourceRef.current = null;
-        }
-    }
-    // --- [END] پیاده‌سازی ---
-  };
-
-  return (
-    <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
-      <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
-      <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
-
-      <form onSubmit={handleModelQuery}>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          rows="4"
-          className="cyber-textarea w-full"
-          placeholder={placeholder}
-          disabled={loading} 
-        />
-        <button 
-            type="submit" 
-            className="cyber-button w-full mt-3 flex items-center justify-center" 
-            disabled={loading || !input.trim()}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="animate-spin h-5 w-5 mr-3" />
-              ANALYZING...
-            </>
-          ) : (
-            'EXECUTE_QUERY_'
-          )}
-        </button>
-      </form>
-
-      {error && (
-        <p className="mt-2 text-xs text-cyber-red p-2 bg-red-900/30 rounded border border-red-500/50">
-          {error}
-        </p>
-      )}
-
-      <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto whitespace-pre-wrap">
-         {typedOutput}
-         {isTyping ? <span className="typing-cursor"></span> : null}
-         {!loading && !error && !output && !typedOutput && (
-             <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
-         )}
-      </div>
-    </div>
-  );
-};
-
-
-// --- [START] کامپوننت ExploitDBTable (اصلاح شده) ---
+// --- کامپوننت ExploitDBTable (بدون تغییر) ---
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
 const REFRESH_INTERVAL = 3 * 60 * 1000; 
@@ -909,36 +610,499 @@ const ExploitDBTable = () => {
 // --- [END] کامپوننت ExploitDBTable ---
 
 
-// --- کامپوننت‌های Wrapper برای تب‌ها ---
+// --- [START] منطق کامپوننت AIModelCard سابق ---
+// این منطق اکنون به کامپوننت جدید AIModels منتقل می‌شود
+const HF_USER = "amirimmd";
+const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
+const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
+const API_PREFIX = "/gradio_api";
+const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
+const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
 
-const AIModels = () => (
-    <section id="ai-models-section" className="cyber-card mb-12">
-      <div className="flex items-center mb-6">
-        <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
-        <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <AIModelCard 
-          title="MODEL::EXBERT_"
-          description="Custom BERT+LSTM model fine-tuned for estimating exploitability probability."
-          placeholder="INITIATE_EXBERT_QUERY... (e.g., Buffer overflow in...)"
-          modelId="exbert"
-        />
-        <AIModelCard 
-          title="MODEL::EXBERT.XAI_"
-          description="[SIMULATED] Explainable AI (XAI) for transparent threat assessment."
-          placeholder="INITIATE_XAI_QUERY..."
-          modelId="xai"
-        />
-        <AIModelCard 
-          title="MODEL::GENERAL.PURPOSE_"
-          description="[SIMULATED] Versatile language processing for auxiliary tasks."
-          placeholder="INITIATE_GENERAL_QUERY..."
-          modelId="other"
-        />
-      </div>
-    </section>
-);
+// تابع تولید هش
+const generateSessionHash = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 11; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+// هوک تایپ‌رایتر
+const useTypewriter = (text, speed = 50) => {
+    const [displayText, setDisplayText] = useState('');
+    const [internalText, setInternalText] = useState(text);
+    const [isTyping, setIsTyping] = useState(false);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const intervalRef = useRef(null);
+
+    const startTypingProcess = useCallback((newText) => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setInternalText(newText || '');
+        setDisplayText('');
+        setCurrentIndex(0);
+        setIsTyping(!!newText);
+    }, []);
+
+    useEffect(() => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
+        if (isTyping && internalText && currentIndex < internalText.length) {
+            intervalRef.current = setInterval(() => {
+                 if (currentIndex < internalText.length) {
+                    const nextIndex = currentIndex + 1;
+                    setDisplayText(internalText.substring(0, nextIndex));
+                    setCurrentIndex(nextIndex);
+                 } else {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                    setIsTyping(false);
+                 }
+            }, speed);
+        } else if (currentIndex >= (internalText?.length || 0)) {
+            if(isTyping) setIsTyping(false);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [isTyping, speed, internalText, currentIndex]);
+
+    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+    return [displayText, startTypingProcess, isTyping];
+};
+
+// تابع شبیه‌سازی
+const simulateAnalysis = (query, modelId) => {
+    let simulatedResponse = '';
+    switch (modelId) {
+      case 'xai': simulatedResponse = `[SIMULATED_XAI_REPORT]:\nAnalysis for "${query.substring(0,15)}..." shows high attention on token [X].\nPredicted Label: 1\nConfidence: 0.85`; break;
+      case 'other': simulatedResponse = `[SIMULATED_GENERAL_REPORT]:\nQuery processed by General Purpose Model.\nInput Length: ${query.length} chars.\nStatus: OK`; break;
+      default: simulatedResponse = "ERROR: Simulated model not found.";
+    }
+    return simulatedResponse;
+};
+// --- [END] منطق کامپوننت AIModelCard سابق ---
+
+
+// --- [START] کامپوننت جدید AIModels (رابط چت) ---
+const AIModels = ({ setActiveTab }) => {
+    const [activeModel, setActiveModel] = useState('exbert');
+    const [messages, setMessages] = useState([
+        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: اتصال برقرار شد ::\nبه واحد تحلیل هوشمند خوش آمدید. لطفاً مدل خود را انتخاب کرده و درخواست را وارد کنید.' }
+    ]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    // باز بودن سایدبار در دسکتاپ به صورت پیش‌فرض
+    const [sidebarOpen, setSidebarOpen] = useState(true); 
+    // بسته بودن انتخاب‌گر موبایل به صورت پیش‌فرض
+    const [modelSelectorOpen, setModelSelectorOpen] = useState(false); 
+    const [statusText, setStatusText] = useState(''); // برای نمایش وضعیت صف
+
+    const eventSourceRef = useRef(null);
+    const messagesEndRef = useRef(null);
+    const inputRef = useRef(null);
+
+    // هوک تایپ‌رایتر برای پیام در حال ورود
+    const [typedMessage, startTypingProcess, isTyping] = useTypewriter('', 20);
+    const [lastAiMessageText, setLastAiMessageText] = useState('');
+    const prevIsTyping = useRef(false);
+
+    const models = {
+      'exbert': { title: 'MODEL::EXBERT_', description: 'تحلیل احتمال Exploitability' },
+      'xai': { title: 'MODEL::EXBERT.XAI_', description: '[شبیه‌سازی شده] Explainable AI' },
+      'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[شبیه‌سازی شده] مدل عمومی' },
+    };
+
+    // افکت برای افزودن پیام به لیست پس از اتمام تایپ
+    useEffect(() => {
+        if (prevIsTyping.current && !isTyping && lastAiMessageText) {
+            const aiMessage = { id: Date.now(), sender: 'ai', model: activeModel, text: lastAiMessageText };
+            setMessages(prev => [...prev, aiMessage]);
+            setLastAiMessageText('');
+            startTypingProcess('');
+        }
+        prevIsTyping.current = isTyping;
+    }, [isTyping, lastAiMessageText, activeModel, startTypingProcess]);
+
+    // افکت برای اسکرول خودکار به پایین
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, typedMessage]); // با هر پیام جدید یا هر حرف تایپ شده اسکرول کن
+
+    // پاکسازی EventSource هنگام خروج
+    useEffect(() => {
+      return () => {
+        if (eventSourceRef.current) {
+          console.log("Closing existing EventSource connection on component unmount.");
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+      };
+    }, []);
+
+    // تابع ارسال پیام (ترکیبی از منطق AIModelCard)
+    const handleSend = async () => {
+        const query = input.trim();
+        if (!query || loading) return;
+
+        setLoading(true);
+        setInput('');
+        setStatusText('');
+        if(inputRef.current) inputRef.current.style.height = 'auto'; // ریست کردن ارتفاع textarea
+        
+        const newUserMessage = { id: Date.now(), sender: 'user', text: query, model: activeModel };
+        setMessages(prev => [...prev, newUserMessage]);
+        
+        if (eventSourceRef.current) {
+            console.log("Closing previous EventSource before new request.");
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
+
+        // --- منطق شبیه‌سازی ---
+        if (activeModel !== 'exbert') {
+          const response = simulateAnalysis(query, activeModel);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          setLastAiMessageText(response);
+          startTypingProcess(response);
+          setLoading(false);
+          return;
+        }
+        
+        // --- منطق واقعی ExBERT (/queue/join) ---
+        const sessionHash = generateSessionHash(); 
+        
+        try {
+            console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
+            const joinHeaders = {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            };
+            const payload = {
+                "data": [query],
+                "event_data": null,
+                "fn_index": 2,       
+                "trigger_id": 12,    
+                "session_hash": sessionHash
+            };
+
+            const joinResponse = await fetch(QUEUE_JOIN_URL, {
+                method: 'POST',
+                headers: joinHeaders, 
+                body: JSON.stringify(payload) 
+            });
+
+            if (!joinResponse.ok) {
+                 const errorText = await joinResponse.text();
+                 console.error("Queue Join Error:", joinResponse.status, errorText);
+                 let detailedError = `Failed to join queue: ${joinResponse.status}.`;
+                 if (joinResponse.status === 404) {
+                     detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
+                 }
+                 throw new Error(detailedError);
+            }
+
+            const joinResult = await joinResponse.json();
+            
+            if (!joinResult.event_id) {
+                 if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
+                 throw new Error("Failed to get event_id from queue join.");
+            }
+            console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
+
+            const dataUrl = QUEUE_DATA_URL(sessionHash);
+            eventSourceRef.current = new EventSource(dataUrl); 
+
+            eventSourceRef.current.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    switch (message.msg) {
+                        case "process_starts":
+                            setStatusText("Processing started...");
+                            break;
+                        case "process_completed":
+                            if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                                const rawPrediction = message.output.data[0];
+                                const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
+                                setLastAiMessageText(formattedOutput);
+                                startTypingProcess(formattedOutput);
+                            } else {
+                                 const errorMsg = message.output?.error || "Unknown server processing error.";
+                                 setLastAiMessageText(`Processing failed: ${errorMsg}`);
+                                 startTypingProcess(`Processing failed: ${errorMsg}`);
+                            }
+                            if(eventSourceRef.current) eventSourceRef.current.close();
+                            eventSourceRef.current = null;
+                            setLoading(false);
+                            setStatusText('');
+                            break;
+                         case "queue_full":
+                             const queueError = "API Error: The queue is full, please try again later.";
+                             setLastAiMessageText(queueError);
+                             startTypingProcess(queueError);
+                             if(eventSourceRef.current) eventSourceRef.current.close();
+                             eventSourceRef.current = null;
+                             setLoading(false);
+                             setStatusText('Queue Full.');
+                             break;
+                         case "estimation":
+                             const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
+                             const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
+                             const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
+                             const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
+                             setStatusText(waitMsg);
+                             break;
+                        case "close_stream":
+                            if(eventSourceRef.current) eventSourceRef.current.close();
+                            eventSourceRef.current = null;
+                            if (loading) { 
+                                setLoading(false);
+                                if (!lastAiMessageText && !isTyping) {
+                                    const closeError = "Stream closed unexpectedly before result.";
+                                    setLastAiMessageText(closeError);
+                                    startTypingProcess(closeError);
+                                }
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                } catch (parseError) {
+                     console.warn("Could not parse SSE message:", event.data);
+                }
+            };
+
+            eventSourceRef.current.onerror = (error) => {
+                let errorMsg = "Error connecting to API stream.";
+                 if (!navigator.onLine) {
+                     errorMsg += " Check your network connection.";
+                 } else {
+                     errorMsg += " Could not maintain connection. Check Space status/logs."; 
+                 }
+                setLastAiMessageText(errorMsg);
+                startTypingProcess(errorMsg);
+                 if(eventSourceRef.current) eventSourceRef.current.close();
+                eventSourceRef.current = null;
+                setLoading(false);
+                setStatusText('Connection Error.');
+            };
+
+        } catch (err) {
+            let displayError = err.message || "An unknown error occurred.";
+            if (err.message.includes("Failed to fetch")) {
+                displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
+            } else if (err.message.includes("503")) {
+                 displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
+            }
+           setLastAiMessageText(displayError);
+           startTypingProcess(displayError);
+           setLoading(false);
+           setStatusText('Failed to connect.');
+            if (eventSourceRef.current) {
+               eventSourceRef.current.close();
+               eventSourceRef.current = null;
+            }
+        }
+    };
+    
+    // کامپوننت داخلی برای رندر پیام‌ها
+    const MessageComponent = ({ msg, isTyping = false }) => {
+        const isAi = msg.sender === 'ai';
+        return (
+            <div className={`flex w-full mb-4 ${isAi ? 'justify-start' : 'justify-end'}`}>
+                <div className={`flex max-w-xs md:max-w-md lg:max-w-2xl ${isAi ? 'flex-row' : 'flex-row-reverse'}`}>
+                    {/* آیکون */}
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isAi ? 'bg-cyber-card text-cyber-green' : 'bg-cyber-green text-dark-bg'}`}>
+                        {isAi ? <Bot size={20} /> : <User size={20} />}
+                    </div>
+                    {/* متن پیام */}
+                    <div className={`mx-3 rounded-lg p-3 ${isAi ? 'bg-cyber-card' : 'bg-cyber-green text-dark-bg'}`}>
+                        {isAi && (
+                            <span className="text-xs font-bold text-cyber-green block mb-1">
+                                {models[msg.model]?.title || 'AI Model'}
+                            </span>
+                        )}
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                            {msg.text}
+                            {isTyping && <span className="typing-cursor"></span>}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // کامپوننت داخلی سایدبار دسکتاپ
+    const ModelSidebar = () => (
+        <div className={`hidden md:flex flex-col flex-shrink-0 bg-cyber-card border-r border-cyber-cyan/20 transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? 'w-72 p-4' : 'w-0 p-0'}`}>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white whitespace-nowrap">انتخاب مدل</h3>
+                <button onClick={() => setSidebarOpen(false)} className="text-gray-500 hover:text-white">
+                    <X size={20} />
+                </button>
+            </div>
+            <div className="flex flex-col space-y-2">
+                {Object.keys(models).map(key => (
+                    <button
+                        key={key}
+                        onClick={() => {
+                            setActiveModel(key);
+                            // شروع مکالمه جدید هنگام تغییر مدل
+                            setMessages([
+                                { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: مدل به ${models[key].title} تغییر یافت ::\n آماده دریافت درخواست...` }
+                            ]);
+                        }}
+                        className={`w-full text-left p-3 rounded-lg transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
+                    >
+                        <span className="font-bold block">{models[key].title}</span>
+                        <span className="text-xs text-gray-400">{models[key].description}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+    
+    // مدیریت تغییر ارتفاع textarea
+    const handleInput = (e) => {
+        setInput(e.target.value);
+        e.target.style.height = 'auto';
+        e.target.style.height = (e.target.scrollHeight) + 'px';
+    };
+
+    return (
+        // [مهم] بخش AIModels دیگر یک cyber-card معمولی نیست، بلکه یک کانتینر چت تمام ارتفاع است
+        <section id="ai-models-section" className="mb-12">
+            {/* [مهم] ارتفاع ثابت برای کانتینر چت */}
+            <div className="flex h-[85vh] bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
+                
+                {/* --- سایدبار (دسکتاپ) --- */}
+                <ModelSidebar />
+
+                {/* --- بخش اصلی چت --- */}
+                <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
+                    
+                    {/* هدر چت */}
+                    <div className="flex-shrink-0 flex items-center justify-between p-3 border-b border-cyber-cyan/20 bg-cyber-card">
+                        {/* دکمه باز کردن سایدبار (دسکتاپ) */}
+                        <button onClick={() => setSidebarOpen(true)} className={`hidden md:block text-cyber-cyan hover:text-cyber-green ${sidebarOpen ? 'hidden' : ''}`}>
+                            <Menu size={24} />
+                        </button>
+                        
+                        {/* دکمه بازگشت (موبایل) - کاربر را به تب NVD می‌برد */}
+                        <button onClick={() => setActiveTab('nvd')} className="md:hidden text-cyber-cyan hover:text-cyber-green">
+                            <ArrowLeft size={24} />
+                        </button>
+
+                        {/* انتخاب‌گر مدل (موبایل) */}
+                        <div className="relative md:hidden">
+                            <button onClick={() => setModelSelectorOpen(o => !o)} className="flex items-center text-lg font-bold text-white">
+                                {models[activeModel].title}
+                                <ChevronDown size={20} className={`ml-1 transition-transform ${modelSelectorOpen ? 'rotate-180' : ''}`} />
+                            </button>
+                            {/* منوی کشویی مدل‌ها در موبایل */}
+                            {modelSelectorOpen && (
+                                <div className="absolute top-full right-0 mt-2 w-60 bg-cyber-card border border-cyber-cyan/30 rounded-lg shadow-lg z-20">
+                                    {Object.keys(models).map(key => (
+                                        <button
+                                            key={key}
+                                            onClick={() => {
+                                                setActiveModel(key);
+                                                setModelSelectorOpen(false);
+                                                // شروع مکالمه جدید
+                                                setMessages([
+                                                    { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: مدل به ${models[key].title} تغییر یافت ::\n آماده دریافت درخواست...` }
+                                                ]);
+                                            }}
+                                            className={`w-full text-left p-3 transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
+                                        >
+                                            <span className="font-bold block">{models[key].title}</span>
+                                            <span className="text-xs text-gray-400">{models[key].description}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* عنوان مدل (دسکتاپ) */}
+                        <div className="hidden md:block text-center">
+                            <h3 className="text-lg font-bold text-white">{models[activeModel].title}</h3>
+                            <p className="text-xs text-gray-400">{models[activeModel].description}</p>
+                        </div>
+                        
+                        {/* آیکون کاربر (جای خالی برای تراز) */}
+                        <div className="w-8">
+                          {/* <User size={24} className="text-cyber-cyan" /> */}
+                        </div>
+                    </div>
+
+                    {/* لیست پیام‌ها */}
+                    <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth">
+                        {messages.map(msg => (
+                            <MessageComponent key={msg.id} msg={msg} />
+                        ))}
+                        {/* پیام در حال تایپ */}
+                        {isTyping && (
+                            <MessageComponent 
+                                msg={{ id: 'typing', sender: 'ai', model: activeModel, text: typedMessage }} 
+                                isTyping={true} 
+                            />
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* بخش ورودی متن */}
+                    <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg">
+                        {/* نمایش وضعیت صف */}
+                        { (loading || statusText) && (
+                            <div className="text-xs text-cyber-cyan mb-2 flex items-center">
+                                <Loader2 size={14} className="animate-spin mr-2" />
+                                {statusText || 'در حال پردازش...'}
+                            </div>
+                        )}
+                        <div className="flex items-end space-x-3">
+                            <textarea
+                                ref={inputRef}
+                                value={input}
+                                onInput={handleInput}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSend();
+                                    }
+                                }}
+                                rows="1"
+                                className="cyber-textarea w-full resize-none max-h-32"
+                                placeholder="پیام خود را برای تحلیل وارد کنید..."
+                                disabled={loading}
+                            />
+                            <button 
+                                onClick={handleSend} 
+                                disabled={loading || !input.trim()}
+                                className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0"
+                            >
+                                {loading ? (
+                                    <Loader2 className="animate-spin" size={20} />
+                                ) : (
+                                    <Send size={20} />
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+};
+// --- [END] کامپوننت جدید AIModels ---
+
+
+// --- کامپوننت‌های Wrapper برای تب‌ها (بدون تغییر) ---
 
 const NVDTab = () => (
     <section id="nvd-section" className="cyber-card mb-12">
@@ -976,6 +1140,7 @@ const LoginTab = () => (
     </section>
 );
 
+// [اصلاح شد] کامپوننت TabButton برای پشتیبانی از setActiveTab در موبایل
 const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
     <button
         onClick={onClick}
@@ -993,6 +1158,21 @@ const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
 function App() {
   const [activeTab, setActiveTab] = useState('ai'); 
 
+  // [مهم] اگر تب AI فعال باشد، فقط کامپوننت AIModels را در موبایل رندر می‌کنیم
+  // و هدر اصلی و گرید پس‌زمینه را مخفی می‌کنیم تا تمام صفحه شود.
+  if (activeTab === 'ai' && typeof window !== 'undefined' && window.innerWidth < 768) {
+      return (
+        <>
+          <div className="background-grid"></div>
+          {/* کانتینر تمام صفحه برای چت موبایل */}
+          <div className="w-full h-screen p-2 pt-4 flex flex-col">
+            <AIModels setActiveTab={setActiveTab} />
+          </div>
+        </>
+      );
+  }
+  
+  // رندر عادی برای دسکتاپ (که چت داخل تب است) یا سایر تب‌های موبایل
   return (
     <>
       {/* Background Grid Effect */}
@@ -1007,8 +1187,10 @@ function App() {
         </h1>
 
         {/* --- [START] چیدمان دسکتاپ (md به بالا) --- */}
+        {/* در دسکتاپ، همه تب‌ها همیشه نمایش داده می‌شوند */}
         <div className="hidden md:block">
-          <AIModels />
+          {/* [مهم] ارسال setActiveTab به AIModels لازم نیست چون در دسکتاپ همیشه باز است */}
+          <AIModels setActiveTab={() => {}} /> 
           <NVDTab />
           <ExploitDBTab />
         </div>
@@ -1016,10 +1198,11 @@ function App() {
 
 
         {/* --- [START] چیدمان اپلیکیشن موبایل (زیر md) --- */}
+        {/* در موبایل، فقط تب فعال (غیر از AI) نمایش داده می‌شود */}
         <div className="md:hidden pb-20"> 
           
           <div id="mobile-tab-content">
-            {activeTab === 'ai' && <AIModels />}
+            {/* activeTab === 'ai' در اینجا مدیریت نمی‌شود، چون در بالا جداگانه رندر شد */}
             {activeTab === 'nvd' && <NVDTab />}
             {activeTab === 'exploits' && <ExploitDBTab />}
             {activeTab === 'user' && <LoginTab />}
