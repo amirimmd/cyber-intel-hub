@@ -1,28 +1,30 @@
 // frontend/src/App.jsx
-// [بازطراحی کامل تب AI]
-// - کامپوننت AIModels به یک رابط چت تمام صفحه تبدیل شد.
-// - کامپوننت AIModelCard حذف شد و منطق API آن (useTypewriter, API calls) مستقیماً در AIModels جدید ادغام شد.
-// - رابط چت در دسکتاپ دارای سایدبار جمع‌شونده در سمت چپ برای انتخاب مدل است.
-// - رابط چت در موبایل دارای انتخاب‌گر مدل جمع‌شونده در هدر است.
-// - سایر تب‌ها (NVD, ExploitDB) بدون تغییر باقی ماندند.
+// [MAJOR REFACTOR]
+// - All Persian text and comments translated to English.
+// - Desktop layout: Added a tabbed interface for NVD and ExploitDB below the AI Chat module.
+// - Mobile layout: AI Chat is no longer fullscreen. It now respects the main tab navigation, fixing layout/scrolling issues.
+// - AI Chat: ExBERT model responses (Label 0) are colored green, and (Label 1, 2) are colored red.
+// - AI Chat: Removed mobile "Back" button as it's no longer needed.
+// - NVDTable: Date formatting changed to 'en-US'.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-// [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
+// Imports switched to CDN (esm.sh) to work in preview environments.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { 
   BrainCircuit, ShieldAlert, Swords, 
   Loader2, Filter, DatabaseZap, Clipboard, 
   User, Database, BarChart2,
   Swords as SwordsIcon,
-  Menu, // برای سایدبار دسکتاپ
-  X, // برای بستن سایدبار
-  Send, // دکمه ارسال چت
-  Bot, // آیکون AI
-  ChevronDown, // برای انتخاب‌گر موبایل
-  ArrowLeft // برای بازگشت از چت در موبایل
+  Menu, // For desktop sidebar
+  X, // For closing sidebar
+  Send, // Chat send button
+  Bot, // AI icon
+  ChevronDown, // For mobile model selector
+  Rss, // For NVD Tab
+  FileCode // For ExploitDB Tab
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
-// --- Supabase Client (ادغام شده - بدون تغییر) ---
+// --- Supabase Client (Integrated - No changes) ---
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
 
@@ -35,7 +37,7 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== "https://your-project-url.
       "FATAL: Supabase URL or Anon Key is missing or is placeholder. " +
       "Ensure VITE_... variables are set in Vercel and vite.config.js has target: 'es2020'."
     );
-    // ایجاد یک کلاینت mock برای جلوگیری از کرش کامل در پیش‌نمایش
+    // Mock client to prevent crashing in preview
     supabase = {
         from: () => ({
             select: () => ({
@@ -64,7 +66,7 @@ if (supabaseUrl && supabaseAnonKey && supabaseUrl !== "https://your-project-url.
 }
 
 
-// --- کامپوننت کمکی: CopyButton (بدون تغییر) ---
+// --- Helper Component: CopyButton (No changes) ---
 const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
@@ -84,7 +86,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
-            // از alert استفاده نکنید
+            // Don't use alert()
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -113,7 +115,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 };
 
 
-// --- کامپوننت NVDTable (بدون تغییر) ---
+// --- NVDTable Component (Date format changed) ---
 const DEFAULT_ROWS_TO_SHOW = 10;
 const INITIAL_DATE_FILTER = ''; 
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -275,7 +277,7 @@ const NVDTable = () => {
             <option value="NONE">NONE</option>
           </select>
         </div>
-        {/* فیلتر تاریخ */}
+        {/* Date Filter */}
         <div>
             <label htmlFor="nvd-date" className="block text-sm font-medium text-gray-400 mb-1">Published After (Estimated):</label>
             {filters.date ? (
@@ -338,7 +340,7 @@ const NVDTable = () => {
           </p>
       )}
 
-      {/* راهنمای اسکرول افقی در موبایل */}
+      {/* Horizontal scroll hint for mobile */}
       <p className="md:hidden text-xs text-center text-cyber-cyan/70 mb-2">
         &lt;-- To see more columns, drag the table sideways --&gt;
       </p>
@@ -407,7 +409,8 @@ const NVDTable = () => {
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + (cve.vectorString.length > 30 ? '...' : '') : 'N/A'}</td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {cve.published_date ? new Date(cve.published_date).toLocaleDateString('fa-IR') : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
+                      {/* Date format changed to en-US */}
+                      {cve.published_date ? new Date(cve.published_date).toLocaleDateString('en-US') : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
                   </td>
                 </tr>
               );
@@ -420,7 +423,7 @@ const NVDTable = () => {
 };
 
 
-// --- کامپوننت ExploitDBTable (بدون تغییر) ---
+// --- ExploitDBTable Component (No changes) ---
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
 const REFRESH_INTERVAL = 3 * 60 * 1000; 
@@ -593,7 +596,7 @@ const ExploitDBTable = () => {
         </ul>
       )}
 
-       {/* دکمه Refresh */}
+       {/* Refresh Button */}
        <div className="mt-4 pt-4 border-t border-gray-800/50">
           <button 
             onClick={fetchLatestExploits} 
@@ -607,11 +610,11 @@ const ExploitDBTable = () => {
     </div>
   );
 };
-// --- [END] کامپوننت ExploitDBTable ---
+// --- [END] ExploitDBTable Component ---
 
 
-// --- [START] منطق کامپوننت AIModelCard سابق ---
-// این منطق اکنون به کامپوننت جدید AIModels منتقل می‌شود
+// --- [START] Logic from former AIModelCard ---
+// This logic is now used by the new AIModels chat component
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
@@ -620,7 +623,7 @@ const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
 
-// تابع تولید هش
+// Session hash generator
 const generateSessionHash = () => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -630,7 +633,7 @@ const generateSessionHash = () => {
   return result;
 };
 
-// هوک تایپ‌رایتر
+// Typewriter hook
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
     const [internalText, setInternalText] = useState(text);
@@ -674,7 +677,7 @@ const useTypewriter = (text, speed = 50) => {
     return [displayText, startTypingProcess, isTyping];
 };
 
-// تابع شبیه‌سازی
+// Simulation function
 const simulateAnalysis = (query, modelId) => {
     let simulatedResponse = '';
     switch (modelId) {
@@ -684,39 +687,39 @@ const simulateAnalysis = (query, modelId) => {
     }
     return simulatedResponse;
 };
-// --- [END] منطق کامپوننت AIModelCard سابق ---
+// --- [END] Logic from former AIModelCard ---
 
 
-// --- [START] کامپوننت جدید AIModels (رابط چت) ---
+// --- [START] New AIModels Chat Component ---
 const AIModels = ({ setActiveTab }) => {
     const [activeModel, setActiveModel] = useState('exbert');
     const [messages, setMessages] = useState([
-        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: اتصال برقرار شد ::\nبه واحد تحلیل هوشمند خوش آمدید. لطفاً مدل خود را انتخاب کرده و درخواست را وارد کنید.' }
+        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.' }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    // باز بودن سایدبار در دسکتاپ به صورت پیش‌فرض
+    // Sidebar is open by default on desktop
     const [sidebarOpen, setSidebarOpen] = useState(true); 
-    // بسته بودن انتخاب‌گر موبایل به صورت پیش‌فرض
+    // Mobile model selector is closed by default
     const [modelSelectorOpen, setModelSelectorOpen] = useState(false); 
-    const [statusText, setStatusText] = useState(''); // برای نمایش وضعیت صف
+    const [statusText, setStatusText] = useState(''); // For queue status
 
     const eventSourceRef = useRef(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    // هوک تایپ‌رایتر برای پیام در حال ورود
+    // Typewriter hook for the incoming message
     const [typedMessage, startTypingProcess, isTyping] = useTypewriter('', 20);
     const [lastAiMessageText, setLastAiMessageText] = useState('');
     const prevIsTyping = useRef(false);
 
     const models = {
-      'exbert': { title: 'MODEL::EXBERT_', description: 'تحلیل احتمال Exploitability' },
-      'xai': { title: 'MODEL::EXBERT.XAI_', description: '[شبیه‌سازی شده] Explainable AI' },
-      'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[شبیه‌سازی شده] مدل عمومی' },
+      'exbert': { title: 'MODEL::EXBERT_', description: 'Exploitability Probability Analysis' },
+      'xai': { title: 'MODEL::EXBERT.XAI_', description: '[SIMULATED] Explainable AI' },
+      'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[SIMULATED] General Purpose Model' },
     };
 
-    // افکت برای افزودن پیام به لیست پس از اتمام تایپ
+    // Effect to add the message to the list after typing is complete
     useEffect(() => {
         if (prevIsTyping.current && !isTyping && lastAiMessageText) {
             const aiMessage = { id: Date.now(), sender: 'ai', model: activeModel, text: lastAiMessageText };
@@ -727,12 +730,12 @@ const AIModels = ({ setActiveTab }) => {
         prevIsTyping.current = isTyping;
     }, [isTyping, lastAiMessageText, activeModel, startTypingProcess]);
 
-    // افکت برای اسکرول خودکار به پایین
+    // Effect to auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, typedMessage]); // با هر پیام جدید یا هر حرف تایپ شده اسکرول کن
+    }, [messages, typedMessage]); // Scroll on new message or new typed char
 
-    // پاکسازی EventSource هنگام خروج
+    // Cleanup EventSource on unmount
     useEffect(() => {
       return () => {
         if (eventSourceRef.current) {
@@ -743,7 +746,7 @@ const AIModels = ({ setActiveTab }) => {
       };
     }, []);
 
-    // تابع ارسال پیام (ترکیبی از منطق AIModelCard)
+    // Send message function (combined logic from AIModelCard)
     const handleSend = async () => {
         const query = input.trim();
         if (!query || loading) return;
@@ -751,7 +754,7 @@ const AIModels = ({ setActiveTab }) => {
         setLoading(true);
         setInput('');
         setStatusText('');
-        if(inputRef.current) inputRef.current.style.height = 'auto'; // ریست کردن ارتفاع textarea
+        if(inputRef.current) inputRef.current.style.height = 'auto'; // Reset textarea height
         
         const newUserMessage = { id: Date.now(), sender: 'user', text: query, model: activeModel };
         setMessages(prev => [...prev, newUserMessage]);
@@ -762,7 +765,7 @@ const AIModels = ({ setActiveTab }) => {
             eventSourceRef.current = null;
         }
 
-        // --- منطق شبیه‌سازی ---
+        // --- Simulation Logic ---
         if (activeModel !== 'exbert') {
           const response = simulateAnalysis(query, activeModel);
           await new Promise(resolve => setTimeout(resolve, 1000));
@@ -773,7 +776,7 @@ const AIModels = ({ setActiveTab }) => {
           return;
         }
         
-        // --- منطق واقعی ExBERT (/queue/join) ---
+        // --- Real ExBERT Logic (/queue/join) ---
         const sessionHash = generateSessionHash(); 
         
         try {
@@ -911,24 +914,38 @@ const AIModels = ({ setActiveTab }) => {
         }
     };
     
-    // کامپوننت داخلی برای رندر پیام‌ها
-    const MessageComponent = ({ msg, isTyping = false }) => {
+    // Internal component for rendering messages
+    const MessageComponent = ({ msg, isTyping = false, colorOverride = '' }) => {
         const isAi = msg.sender === 'ai';
+
+        // [NEW] Logic for coloring ExBERT output
+        const labelMatch = msg.text.match(/Predicted Label: (\d)/);
+        const label = labelMatch ? labelMatch[1] : null;
+        
+        let labelColor = '';
+        if (msg.model === 'exbert') {
+            if (label === '0') labelColor = 'text-cyber-green';
+            // Per request, Label 2 is red. Also coloring Label 1 red.
+            else if (label === '2' || label === '1') labelColor = 'text-cyber-red';
+        }
+        
+        const finalColor = colorOverride || labelColor;
+
         return (
             <div className={`flex w-full mb-4 ${isAi ? 'justify-start' : 'justify-end'}`}>
                 <div className={`flex max-w-xs md:max-w-md lg:max-w-2xl ${isAi ? 'flex-row' : 'flex-row-reverse'}`}>
-                    {/* آیکون */}
+                    {/* Icon */}
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isAi ? 'bg-cyber-card text-cyber-green' : 'bg-cyber-green text-dark-bg'}`}>
                         {isAi ? <Bot size={20} /> : <User size={20} />}
                     </div>
-                    {/* متن پیام */}
+                    {/* Message Text */}
                     <div className={`mx-3 rounded-lg p-3 ${isAi ? 'bg-cyber-card' : 'bg-cyber-green text-dark-bg'}`}>
                         {isAi && (
                             <span className="text-xs font-bold text-cyber-green block mb-1">
                                 {models[msg.model]?.title || 'AI Model'}
                             </span>
                         )}
-                        <p className="text-sm whitespace-pre-wrap break-words">
+                        <p className={`text-sm whitespace-pre-wrap break-words ${finalColor}`}>
                             {msg.text}
                             {isTyping && <span className="typing-cursor"></span>}
                         </p>
@@ -938,11 +955,11 @@ const AIModels = ({ setActiveTab }) => {
         );
     };
 
-    // کامپوننت داخلی سایدبار دسکتاپ
+    // Internal component for Desktop Sidebar
     const ModelSidebar = () => (
         <div className={`hidden md:flex flex-col flex-shrink-0 bg-cyber-card border-r border-cyber-cyan/20 transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? 'w-72 p-4' : 'w-0 p-0'}`}>
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white whitespace-nowrap">انتخاب مدل</h3>
+                <h3 className="text-lg font-bold text-white whitespace-nowrap">Select Model</h3>
                 <button onClick={() => setSidebarOpen(false)} className="text-gray-500 hover:text-white">
                     <X size={20} />
                 </button>
@@ -953,9 +970,9 @@ const AIModels = ({ setActiveTab }) => {
                         key={key}
                         onClick={() => {
                             setActiveModel(key);
-                            // شروع مکالمه جدید هنگام تغییر مدل
+                            // Start new conversation on model switch
                             setMessages([
-                                { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: مدل به ${models[key].title} تغییر یافت ::\n آماده دریافت درخواست...` }
+                                { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...` }
                             ]);
                         }}
                         className={`w-full text-left p-3 rounded-lg transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
@@ -968,55 +985,50 @@ const AIModels = ({ setActiveTab }) => {
         </div>
     );
     
-    // مدیریت تغییر ارتفاع textarea
+    // Handle textarea auto-resize
     const handleInput = (e) => {
         setInput(e.target.value);
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
     };
 
+    // [MODIFIED] Removed fixed height h-[85vh] to allow natural flow on mobile
     return (
-        // [مهم] بخش AIModels دیگر یک cyber-card معمولی نیست، بلکه یک کانتینر چت تمام ارتفاع است
         <section id="ai-models-section" className="mb-12">
-            {/* [مهم] ارتفاع ثابت برای کانتینر چت */}
-            <div className="flex h-[85vh] bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
+            <div className="flex flex-col md:flex-row md:h-[85vh] bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
                 
-                {/* --- سایدبار (دسکتاپ) --- */}
+                {/* --- Sidebar (Desktop) --- */}
                 <ModelSidebar />
 
-                {/* --- بخش اصلی چت --- */}
-                <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
+                {/* --- Main Chat Area --- */}
+                {/* [MODIFIED] Added min-h-[70vh] for mobile to ensure it fills most of the screen */}
+                <div className="flex-1 flex flex-col h-full min-h-[70vh] md:min-h-0 bg-dark-bg/50">
                     
-                    {/* هدر چت */}
+                    {/* Chat Header */}
                     <div className="flex-shrink-0 flex items-center justify-between p-3 border-b border-cyber-cyan/20 bg-cyber-card">
-                        {/* دکمه باز کردن سایدبار (دسکتاپ) */}
+                        {/* Desktop: Sidebar Toggle Button */}
                         <button onClick={() => setSidebarOpen(true)} className={`hidden md:block text-cyber-cyan hover:text-cyber-green ${sidebarOpen ? 'hidden' : ''}`}>
                             <Menu size={24} />
                         </button>
                         
-                        {/* دکمه بازگشت (موبایل) - کاربر را به تب NVD می‌برد */}
-                        <button onClick={() => setActiveTab('nvd')} className="md:hidden text-cyber-cyan hover:text-cyber-green">
-                            <ArrowLeft size={24} />
-                        </button>
-
-                        {/* انتخاب‌گر مدل (موبایل) */}
+                        {/* Mobile: Model Selector */}
                         <div className="relative md:hidden">
                             <button onClick={() => setModelSelectorOpen(o => !o)} className="flex items-center text-lg font-bold text-white">
                                 {models[activeModel].title}
                                 <ChevronDown size={20} className={`ml-1 transition-transform ${modelSelectorOpen ? 'rotate-180' : ''}`} />
                             </button>
-                            {/* منوی کشویی مدل‌ها در موبایل */}
+                            {/* Mobile: Model Dropdown Menu */}
                             {modelSelectorOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-60 bg-cyber-card border border-cyber-cyan/30 rounded-lg shadow-lg z-20">
+                                <div className="absolute top-full left-0 mt-2 w-60 bg-cyber-card border border-cyber-cyan/30 rounded-lg shadow-lg z-20">
                                     {Object.keys(models).map(key => (
                                         <button
                                             key={key}
                                             onClick={() => {
                                                 setActiveModel(key);
                                                 setModelSelectorOpen(false);
-                                                // شروع مکالمه جدید
+                                                // Start new conversation
                                                 setMessages([
-                                                    { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: مدل به ${models[key].title} تغییر یافت ::\n آماده دریافت درخواست...` }
+                                                    { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...` }
                                                 ]);
                                             }}
                                             className={`w-full text-left p-3 transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
@@ -1029,40 +1041,45 @@ const AIModels = ({ setActiveTab }) => {
                             )}
                         </div>
 
-                        {/* عنوان مدل (دسکتاپ) */}
+                        {/* Desktop: Model Title */}
                         <div className="hidden md:block text-center">
                             <h3 className="text-lg font-bold text-white">{models[activeModel].title}</h3>
                             <p className="text-xs text-gray-400">{models[activeModel].description}</p>
                         </div>
                         
-                        {/* آیکون کاربر (جای خالی برای تراز) */}
+                        {/* Spacer */}
                         <div className="w-8">
                           {/* <User size={24} className="text-cyber-cyan" /> */}
                         </div>
                     </div>
 
-                    {/* لیست پیام‌ها */}
+                    {/* Message List */}
                     <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth">
                         {messages.map(msg => (
                             <MessageComponent key={msg.id} msg={msg} />
                         ))}
-                        {/* پیام در حال تایپ */}
+                        {/* Typing message */}
                         {isTyping && (
                             <MessageComponent 
                                 msg={{ id: 'typing', sender: 'ai', model: activeModel, text: typedMessage }} 
                                 isTyping={true} 
+                                // [NEW] Pass color override based on the full text being typed
+                                colorOverride={
+                                    (lastAiMessageText.includes('Predicted Label: 0')) ? 'text-cyber-green' :
+                                    (lastAiMessageText.includes('Predicted Label: 2') || lastAiMessageText.includes('Predicted Label: 1')) ? 'text-cyber-red' : ''
+                                }
                             />
                         )}
                         <div ref={messagesEndRef} />
                     </div>
 
-                    {/* بخش ورودی متن */}
+                    {/* Input Area */}
                     <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg">
-                        {/* نمایش وضعیت صف */}
+                        {/* Queue Status */}
                         { (loading || statusText) && (
                             <div className="text-xs text-cyber-cyan mb-2 flex items-center">
                                 <Loader2 size={14} className="animate-spin mr-2" />
-                                {statusText || 'در حال پردازش...'}
+                                {statusText || 'Processing...'}
                             </div>
                         )}
                         <div className="flex items-end space-x-3">
@@ -1078,7 +1095,7 @@ const AIModels = ({ setActiveTab }) => {
                                 }}
                                 rows="1"
                                 className="cyber-textarea w-full resize-none max-h-32"
-                                placeholder="پیام خود را برای تحلیل وارد کنید..."
+                                placeholder="Enter query for analysis..."
                                 disabled={loading}
                             />
                             <button 
@@ -1099,10 +1116,10 @@ const AIModels = ({ setActiveTab }) => {
         </section>
     );
 };
-// --- [END] کامپوننت جدید AIModels ---
+// --- [END] New AIModels Chat Component ---
 
 
-// --- کامپوننت‌های Wrapper برای تب‌ها (بدون تغییر) ---
+// --- Wrapper Components for Tabs ---
 
 const NVDTab = () => (
     <section id="nvd-section" className="cyber-card mb-12">
@@ -1140,7 +1157,7 @@ const LoginTab = () => (
     </section>
 );
 
-// [اصلاح شد] کامپوننت TabButton برای پشتیبانی از setActiveTab در موبایل
+// Mobile Tab Button Component
 const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
     <button
         onClick={onClick}
@@ -1154,60 +1171,70 @@ const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
 );
 
 
-// --- کامپوننت اصلی App (با چیدمان واکنش‌گرا) ---
+// --- Main App Component (Layout logic updated) ---
 function App() {
+  // 'ai' is the default tab for both mobile and desktop
   const [activeTab, setActiveTab] = useState('ai'); 
+  // [NEW] State for desktop data tabs (NVD vs ExploitDB)
+  const [desktopDataTab, setDesktopDataTab] = useState('nvd');
 
-  // [مهم] اگر تب AI فعال باشد، فقط کامپوننت AIModels را در موبایل رندر می‌کنیم
-  // و هدر اصلی و گرید پس‌زمینه را مخفی می‌کنیم تا تمام صفحه شود.
-  if (activeTab === 'ai' && typeof window !== 'undefined' && window.innerWidth < 768) {
-      return (
-        <>
-          <div className="background-grid"></div>
-          {/* کانتینر تمام صفحه برای چت موبایل */}
-          <div className="w-full h-screen p-2 pt-4 flex flex-col">
-            <AIModels setActiveTab={setActiveTab} />
-          </div>
-        </>
-      );
-  }
+  // [REMOVED] Special fullscreen logic for mobile chat is gone.
   
-  // رندر عادی برای دسکتاپ (که چت داخل تب است) یا سایر تب‌های موبایل
   return (
     <>
       {/* Background Grid Effect */}
       <div className="background-grid"></div>
 
-      {/* کانتینر اصلی */}
+      {/* Main Container */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 relative z-10">
 
-        {/* Main Header (مشترک برای دسکتاپ و موبایل) */}
+        {/* Main Header */}
         <h1 className="text-3xl md:text-5xl font-bold text-center mb-6 md:mb-10 bg-clip-text text-transparent bg-gradient-to-r from-cyber-green to-cyber-cyan section-header break-words">
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
 
-        {/* --- [START] چیدمان دسکتاپ (md به بالا) --- */}
-        {/* در دسکتاپ، همه تب‌ها همیشه نمایش داده می‌شوند */}
+        {/* --- [START] Desktop Layout (md and up) --- */}
         <div className="hidden md:block">
-          {/* [مهم] ارسال setActiveTab به AIModels لازم نیست چون در دسکتاپ همیشه باز است */}
+          {/* AIModels is always visible on top */}
           <AIModels setActiveTab={() => {}} /> 
-          <NVDTab />
-          <ExploitDBTab />
+          
+          {/* [NEW] Desktop Tab Navigation for Data Feeds */}
+          <div className="flex space-x-2 mb-6 -mt-6">
+              <button 
+                  onClick={() => setDesktopDataTab('nvd')}
+                  className={`flex-1 flex items-center justify-center p-3 rounded-lg transition-all ${desktopDataTab === 'nvd' ? 'bg-cyber-card border border-cyber-cyan text-cyber-cyan shadow-lg' : 'bg-gray-900/50 text-gray-500 hover:bg-gray-800'}`}
+              >
+                  <Rss className="w-5 h-5 mr-2" />
+                  <span className="font-bold text-lg">NVD_FEED_</span>
+              </button>
+              <button 
+                  onClick={() => setDesktopDataTab('exploits')}
+                  className={`flex-1 flex items-center justify-center p-3 rounded-lg transition-all ${desktopDataTab === 'exploits' ? 'bg-cyber-card border border-cyber-red text-cyber-red shadow-lg' : 'bg-gray-900/50 text-gray-500 hover:bg-gray-800'}`}
+              >
+                  <FileCode className="w-5 h-5 mr-2" />
+                  <span className="font-bold text-lg">EXPLOIT_FEED_</span>
+              </button>
+          </div>
+          
+          {/* [NEW] Conditional Rendering for Desktop Tabs */}
+          {desktopDataTab === 'nvd' && <NVDTab />}
+          {desktopDataTab === 'exploits' && <ExploitDBTab />}
         </div>
-        {/* --- [END] چیدمان دسکتاپ --- */}
+        {/* --- [END] Desktop Layout --- */}
 
 
-        {/* --- [START] چیدمان اپلیکیشن موبایل (زیر md) --- */}
-        {/* در موبایل، فقط تب فعال (غیر از AI) نمایش داده می‌شود */}
+        {/* --- [START] Mobile App Layout (below md) --- */}
         <div className="md:hidden pb-20"> 
           
           <div id="mobile-tab-content">
-            {/* activeTab === 'ai' در اینجا مدیریت نمی‌شود، چون در بالا جداگانه رندر شد */}
+            {/* All tabs now render normally */}
+            {activeTab === 'ai' && <AIModels setActiveTab={setActiveTab} />}
             {activeTab === 'nvd' && <NVDTab />}
             {activeTab === 'exploits' && <ExploitDBTab />}
             {activeTab === 'user' && <LoginTab />}
           </div>
 
+          {/* Bottom Navigation Bar */}
           <nav className="fixed bottom-0 left-0 right-0 h-16 bg-cyber-card border-t border-solid border-cyber-cyan/30 z-50 flex justify-around items-center shadow-lg backdrop-blur-sm bg-opacity-90">
             <TabButton 
               icon={BrainCircuit} 
@@ -1235,7 +1262,7 @@ function App() {
             />
           </nav>
         </div>
-        {/* --- [END] چیدمان موبایل --- */}
+        {/* --- [END] Mobile Layout --- */}
 
       </div>
     </>
@@ -1243,3 +1270,4 @@ function App() {
 }
 
 export default App;
+
