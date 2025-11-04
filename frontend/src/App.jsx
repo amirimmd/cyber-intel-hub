@@ -1,8 +1,5 @@
 // frontend/src/App.jsx
-// [فایل کامل] این فایل شامل تمام کامپوننت‌های React و منطق برنامه است.
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-// [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { 
   ShieldAlert, 
@@ -16,42 +13,55 @@ import {
 } from 'https://esm.sh/lucide-react@0.395.0';
 
 // --- [ادغام شد] Supabase Client (از supabaseClient.js) ---
-// [WORKAROUND] استفاده از مقادیر موقت برای متغیرهای محیطی.
-// راه‌حل نهایی: تنظیم 'target: es2020' در فایل vite.config.js
-const supabaseUrl = "https" + "://your-project-url.supabase.co"; // <-- URL موقت - این را در Vercel تنظیم کنید
-const supabaseAnonKey = "your-anon-key"; // <-- Key موقت - این را در Vercel تنظیم کنید
+// این متغیرها باید در Vercel تنظیم شوند
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let supabase;
-if (supabaseUrl !== "https" + "://your-project-url.supabase.co" && supabaseAnonKey !== "your-anon-key") {
+if (supabaseUrl && supabaseAnonKey) {
   supabase = createClient(supabaseUrl, supabaseAnonKey);
-  console.log("Supabase client initialized.");
+  console.log("✅ Supabase client initialized.");
 } else {
-  console.warn("Supabase credentials are placeholders. Using mock client. Please set VITE_... variables in Vercel.");
-  // ایجاد یک mock client برای جلوگیری از کرش در پیش‌نمایش
+  console.error(
+    "FATAL: Supabase URL or Anon Key is missing. " +
+    "Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel Environment Variables."
+  );
+  // ایجاد یک کلاینت mock برای جلوگیری از کرش کامل برنامه در حالت پیش‌نمایش
   supabase = {
     from: () => ({
-      select: () => Promise.resolve({ data: [], error: { message: "Mock Client: Supabase not configured." } }),
-      on: () => ({
-        subscribe: () => ({ unsubscribe: () => {} })
+      select: () => ({
+        order: () => ({
+          limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+        }),
+        eq: () => ({
+          order: () => ({
+           limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+          })
+        }),
+        neq: () => ({
+          order: () => ({
+           limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+          })
+        }),
       }),
       channel: () => ({
-         on: () => ({
-           subscribe: () => ({ unsubscribe: () => {} })
-         })
+        on: () => ({
+          subscribe: () => ({})
+        })
       }),
       removeChannel: () => {}
     })
   };
 }
 
-
-// --- [ادغام شد] کامپوننت کمکی: CopyButton ---
+// --- [ادغام شد] کامپوننت کمکی: CopyButton (مورد نیاز NVDTable و ExploitDBTable) ---
 const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e) => {
         e.stopPropagation(); 
         try {
+            // ایجاد یک textarea موقت
             const textarea = document.createElement('textarea');
             textarea.value = textToCopy;
             textarea.style.position = 'fixed'; 
@@ -59,12 +69,16 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
+            
+            // استفاده از execCommand برای سازگاری (navigator.clipboard در iFrame ها کار نمی‌کند)
             document.execCommand('copy'); 
+            
             document.body.removeChild(textarea);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
+            // نمایش پیام خطا به جای alert
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -92,13 +106,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
     );
 };
 
-
-// --- [ادغام شد] کامپوننت NVDTable (از NVDTable.jsx) ---
-const DEFAULT_ROWS_TO_SHOW = 10;
-const INITIAL_DATE_FILTER = ''; 
-const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
-const DEFAULT_START_DATE_FILTER = '2024-01-01'; 
-
+// --- [ادغام شد] کامپوننت کمکی: SeverityBadge (مورد نیاز NVDTable) ---
 const SeverityBadge = ({ severity }) => {
   let badgeClass = 'badge-unknown';
   switch (String(severity).toUpperCase()) {
@@ -111,6 +119,57 @@ const SeverityBadge = ({ severity }) => {
   }
   return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
 };
+
+// --- [ادغام شد] هوک کمکی: useTypewriter (مورد نیاز AIModelCard) ---
+const useTypewriter = (text, speed = 50) => {
+    const [displayText, setDisplayText] = useState('');
+    const [internalText, setInternalText] = useState(text);
+    const [isTyping, setIsTyping] = useState(false);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const intervalRef = useRef(null);
+
+    const startTypingProcess = useCallback((newText) => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setInternalText(newText || '');
+        setDisplayText('');
+        setCurrentIndex(0);
+        setIsTyping(!!newText);
+    }, []);
+
+    useEffect(() => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
+        if (isTyping && internalText && currentIndex < internalText.length) {
+            intervalRef.current = setInterval(() => {
+                 if (currentIndex < internalText.length) {
+                    const nextIndex = currentIndex + 1;
+                    setDisplayText(internalText.substring(0, nextIndex));
+                    setCurrentIndex(nextIndex);
+                 } else {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                    setIsTyping(false);
+                 }
+            }, speed);
+        } else if (currentIndex >= (internalText?.length || 0)) {
+            if(isTyping) setIsTyping(false);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [isTyping, speed, internalText, currentIndex]);
+
+    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+    return [displayText, startTypingProcess, isTyping];
+};
+
+
+// --- [ادغام شد] کامپوننت NVDTable (از NVDTable.jsx) ---
+const DEFAULT_ROWS_TO_SHOW = 10;
+const INITIAL_DATE_FILTER = ''; 
+const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
+const DEFAULT_START_DATE_FILTER = '2024-01-01'; 
 
 const extractYearFromCveId = (cveId) => {
     const match = cveId?.match(/CVE-(\d{4})-\d+/);
@@ -148,7 +207,7 @@ const NVDTable = () => {
         setAllData(data || []);
     } catch (err) {
         console.error('Error fetching NVD data:', err.message);
-        setError(`Database Error: ${err.message}. Check Supabase connection.`);
+        setError(`Database Error: ${err.message}. Check Supabase connection and table column names (ID, text, score, baseSeverity).`);
     } finally {
         setLoading(false);
     }
@@ -210,7 +269,9 @@ const NVDTable = () => {
   const truncateText = (text) => {
     if (!text) return { display: 'N/A', needsCopy: false };
     
-    const limit = (typeof window !== 'undefined' && window.innerWidth < 640) ? 40 : 150; 
+    // بررسی می‌کنیم که آیا در مرورگر هستیم یا خیر
+    const isBrowser = typeof window !== 'undefined';
+    const limit = (isBrowser && window.innerWidth < 640) ? 40 : 150; 
     const needsCopy = text.length > limit;
 
     if (needsCopy) {
@@ -322,7 +383,7 @@ const NVDTable = () => {
 
       {/* راهنمای اسکرول افقی در موبایل */}
       <p className="md:hidden text-xs text-center text-cyber-cyan/70 mb-2">
-        &lt;-- To see more columns, drag the table sideways --&gt;
+        &lt;-- برای دیدن ستون‌های بیشتر، جدول را بکشید --&gt;
       </p>
 
       {/* Results Table */}
@@ -402,59 +463,18 @@ const NVDTable = () => {
 };
 
 
-// --- [ادغام شد] هوک Typewriter ---
-const useTypewriter = (text, speed = 50) => {
-    const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text);
-    const [isTyping, setIsTyping] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null);
-
-    const startTypingProcess = useCallback((newText) => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setInternalText(newText || '');
-        setDisplayText('');
-        setCurrentIndex(0);
-        setIsTyping(!!newText);
-    }, []);
-
-    useEffect(() => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-
-        if (isTyping && internalText && currentIndex < internalText.length) {
-            intervalRef.current = setInterval(() => {
-                 if (currentIndex < internalText.length) {
-                    const nextIndex = currentIndex + 1;
-                    setDisplayText(internalText.substring(0, nextIndex));
-                    setCurrentIndex(nextIndex);
-                 } else {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                    setIsTyping(false);
-                 }
-            }, speed);
-        } else if (currentIndex >= (internalText?.length || 0)) {
-            if(isTyping) setIsTyping(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isTyping, speed, internalText, currentIndex]);
-
-    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
-
-    return [displayText, startTypingProcess, isTyping];
-};
-
-
 // --- [ادغام شد] کامپوننت AIModelCard (از AIModelCard.jsx) ---
 // --- Configuration ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
-// [WORKAROUND] Replaced import.meta.env to fix build warnings.
-const HF_API_TOKEN = ""; // import.meta.env.VITE_HF_API_TOKEN;
+const API_PREFIX = "/gradio_api";
+const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
+const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
+
+// [NOTE] این متغیر خوانده می‌شود اما چون Space شما public است، در هدر ارسال استفاده نمی‌شود.
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
 if (!HF_API_TOKEN) {
   console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! (Using public mode)");
@@ -462,13 +482,22 @@ if (!HF_API_TOKEN) {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded (though likely not needed for public space).");
 }
 
+const generateSessionHash = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 11; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
-  const eventSourceRef = useRef(null); // نگه‌داشتن eventSourceRef (گرچه دیگر استفاده نمی‌شود)
+  const eventSourceRef = useRef(null);
 
   // منطق شبیه‌سازی برای مدل‌های غیر از ExBERT
   const simulateAnalysis = (query, modelId) => {
@@ -482,7 +511,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   };
 
   useEffect(() => {
-    // پاکسازی EventSource (اگرچه در منطق جدید استفاده نمی‌شود، نگه داشتن آن ضرری ندارد)
     return () => {
       if (eventSourceRef.current) {
         console.log("Closing existing EventSource connection.");
@@ -492,7 +520,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     };
   }, []);
 
-  // [آخرین نسخه] استفاده از /run/predict
   const handleModelQuery = async (e) => {
     e.preventDefault();
     const query = input.trim();
@@ -517,67 +544,161 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
     
-    // --- [START] بازنویسی کامل منطق API ---
-    // استفاده از اندپوینت جدید /run/predict
-    const API_RUN_URL = `${BASE_API_URL}/run/predict`;
-
+    // --- [START] پیاده‌سازی منطق فراخوانی API عمومی ---
+    const sessionHash = generateSessionHash(); // 1. تولید هش محلی
+    
     try {
-      console.log(`Step 1: Calling Gradio API at ${API_RUN_URL}...`);
-
-      const payload = {
-        "data": [query] // فقط داده‌های ورودی را ارسال کنید
-      };
-
-      const response = await fetch(API_RUN_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("API Run Error:", response.status, errorText);
-        let detailedError = `API Error: ${response.status}.`;
-         if (response.status === 404) {
-             detailedError = "API ERROR: 404 Not Found. آیا 'api_name=\"predict\"' را به app.py اضافه کردید؟";
-         } else if (response.status === 503) {
-             detailedError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded.";
-         } else {
-             detailedError += ` ${errorText.substring(0, 150)}`;
-         }
-        throw new Error(detailedError);
-      }
-
-      const result = await response.json();
-      console.log("Step 2: Received API result:", result);
-
-      // 9. استخراج خروجی
-      if (result.data && result.data.length > 0) {
-        const rawPrediction = result.data[0];
-        let formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
+        console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         
-        setOutput(formattedOutput);
-        startTypingProcess(formattedOutput);
-      } else {
-        throw new Error("Invalid API response structure. 'data' array not found.");
-      }
+        // 2. ساخت هدرها (بدون نیاز به توکن Auth برای Space عمومی)
+        const joinHeaders = {
+            'Content-Type': 'application/json',
+        };
+        
+        // 3. ساخت Payload دقیقاً مطابق اسکریپت پایتون
+        const payload = {
+            "data": [query],
+            "event_data": null,
+            "fn_index": 2,       // مطابق اسکریپت پایتون
+            "trigger_id": 12,    // مطابق اسکریپت پایتون
+            "session_hash": sessionHash
+        };
+
+        const joinResponse = await fetch(QUEUE_JOIN_URL, {
+            method: 'POST',
+            headers: joinHeaders, 
+            body: JSON.stringify(payload) // 4. ارسال Payload
+        });
+
+        if (!joinResponse.ok) {
+             const errorText = await joinResponse.text();
+             console.error("Queue Join Error:", joinResponse.status, errorText);
+             let detailedError = `Failed to join queue: ${joinResponse.status}.`;
+             if (joinResponse.status === 401) {
+                 detailedError = "API ERROR: 401 Unauthorized. Check Space permissions (should be public).";
+             } else if (joinResponse.status === 422) {
+                 detailedError = `API ERROR: 422 Validation Error. Check fn_index/trigger_id.`;
+             } else {
+                 detailedError += ` ${errorText.substring(0, 150)}`;
+             }
+             throw new Error(detailedError);
+        }
+
+        const joinResult = await joinResponse.json();
+        
+        // 5. بررسی event_id
+        if (!joinResult.event_id) {
+             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
+             throw new Error("Failed to get event_id from queue join.");
+        }
+        console.log(`Step 2: Joined queue successfully with event_id: ${joinResult.event_id} and session_hash: ${sessionHash}`);
+
+        // --- Listening for data (EventSource) ---
+        // 6. گوش دادن به /queue/data با استفاده از session_hash
+        console.log(`Step 3: Listening for results via EventSource at ${QUEUE_DATA_URL(sessionHash)}...`);
+        const dataUrl = QUEUE_DATA_URL(sessionHash);
+
+        eventSourceRef.current = new EventSource(dataUrl); 
+
+        eventSourceRef.current.onmessage = (event) => {
+            try {
+                // 7. دریافت جریان داده‌ها
+                const message = JSON.parse(event.data);
+                console.log("Parsed SSE message:", message);
+
+                switch (message.msg) {
+                    case "process_starts":
+                        setOutput("Processing started...");
+                        startTypingProcess("Processing started...");
+                        break;
+                    case "process_generating": break;
+                    case "process_completed":
+                        // 8. دریافت نتیجه نهایی
+                        console.log("Processing completed. Raw output:", JSON.stringify(message.output, null, 2));
+                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                            
+                            // 9. استخراج خروجی
+                            const rawPrediction = message.output.data[0];
+                            let formattedOutput = `[EXBERT_REPORT]: ${rawPrediction}`;
+
+                            setOutput(formattedOutput);
+                            startTypingProcess(formattedOutput);
+                        } else {
+                             const errorMsg = message.output?.error || "Unknown server processing error.";
+                             setError(`Processing failed: ${errorMsg}`);
+                             setOutput(''); startTypingProcess('');
+                        }
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        setLoading(false);
+                        break;
+                     case "queue_full":
+                         setError("API Error: The queue is full, please try again later.");
+                         if(eventSourceRef.current) eventSourceRef.current.close();
+                         eventSourceRef.current = null;
+                         setLoading(false);
+                         break;
+                     case "estimation":
+                         const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
+                         const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
+                         const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
+                         const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
+                         if (loading) {
+                             setOutput(waitMsg);
+                             startTypingProcess(waitMsg);
+                         }
+                         break;
+                    case "close_stream":
+                        console.log("Stream closed by server.");
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        if (loading) { // اگر هنوز در حال بارگذاری بودیم و نتیجه نیامد
+                            setLoading(false);
+                            if (!output && !error) {
+                                setError("Stream closed unexpectedly before result.");
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } catch (parseError) {
+                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
+            }
+        };
+
+        eventSourceRef.current.onerror = (error) => {
+            let errorMsg = "Error connecting to API stream.";
+             if (typeof navigator !== 'undefined' && !navigator.onLine) {
+                 errorMsg += " Check your network connection.";
+             } else {
+                 errorMsg += " Could not maintain connection. Check Space status/logs."; 
+             }
+            setError(errorMsg);
+             if(eventSourceRef.current) eventSourceRef.current.close();
+            eventSourceRef.current = null;
+            setLoading(false);
+            setOutput('');
+            startTypingProcess('');
+        };
 
     } catch (err) {
-      let displayError = err.message || "An unknown error occurred.";
-      if (err.message.includes("Failed to fetch")) {
-          displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
-      }
+        let displayError = err.message || "An unknown error occurred.";
+        if (err.message.includes("Failed to fetch")) {
+            displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
+        } else if (err.message.includes("503")) {
+             displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
+        }
        setError(displayError);
+       setLoading(false);
        setOutput('');
        startTypingProcess('');
-    } finally {
-      setLoading(false);
-      if (eventSourceRef.current) {
-         eventSourceRef.current.close();
-         eventSourceRef.current = null;
-      }
+        if (eventSourceRef.current) {
+           eventSourceRef.current.close();
+           eventSourceRef.current = null;
+        }
     }
-    // --- [END] بازنویسی کامل منطق API ---
+    // --- [END] پیاده‌سازی ---
   };
 
   // --- Render logic ---
@@ -628,14 +749,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   );
 };
 
-
 // --- [ادغام شد] کامپوننت ExploitDBTable (از ExploitDBTable.jsx) ---
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
 
-// 'extractYearFromId' قبلاً در NVDTable (به عنوان extractYearFromCveId) تعریف شده
-// ما از همان تابع استفاده می‌کنیم یا یکی جدید تعریف می‌کنیم. برای سادگی، یک تابع محلی تعریف می‌کنیم.
-const extractYearFromExploitId = (id) => {
+const extractYearFromId = (id) => {
     const match = id?.match(/(\d{4})/); 
     return match ? match[1] : 'N/A';
 };
@@ -685,21 +803,28 @@ const ExploitDBTable = () => {
       const data1 = response1.data || [];
       const data0 = response0.data || [];
 
+      console.log(`ExploitDBTable: Fetched ${data1.length} (Label 1) and ${data0.length} (Label 0/Other).`);
+
       let combinedData = [...data1, ...data0];
+      
       combinedData.sort((a, b) => (a.ID < b.ID ? 1 : a.ID > b.ID ? -1 : 0));
+      
       const finalSet = combinedData.slice(0, EXPLOITS_TO_SHOW);
 
+      console.log(`ExploitDBTable: Final display set size: ${finalSet.length}`);
       setLatestExploits(finalSet);
 
     } catch (error) {
       console.error('Error fetching Exploit-DB feed:', error.message);
-      setError(`Database Query Error: ${error.message}. Check RLS, 'exploits' table.`);
+      setError(`Database Query Error: ${error.message}. Check RLS, the 'exploits' table structure, and data content.`);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    console.log('ExploitDBTable: Component mounted, starting initial fetch.');
+    
     fetchLatestExploits();
     
     const exploitSubscription = supabase
@@ -708,12 +833,14 @@ const ExploitDBTable = () => {
             'postgres_changes', 
             { event: '*', schema: 'public', table: 'exploits' }, 
             (payload) => {
+                 console.log('ExploitDBTable: Realtime change detected, refetching...');
                  fetchLatestExploits(); 
             }
         )
         .subscribe();
 
     return () => {
+        console.log('ExploitDBTable: Component unmounting, removing subscription.');
         supabase.removeChannel(exploitSubscription);
     };
   }, [fetchLatestExploits]); 
@@ -761,7 +888,7 @@ const ExploitDBTable = () => {
                       {exploit.ID}
                     </span>
                     <span className="text-xs text-gray-500 bg-gray-900/50 px-2 py-0.5 rounded-full">
-                       YEAR: {extractYearFromExploitId(exploit.ID)}
+                       YEAR: {extractYearFromId(exploit.ID)}
                     </span>
                 </div>
                 
