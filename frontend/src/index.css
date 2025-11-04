@@ -1,3 +1,4 @@
+/* frontend/src/index.css */
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap');
 
 @tailwind base;
@@ -5,91 +6,86 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply font-mono bg-dark-bg text-cyber-text;
-    text-shadow: 0 0 2px rgba(0, 255, 255, 0.1);
-  }
-  ::selection {
-    @apply bg-cyber-cyan text-dark-bg;
-  }
+body {
+@apply font-mono bg-dark-bg text-cyber-text;
+text-shadow: 0 0 2px rgba(0, 255, 255, 0.1);
+}
+::selection {
+@apply bg-cyber-cyan text-dark-bg;
+}
 }
 
 @layer components {
-  /* Background Grid */
-  .background-grid {
-    @apply fixed top-0 left-0 w-full h-full pointer-events-none -z-10;
-    background-image: 
-      linear-gradient(to right, rgba(0, 255, 255, 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
-    background-size: 50px 50px;
-    animation: grid-pulse 60s linear infinite;
-  }
+/* Background Grid */
+.background-grid {
+@apply fixed top-0 left-0 w-full h-full pointer-events-none -z-10;
+background-image:
+linear-gradient(to right, rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+linear-gradient(to bottom, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
+background-size: 50px 50px;
+animation: grid-pulse 60s linear infinite;
+}
 
-  /* [ویرایش شد] Main Cyber Card Container
-    - p-6 به p-4 (برای موبایل) تغییر کرد.
-    - sm:p-6 (برای نمایشگرهای کوچک به بالا) اضافه شد تا پدینگ در دستگاه‌های بزرگتر حفظ شود.
-  */
-  .cyber-card {
-    @apply bg-cyber-card border border-solid rounded-2xl p-4 sm:p-6 shadow-lg;
-    animation: border-pulse 4s infinite alternate ease-in-out;
-  }
+/* [ویرایش شد] Main Cyber Card Container
+- p-6 به p-4 (برای موبایل) تغییر کرد.
+- sm:p-6 (برای نمایشگرهای کوچک به بالا) اضافه شد تا پدینگ در دستگاه‌های بزرگتر حفظ شود.
+*/
+.cyber-card {
+@apply bg-cyber-card border border-solid rounded-2xl p-4 sm:p-6 shadow-lg;
+animation: border-pulse 4s infinite alternate ease-in-out;
+}
 
-  /* Section Headers */
-  .section-header {
-    @apply animate-flicker;
-  }
+/* Section Headers */
+.section-header {
+@apply animate-flicker;
+}
 
-  /* [تایید شد] Form Inputs
-    این کلاس‌ها به درستی w-full دارند که برای واکنش‌گرایی در موبایل عالی است.
-  */
-  .cyber-input, .cyber-select, .cyber-textarea {
-    @apply w-full bg-dark-bg border border-cyber-cyan/30 text-cyber-green rounded-lg px-4 py-2;
-    @apply focus:outline-none focus:border-cyber-cyan focus:ring-2 focus:ring-cyber-cyan/50;
-    box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.1);
-  }
-  .cyber-input::placeholder, .cyber-textarea::placeholder {
-    @apply text-cyber-cyan/40;
-  }
+/* Form Inputs */
+.cyber-input, .cyber-select, .cyber-textarea {
+@apply w-full bg-dark-bg border border-cyber-cyan/30 text-cyber-green rounded-lg px-4 py-2;
+@apply focus:outline-none focus:border-cyber-cyan focus:ring-2 focus:ring-cyber-cyan/50;
+box-shadow: inset 0 0 5px rgba(0, 255, 255, 0.1);
+}
+.cyber-input::placeholder, .cyber-textarea::placeholder {
+@apply text-cyber-cyan/40;
+}
 
-  /* [تایید شد] Buttons
-    شما به درستی از w-full و md:w-auto در کامپوننت‌ها استفاده کرده‌اید (مثلاً در NVDTable).
-    این کلاس پایه نیازی به تغییر ندارد.
-  */
-  .cyber-button {
-    @apply w-full md:w-auto bg-cyber-green text-dark-bg font-bold py-2 px-6 rounded-lg;
-    @apply transition-all duration-200;
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-  }
-  .cyber-button:hover {
-    @apply bg-green-400 shadow-lg shadow-cyber-green/50 -translate-y-0.5;
-  }
-  .cyber-button:disabled {
-    @apply bg-green-900 text-gray-500 shadow-none translate-y-0 cursor-not-allowed;
-  }
+/* Buttons */
+.cyber-button {
+@apply w-full md:w-auto bg-cyber-green text-dark-bg font-bold py-2 px-6 rounded-lg;
+@apply transition-all duration-200;
+box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+.cyber-button:hover {
+@apply bg-green-400 shadow-lg shadow-cyber-green/50 -translate-y-0.5;
+}
+.cyber-button:disabled {
+@apply bg-green-900 text-gray-500 shadow-none translate-y-0 cursor-not-allowed;
+}
 
-  /* Blinking Cursor */
-  .typing-cursor {
-    @apply inline-block w-2.5 h-5 bg-cyber-green ml-1 align-middle;
-    animation: blink 0.7s steps(1) infinite;
-  }
+/* Blinking Cursor */
+.typing-cursor {
+@apply inline-block w-2.5 h-5 bg-cyber-green ml-1 align-middle;
+animation: blink 0.7s steps(1) infinite;
+}
 
-  /* Icon Colors */
-  .icon-cyan { @apply text-cyber-cyan shadow-lg shadow-cyber-cyan/50; }
-  .icon-green { @apply text-cyber-green shadow-lg shadow-cyber-green/50; }
-  .icon-red { @apply text-cyber-red shadow-lg shadow-cyber-red/50; }
+/* Icon Colors */
+.icon-cyan { @apply text-cyber-cyan shadow-lg shadow-cyber-cyan/50; }
+.icon-green { @apply text-cyber-green shadow-lg shadow-cyber-green/50; }
+.icon-red { @apply text-cyber-red shadow-lg shadow-cyber-red/50; }
 
-  /* Severity Badges */
-  .severity-badge {
-    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase border;
-    box-shadow: 0 0 5px;
-  }
-  .badge-critical { @apply bg-red-900/50 text-cyber-red border-cyber-red/70 shadow-cyber-red/50; }
-  .badge-high { @apply bg-orange-900/50 text-cyber-orange border-cyber-orange/70 shadow-cyber-orange/50; }
-  .badge-medium { @apply bg-yellow-900/50 text-cyber-yellow border-cyber-yellow/70 shadow-cyber-yellow/50; }
-  .badge-low { @apply bg-cyan-900/50 text-cyber-cyan border-cyber-cyan/70 shadow-cyber-cyan/50; }
-  .badge-unknown { @apply bg-gray-700/50 text-gray-400 border-gray-500/70; }
+/* Severity Badges */
+.severity-badge {
+@apply inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase border;
+box-shadow: 0 0 5px;
+}
+.badge-critical { @apply bg-red-900/50 text-cyber-red border-cyber-red/70 shadow-cyber-red/50; }
+.badge-high { @apply bg-orange-900/50 text-cyber-orange border-cyber-orange/70 shadow-cyber-orange/50; }
+.badge-medium { @apply bg-yellow-900/50 text-cyber-yellow border-cyber-yellow/70 shadow-cyber-yellow/50; }
+.badge-low { @apply bg-cyan-900/50 text-cyber-cyan border-cyber-cyan/70 shadow-cyber-cyan/50; }
+.badge-unknown { @apply bg-gray-700/50 text-gray-400 border-gray-500/70; }
 
-  /* [حذف شده] استایل‌های مربوط به Live Feed / Feed Item */
-  /* .feed-container { ... } */
-  /* .feed-item { ... } */
+/* [حذف شد] استایل‌های مربوط به Live Feed / Feed Item /
+/ .feed-container { ... } /
+/ .feed-item { ... } */
 }

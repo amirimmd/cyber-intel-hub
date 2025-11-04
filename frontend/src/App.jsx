@@ -1,40 +1,67 @@
 // frontend/src/App.jsx
-// [اصلاح جامع] همه کامپوننت‌ها در یک فایل ادغام شدند
-// [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
-// [اصلاح شد] منطق AIModelCard برای فعال‌سازی باکس‌ها و فراخوانی صحیح API عمومی اصلاح شد.
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-// [اصلاح شد] ایمپورت Supabase از ESM CDN
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-// [اصلاح شد] ایمپورت Lucide-React از ESM CDN
+import { createClient } from '@supabase/supabase-js';
 import { 
-  BrainCircuit, ShieldAlert, Swords, 
-  Loader2, Filter, DatabaseZap, Clipboard, 
-  Swords as SwordsIcon 
-} from 'https://esm.sh/lucide-react@0.395.0'; 
+  ShieldAlert, 
+  BrainCircuit, 
+  Swords, 
+  User,
+  Loader2, 
+  Filter, 
+  DatabaseZap, 
+  Clipboard 
+} from 'lucide-react';
 
-// --- Supabase Client (ادغام شده از supabaseClient.js) ---
-// [WORKAROUND] استفاده از مقادیر موقت برای متغیرهای محیطی چون import.meta.env در این محیط کار نمی‌کند
-// شما باید این متغیرها را در Vercel تنظیم کنید
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; // <-- URL موقت - این را در Vercel تنظیم کنید
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key"; // <-- Key موقت - این را در Vercel تنظیم کنید
+// --- [ادغام شد] Supabase Client (از supabaseClient.js) ---
+// این متغیرها باید در Vercel تنظیم شوند
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+let supabase;
+if (supabaseUrl && supabaseAnonKey) {
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  console.log("✅ Supabase client initialized.");
+} else {
   console.error(
     "FATAL: Supabase URL or Anon Key is missing. " +
-    "Using placeholders for preview. Ensure VITE_... variables are set in Vercel."
+    "Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel Environment Variables."
   );
+  // ایجاد یک کلاینت mock برای جلوگیری از کرش کامل برنامه در حالت پیش‌نمایش
+  supabase = {
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+        }),
+        eq: () => ({
+          order: () => ({
+           limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+          })
+        }),
+        neq: () => ({
+          order: () => ({
+           limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+          })
+        }),
+      }),
+      channel: () => ({
+        on: () => ({
+          subscribe: () => ({})
+        })
+      }),
+      removeChannel: () => {}
+    })
+  };
 }
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-
-// --- کامپوننت کمکی: CopyButton (مورد نیاز NVDTable و ExploitDBTable) ---
+// --- [ادغام شد] کامپوننت کمکی: CopyButton (مورد نیاز NVDTable و ExploitDBTable) ---
 const CopyButton = ({ textToCopy, isId = false }) => {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = (e) => {
         e.stopPropagation(); 
         try {
+            // ایجاد یک textarea موقت
             const textarea = document.createElement('textarea');
             textarea.value = textToCopy;
             textarea.style.position = 'fixed'; 
@@ -42,7 +69,10 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
+            
+            // استفاده از execCommand برای سازگاری (navigator.clipboard در iFrame ها کار نمی‌کند)
             document.execCommand('copy'); 
+            
             document.body.removeChild(textarea);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500); 
@@ -59,7 +89,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 
     const buttonClass = isId ? 
         'ml-1 px-1 py-0.5 text-xs rounded transition-all duration-150' : 
-        'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 flex-shrink-0'; // flex-shrink-0 اضافه شد
+        'ml-2 px-2 py-1 text-xs font-mono rounded-full transition-all duration-150 flex-shrink-0';
     
     const baseStyle = copied ? 
         'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50' : 
@@ -76,13 +106,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
     );
 };
 
-
-// --- کامپوننت NVDTable (ادغام شده از NVDTable.jsx) ---
-const DEFAULT_ROWS_TO_SHOW = 10;
-const INITIAL_DATE_FILTER = ''; 
-const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
-const DEFAULT_START_DATE_FILTER = '2024-01-01'; 
-
+// --- [ادغام شد] کامپوننت کمکی: SeverityBadge (مورد نیاز NVDTable) ---
 const SeverityBadge = ({ severity }) => {
   let badgeClass = 'badge-unknown';
   switch (String(severity).toUpperCase()) {
@@ -95,6 +119,57 @@ const SeverityBadge = ({ severity }) => {
   }
   return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
 };
+
+// --- [ادغام شد] هوک کمکی: useTypewriter (مورد نیاز AIModelCard) ---
+const useTypewriter = (text, speed = 50) => {
+    const [displayText, setDisplayText] = useState('');
+    const [internalText, setInternalText] = useState(text);
+    const [isTyping, setIsTyping] = useState(false);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const intervalRef = useRef(null);
+
+    const startTypingProcess = useCallback((newText) => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        setInternalText(newText || '');
+        setDisplayText('');
+        setCurrentIndex(0);
+        setIsTyping(!!newText);
+    }, []);
+
+    useEffect(() => {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+
+        if (isTyping && internalText && currentIndex < internalText.length) {
+            intervalRef.current = setInterval(() => {
+                 if (currentIndex < internalText.length) {
+                    const nextIndex = currentIndex + 1;
+                    setDisplayText(internalText.substring(0, nextIndex));
+                    setCurrentIndex(nextIndex);
+                 } else {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                    setIsTyping(false);
+                 }
+            }, speed);
+        } else if (currentIndex >= (internalText?.length || 0)) {
+            if(isTyping) setIsTyping(false);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+        }
+
+        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    }, [isTyping, speed, internalText, currentIndex]);
+
+    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+    return [displayText, startTypingProcess, isTyping];
+};
+
+
+// --- [ادغام شد] کامپوننت NVDTable (از NVDTable.jsx) ---
+const DEFAULT_ROWS_TO_SHOW = 10;
+const INITIAL_DATE_FILTER = ''; 
+const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
+const DEFAULT_START_DATE_FILTER = '2024-01-01'; 
 
 const extractYearFromCveId = (cveId) => {
     const match = cveId?.match(/CVE-(\d{4})-\d+/);
@@ -194,7 +269,9 @@ const NVDTable = () => {
   const truncateText = (text) => {
     if (!text) return { display: 'N/A', needsCopy: false };
     
-    const limit = (typeof window !== 'undefined' && window.innerWidth < 640) ? 40 : 150; 
+    // بررسی می‌کنیم که آیا در مرورگر هستیم یا خیر
+    const isBrowser = typeof window !== 'undefined';
+    const limit = (isBrowser && window.innerWidth < 640) ? 40 : 150; 
     const needsCopy = text.length > limit;
 
     if (needsCopy) {
@@ -306,7 +383,7 @@ const NVDTable = () => {
 
       {/* راهنمای اسکرول افقی در موبایل */}
       <p className="md:hidden text-xs text-center text-cyber-cyan/70 mb-2">
-        &lt;-- To see more columns, drag the table sideways --&gt;
+        &lt;-- برای دیدن ستون‌های بیشتر، جدول را بکشید --&gt;
       </p>
 
       {/* Results Table */}
@@ -386,7 +463,7 @@ const NVDTable = () => {
 };
 
 
-// --- [START] کامپوننت اصلاح شده AIModelCard ---
+// --- [ادغام شد] کامپوننت AIModelCard (از AIModelCard.jsx) ---
 // --- Configuration ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
@@ -405,7 +482,6 @@ if (!HF_API_TOKEN) {
   console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded (though likely not needed for public space).");
 }
 
-// --- Helper Functions ---
 const generateSessionHash = () => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
@@ -414,51 +490,6 @@ const generateSessionHash = () => {
   }
   return result;
 };
-
-// Typewriter Hook
-const useTypewriter = (text, speed = 50) => {
-    const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text);
-    const [isTyping, setIsTyping] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null);
-
-    const startTypingProcess = useCallback((newText) => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setInternalText(newText || '');
-        setDisplayText('');
-        setCurrentIndex(0);
-        setIsTyping(!!newText);
-    }, []);
-
-    useEffect(() => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-
-        if (isTyping && internalText && currentIndex < internalText.length) {
-            intervalRef.current = setInterval(() => {
-                 if (currentIndex < internalText.length) {
-                    const nextIndex = currentIndex + 1;
-                    setDisplayText(internalText.substring(0, nextIndex));
-                    setCurrentIndex(nextIndex);
-                 } else {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                    setIsTyping(false);
-                 }
-            }, speed);
-        } else if (currentIndex >= (internalText?.length || 0)) {
-            if(isTyping) setIsTyping(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isTyping, speed, internalText, currentIndex]);
-
-    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
-
-    return [displayText, startTypingProcess, isTyping];
-};
-
 
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
@@ -522,7 +553,6 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         // 2. ساخت هدرها (بدون نیاز به توکن Auth برای Space عمومی)
         const joinHeaders = {
             'Content-Type': 'application/json',
-            // 'Authorization': `Bearer ${HF_API_TOKEN}`, // حذف شد - Space پابلیک است
         };
         
         // 3. ساخت Payload دقیقاً مطابق اسکریپت پایتون
@@ -639,7 +669,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 
         eventSourceRef.current.onerror = (error) => {
             let errorMsg = "Error connecting to API stream.";
-             if (!navigator.onLine) {
+             if (typeof navigator !== 'undefined' && !navigator.onLine) {
                  errorMsg += " Check your network connection.";
              } else {
                  errorMsg += " Could not maintain connection. Check Space status/logs."; 
@@ -671,13 +701,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     // --- [END] پیاده‌سازی ---
   };
 
-  // --- Render logic (اصلاح شده) ---
+  // --- Render logic ---
   return (
     <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
       <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
-
-      {/* پیام هشدار توکن حذف شد چون دیگر نیازی به آن نیست */}
 
       <form onSubmit={handleModelQuery}>
         <textarea
@@ -686,13 +714,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
           rows="4"
           className="cyber-textarea w-full"
           placeholder={placeholder}
-          // [اصلاح شد] منطق غیرفعال سازی ساده شد
           disabled={loading} 
         />
         <button 
             type="submit" 
             className="cyber-button w-full mt-3 flex items-center justify-center" 
-            // [اصلاح شد] منطق غیرفعال سازی ساده شد
             disabled={loading || !input.trim()}
         >
           {loading ? (
@@ -722,14 +748,11 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     </div>
   );
 };
-// --- [END] کامپوننت اصلاح شده AIModelCard ---
 
-
-// --- کامپوننت ExploitDBTable (ادغام شده از ExploitDBTable.jsx) ---
+// --- [ادغام شد] کامپوننت ExploitDBTable (از ExploitDBTable.jsx) ---
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
 
-// تابع کمکی برای استخراج سال
 const extractYearFromId = (id) => {
     const match = id?.match(/(\d{4})/); 
     return match ? match[1] : 'N/A';
@@ -754,12 +777,6 @@ const ExploitDBTable = () => {
   };
 
   const fetchLatestExploits = useCallback(async () => {
-    if (!supabase) {
-      setError("Supabase client is not initialized.");
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
@@ -803,31 +820,29 @@ const ExploitDBTable = () => {
     } finally {
       setLoading(false);
     }
-  }, []); // supabase از وابستگی‌ها حذف شد
+  }, []);
 
   useEffect(() => {
     console.log('ExploitDBTable: Component mounted, starting initial fetch.');
     
-    if (supabase) {
-      fetchLatestExploits();
-      
-      const exploitSubscription = supabase
-          .channel('exploits_changes')
-          .on(
-              'postgres_changes', 
-              { event: '*', schema: 'public', table: 'exploits' }, 
-              (payload) => {
+    fetchLatestExploits();
+    
+    const exploitSubscription = supabase
+        .channel('exploits_changes')
+        .on(
+            'postgres_changes', 
+            { event: '*', schema: 'public', table: 'exploits' }, 
+            (payload) => {
                  console.log('ExploitDBTable: Realtime change detected, refetching...');
                  fetchLatestExploits(); 
-              }
-          )
-          .subscribe();
+            }
+        )
+        .subscribe();
 
-      return () => {
-          console.log('ExploitDBTable: Component unmounting, removing subscription.');
-          supabase.removeChannel(exploitSubscription);
-      };
-    }
+    return () => {
+        console.log('ExploitDBTable: Component unmounting, removing subscription.');
+        supabase.removeChannel(exploitSubscription);
+    };
   }, [fetchLatestExploits]); 
 
   return (
@@ -849,11 +864,10 @@ const ExploitDBTable = () => {
 
       {!loading && !error && latestExploits.length === 0 && (
         <div className="text-center py-10 text-gray-500">
-          <SwordsIcon className="w-10 h-10 mx-auto mb-2" />
+          <Swords className="w-10 h-10 mx-auto mb-2" />
           <span className="block mb-2 text-sm text-gray-400">NO LATEST EXPLOITS FOUND_ (TABLE EMPTY)</span>
           <p className="text-xs text-cyber-text/70 px-4">
-            If this message persists, please ensure your Exploit-DB synchronization script is running correctly 
-            and that Supabase RLS allows anonymous reads.
+            If this message persists, please ensure your Exploit-DB synchronization script is running correctly.
           </p>
         </div>
       )}
@@ -899,7 +913,7 @@ const ExploitDBTable = () => {
             disabled={loading}
             className="text-cyber-cyan hover:text-cyan-500 font-medium text-sm flex items-center justify-end w-full disabled:opacity-50"
           >
-             <SwordsIcon className="w-4 h-4 mr-2" />
+             <Swords className="w-4 h-4 mr-2" />
              {loading ? 'REFRESHING...' : 'REFRESH_FEED_'}
           </button>
        </div>
@@ -908,67 +922,151 @@ const ExploitDBTable = () => {
 };
 
 
-// --- کامپوننت اصلی App (بر اساس آخرین نسخه شما) ---
+// --- [جدید] کامپوننت‌های کمکی برای چیدمان تب ---
+
+// (Wrapper) کامپوننت برای مدل‌های هوش مصنوعی
+const AIModels = () => (
+  <section id="ai-models-section" className="cyber-card mb-12">
+    <div className="flex items-center mb-6">
+      <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
+      <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <AIModelCard 
+        title="MODEL::EXBERT_"
+        description="Base BERT model for security context evaluation."
+        placeholder="INITIATE_EXBERT_QUERY..."
+        modelId="exbert"
+      />
+      <AIModelCard 
+        title="MODEL::EXBERT.XAI_"
+        description="Explainable AI (XAI) for transparent threat assessment."
+        placeholder="INITIATE_XAI_QUERY..."
+        modelId="xai"
+      />
+      <AIModelCard 
+        title="MODEL::GENERAL.PURPOSE_"
+        description="Versatile language processing for auxiliary tasks."
+        placeholder="INITIATE_GENERAL_QUERY..."
+        modelId="other"
+      />
+    </div>
+  </section>
+);
+
+// (Placeholder) کامپوننت برای تب ورود کاربر
+const LoginTab = () => (
+  <div className="p-6 text-center cyber-card">
+    <User className="w-16 h-16 mx-auto text-cyber-cyan" />
+    <h2 className="text-2xl font-semibold text-cyan-300 mt-4">USER.LOGIN_</h2>
+    <p className="text-gray-400 mt-2">Authentication module standby.</p>
+    <div className="mt-6 space-y-4">
+      <input type="text" placeholder="USERNAME_" className="cyber-input" />
+      <input type="password" placeholder="PASSWORD_" className="cyber-input" />
+      <button className="cyber-button w-full">AUTHENTICATE_</button>
+    </div>
+  </div>
+);
+
+// (Reusable) کامپوننت برای دکمه‌های نوار تب
+const TabButton = ({ icon: Icon, label, tabName, activeTab, setActiveTab }) => (
+  <button
+    onClick={() => setActiveTab(tabName)}
+    className={`flex flex-col items-center justify-center p-3 w-full transition-all duration-200 ${
+      activeTab === tabName 
+      ? 'text-cyber-cyan' 
+      : 'text-gray-500 hover:text-gray-300'
+    }`}
+  >
+    <Icon className={`w-6 h-6 ${activeTab === tabName ? 'animate-flicker' : ''}`} />
+    <span className="text-xs mt-1">{label}</span>
+  </button>
+);
+
+// --- [بازنویسی شده] کامپوننت اصلی App ---
 function App() {
+  // state برای مدیریت تب فعال در موبایل
+  const [activeTab, setActiveTab] = useState('nvd');
+
   return (
     <>
       {/* Background Grid Effect */}
       <div className="background-grid"></div>
 
-      {/* کانتینر اصلی برای واکنش‌گرایی */}
+      {/* کانتینر اصلی */}
       <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8 relative z-10">
 
-        {/* Main Header */}
+        {/* هدر اصلی */}
         <h1 className="text-3xl md:text-5xl font-bold text-center mb-10 bg-clip-text text-transparent bg-gradient-to-r from-cyber-green to-cyber-cyan section-header break-words">
           ::CYBERNETIC.INTELLIGENCE.HUB::
         </h1>
 
-        {/* Section 1: NVD Table (Existing) */}
-        <section id="nvd-section" className="cyber-card mb-12">
-          <div className="flex items-center mb-6">
-            <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
-            <h2 className="text-2xl font-semibold text-cyan-300 break-words min-w-0">NVD Vulnerability Feed_</h2>
-          </div>
+        {/* --- 1. نمایش دسکتاپ (مخفی در موبایل) --- */}
+        <div className="hidden md:block space-y-12">
+          {/* NVD Section (Desktop) */}
+          <section id="nvd-section" className="cyber-card">
+            <div className="flex items-center mb-6">
+              <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
+              <h2 className="text-2xl font-semibold text-cyan-300">NVD Vulnerability Feed_</h2>
+            </div>
+            <NVDTable />
+          </section>
+
+          {/* AI Models Section (Desktop) */}
+          <AIModels />
+
+          {/* Exploit DB Section (Desktop) */}
+          <section id="exploit-db-section" className="cyber-card">
+             <div className="flex items-center mb-6">
+              <Swords className="icon-red w-8 h-8 mr-3 flex-shrink-0" />
+              <h2 className="text-2xl font-semibold text-red-300">EXPLOIT.DB.LATEST_</h2>
+            </div>
+            <ExploitDBTable />
+          </section>
+        </div>
+
+        {/* --- 2. نمایش موبایل (مخفی در دسکتاپ) --- */}
+        <div className="md:hidden pb-24"> {/* pb-24 برای ایجاد فضا برای نوار تب پایین */}
           
-          <NVDTable />
-        </section>
+          {/* محتوای تب بر اساس state */}
+          <div className="mobile-content-area">
+            {activeTab === 'nvd' && (
+              <section id="nvd-section-mobile" className="cyber-card">
+                <div className="flex items-center mb-6">
+                  <ShieldAlert className="icon-cyan w-8 h-8 mr-3" />
+                  <h2 className="text-2xl font-semibold text-cyan-300">NVD Feed_</h2>
+                </div>
+                <NVDTable />
+              </section>
+            )}
+            
+            {activeTab === 'ai' && (
+               <AIModels /> // استفاده مجدد از کامپوننت Wrapper
+            )}
 
-        {/* Section 2: AI Models */}
-        <section id="ai-models-section" className="cyber-card mb-12">
-          <div className="flex items-center mb-6">
-            <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
-            <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <AIModelCard 
-              title="MODEL::EXBERT_"
-              description="Base BERT model for security context evaluation."
-              placeholder="INITIATE_EXBERT_QUERY..."
-              modelId="exbert"
-            />
-            <AIModelCard 
-              title="MODEL::EXBERT.XAI_"
-              description="Explainable AI (XAI) for transparent threat assessment."
-              placeholder="INITIATE_XAI_QUERY..."
-              modelId="xai"
-            />
-            <AIModelCard 
-              title="MODEL::GENERAL.PURPOSE_"
-              description="Versatile language processing for auxiliary tasks."
-              placeholder="INITIATE_GENERAL_QUERY..."
-              modelId="other"
-            />
-          </div>
-        </section>
+            {activeTab === 'exploits' && (
+              <section id="exploit-db-section-mobile" className="cyber-card">
+                <div className="flex items-center mb-6">
+                  <Swords className="icon-red w-8 h-8 mr-3" />
+                  <h2 className="text-2xl font-semibold text-red-300">Exploit DB_</h2>
+                </div>
+                <ExploitDBTable />
+              </section>
+            )}
 
-        {/* Section 3: Exploit DB */}
-        <section id="exploit-db-section" className="cyber-card">
-          <div className="flex items-center mb-6">
-            <Swords className="icon-red w-8 h-8 mr-3 flex-shrink-0" />
-            <h2 className="text-2xl font-semibold text-red-300 break-words min-w-0">EXPLOIT.DB.LATEST_</h2>
+            {activeTab === 'user' && (
+              <LoginTab />
+            )}
           </div>
-          <ExploitDBTable />
-       </section>
+
+          {/* نوار تب ثابت در پایین صفحه */}
+          <nav className="fixed bottom-0 left-0 right-0 bg-cyber-card border-t border-cyber-cyan/30 flex justify-around items-center z-50 shadow-lg shadow-cyber-cyan/10">
+            <TabButton icon={ShieldAlert} label="NVD" tabName="nvd" activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton icon={BrainCircuit} label="AI Models" tabName="ai" activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton icon={Swords} label="Exploits" tabName="exploits" activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton icon={User} label="User" tabName="user" activeTab={activeTabb} setActiveTab={setActiveTab} />
+          </nav>
+        </div>
 
       </div>
     </>
@@ -976,4 +1074,3 @@ function App() {
 }
 
 export default App;
-
