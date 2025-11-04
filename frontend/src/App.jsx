@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
 // [فایل کامل] ادغام همه کامپوننت‌ها و رفع خطای قبلی
 // [اصلاح شد] منطق ExploitDB برای استفاده از ID برای فیلتر تاریخ (2023+) در سمت کلاینت
-// [اصلاح شد] هدرهای Cache-Control به AIModelCard اضافه شد تا از خطاهای کش در موبایل جلوگیری شود
+// [اصلاح شد] بازگشت کامل AIModelCard به منطق /queue/join برای حل خطای 404
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
@@ -10,12 +10,10 @@ import {
   BrainCircuit, ShieldAlert, Swords, 
   Loader2, Filter, DatabaseZap, Clipboard, 
   User, Database, BarChart2,
-  Swords as SwordsIcon // آیکون اضافی برای ExploitDB
+  Swords as SwordsIcon 
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- Supabase Client (ادغام شده) ---
-// [رفع هشدار] استفاده از مقادیر Placeholder برای جلوگیری از خطای import.meta در پیش‌نمایش
-// مطمئن شوید که فایل vite.config.js شما دارای target: 'es2020' است.
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
 
@@ -71,14 +69,12 @@ const CopyButton = ({ textToCopy, isId = false }) => {
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
-            // استفاده از execCommand برای سازگاری بهتر در iFrame
             document.execCommand('copy'); 
             document.body.removeChild(textarea);
             setCopied(true);
             setTimeout(() => setCopied(false), 1500); 
         } catch (err) {
             console.error('Failed to copy text:', err);
-            // نمایش پیام خطا به جای alert
             const messageBox = document.createElement('div');
             messageBox.textContent = 'Could not copy text. Please try manually.';
             messageBox.className = 'fixed bottom-4 right-4 bg-cyber-red text-dark-bg p-3 rounded-lg shadow-lg z-50';
@@ -126,7 +122,6 @@ const SeverityBadge = ({ severity }) => {
   return <span className={`severity-badge ${badgeClass}`}>{severity || 'N/A'}</span>;
 };
 
-// [اصلاح شد] تابع استخراج سال از CVE ID (برای NVD)
 const extractYearFromCveId = (cveId) => {
     const match = cveId?.match(/CVE-(\d{4})-\d+/);
     return match ? parseInt(match[1], 10) : null;
@@ -153,7 +148,6 @@ const NVDTable = () => {
     setError(null);
     
     try {
-        // [اصلاح شد] ستون vectorString اضافه شد
         const { data, error: fetchError } = await supabase
         .from('vulnerabilities') 
         .select('ID, text, baseSeverity, score, published_date, vectorString') 
@@ -401,8 +395,7 @@ const NVDTable = () => {
                   </td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
-                  {/* [اصلاح شد] نمایش vectorString */}
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowR}}ap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + (cve.vectorString.length > 30 ? '...' : '') : 'N/A'}</td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + (cve.vectorString.length > 30 ? '...' : '') : 'N/A'}</td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {cve.published_date ? new Date(cve.published_date).toLocaleDateString('fa-IR') : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
                   </td>
@@ -417,18 +410,28 @@ const NVDTable = () => {
 };
 
 
-// --- کامپوننت AIModelCard (با API پایدار) ---
+// --- کامپوننت AIModelCard (بازگشت به API قدیمی /queue/join) ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
-// [اصلاح شد] استفاده از اندپوینت /run/predict به جای /queue/join
-const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`; 
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; // Placeholder
+const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
-if (!HF_API_TOKEN && !API_URL.includes("your-project-url")) {
-  console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! Using public mode for public Space.");
-}
+// [بازگشت به API قدیمی] استفاده از /queue/join
+const API_PREFIX = "/gradio_api";
+const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
+const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-// Typewriter Hook
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
+
+const generateSessionHash = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 11; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
+
+// Typewriter Hook 
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
     const [internalText, setInternalText] = useState(text);
@@ -472,14 +475,15 @@ const useTypewriter = (text, speed = 50) => {
     return [displayText, startTypingProcess, isTyping];
 };
 
+
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
+  const eventSourceRef = useRef(null); 
 
-  // شبیه‌سازی برای مدل‌های غیر از ExBERT
   const simulateAnalysis = (query, modelId) => {
       let simulatedResponse = '';
       switch (modelId) {
@@ -490,6 +494,15 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return simulatedResponse;
   };
 
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        console.log("Closing existing EventSource connection.");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
 
   const handleModelQuery = async (e) => {
     e.preventDefault();
@@ -499,8 +512,13 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     setLoading(true);
     setError(null);
     startTypingProcess('');
+    
+    if (eventSourceRef.current) {
+        console.log("Closing previous EventSource before new request.");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+    }
 
-    // شبیه‌سازی برای مدل‌های دیگر
     if (modelId !== 'exbert') {
       const response = simulateAnalysis(query, modelId);
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -510,80 +528,149 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
     
-    // --- [START] پیاده‌سازی API پایدار (Named Endpoint) ---
+    // --- [START] منطق /queue/join (مطابق اسکریپت پایتون شما) ---
+    const sessionHash = generateSessionHash(); 
+    
     try {
-        console.log(`Step 1: Calling Gradio API at ${API_URL}...`);
+        console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         
-        // [اصلاح شد] افزودن هدرهای Cache-Busting برای رفع مشکل کش در موبایل
-        const headers = {
+        const joinHeaders = {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0',
         };
         
-        // اگر توکن HF دارید، آن را اضافه کنید (برای Spaces خصوصی)
-        // if (HF_API_TOKEN) {
-        //     headers['Authorization'] = `Bearer ${HF_API_TOKEN}`;
-        // }
-        
+        // [مهم] این مقادیر مطابق اسکریپت پایتون شما تنظیم شده‌اند
         const payload = {
-            "data": [query] // ورودی مدل شما فقط یک رشته است
+            "data": [query],
+            "event_data": null,
+            "fn_index": 2,       
+            "trigger_id": 12,    
+            "session_hash": sessionHash
         };
 
-        const response = await fetch(API_URL, {
+        const joinResponse = await fetch(QUEUE_JOIN_URL, {
             method: 'POST',
-            headers: headers, 
-            body: JSON.stringify(payload)
+            headers: joinHeaders, 
+            body: JSON.stringify(payload) 
         });
 
-        if (!response.ok) {
-             const errorText = await response.text();
-             console.error("API Call Error:", response.status, errorText);
-             let detailedError = `Failed to call API: ${response.status}.`;
-             if (response.status === 401) {
-                 detailedError = "API ERROR: 401 Unauthorized. Check Space permissions/token.";
-             } else if (response.status === 503) {
-                 detailedError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/loading. Wait 30s and retry.";
-             } else if (response.status === 404) {
-                 detailedError = "API ERROR: 404 Not Found. Check if api_name='predict' is set in app.py.";
-             } else {
-                 detailedError += ` ${errorText.substring(0, 150)}`;
+        if (!joinResponse.ok) {
+             const errorText = await joinResponse.text();
+             console.error("Queue Join Error:", joinResponse.status, errorText);
+             let detailedError = `Failed to join queue: ${joinResponse.status}.`;
+             if (joinResponse.status === 404) { // اگر Gradio /queue/join را نشناسد
+                 detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
              }
              throw new Error(detailedError);
         }
 
-        const result = await response.json();
-        console.log("API Result:", result);
-
-        // 9. استخراج خروجی
-        if (result.data && result.data.length > 0) {
-            const rawPrediction = result.data[0];
-            // خروجی app.py شما اکنون دارای \n است، آن را حفظ می‌کنیم
-            const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
-            setOutput(formattedOutput);
-            startTypingProcess(formattedOutput);
-        } else if (result.error) {
-            throw new Error(`API returned an error: ${result.error}`);
-        } else {
-            throw new Error("Invalid response structure from API.");
+        const joinResult = await joinResponse.json();
+        
+        if (!joinResult.event_id) {
+             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
+             throw new Error("Failed to get event_id from queue join.");
         }
+        console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
+
+        // --- Listening for data (EventSource) ---
+        const dataUrl = QUEUE_DATA_URL(sessionHash);
+        eventSourceRef.current = new EventSource(dataUrl); 
+
+        eventSourceRef.current.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+
+                switch (message.msg) {
+                    case "process_starts":
+                        setOutput("Processing started...");
+                        startTypingProcess("Processing started...");
+                        break;
+                    case "process_completed":
+                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                            const rawPrediction = message.output.data[0];
+                            const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
+
+                            setOutput(formattedOutput);
+                            startTypingProcess(formattedOutput);
+                        } else {
+                             const errorMsg = message.output?.error || "Unknown server processing error.";
+                             setError(`Processing failed: ${errorMsg}`);
+                             setOutput(''); startTypingProcess('');
+                        }
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        setLoading(false);
+                        break;
+                     case "queue_full":
+                         setError("API Error: The queue is full, please try again later.");
+                         if(eventSourceRef.current) eventSourceRef.current.close();
+                         eventSourceRef.current = null;
+                         setLoading(false);
+                         break;
+                     case "estimation":
+                         const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
+                         const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
+                         const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
+                         const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
+                         if (loading) {
+                             setOutput(waitMsg);
+                             startTypingProcess(waitMsg);
+                         }
+                         break;
+                    case "close_stream":
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        if (loading) { 
+                            setLoading(false);
+                            if (!output && !error) {
+                                setError("Stream closed unexpectedly before result.");
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } catch (parseError) {
+                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
+            }
+        };
+
+        eventSourceRef.current.onerror = (error) => {
+            let errorMsg = "Error connecting to API stream.";
+             if (!navigator.onLine) {
+                 errorMsg += " Check your network connection.";
+             } else {
+                 errorMsg += " Could not maintain connection. Check Space status/logs."; 
+             }
+            setError(errorMsg);
+             if(eventSourceRef.current) eventSourceRef.current.close();
+            eventSourceRef.current = null;
+            setLoading(false);
+            setOutput('');
+            startTypingProcess('');
+        };
 
     } catch (err) {
         let displayError = err.message || "An unknown error occurred.";
         if (err.message.includes("Failed to fetch")) {
             displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
+        } else if (err.message.includes("503")) {
+             displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
         }
        setError(displayError);
+       setLoading(false);
        setOutput('');
        startTypingProcess('');
-    } finally {
-        setLoading(false);
+        if (eventSourceRef.current) {
+           eventSourceRef.current.close();
+           eventSourceRef.current = null;
+        }
     }
     // --- [END] پیاده‌سازی ---
   };
 
-  // --- Render logic (اصلاح شده) ---
   return (
     <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
       <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
@@ -630,43 +717,28 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     </div>
   );
 };
-// --- [END] کامپوننت AIModelCard ---
 
 
 // --- [START] کامپوننت ExploitDBTable (اصلاح شده) ---
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
-const REFRESH_INTERVAL = 3 * 60 * 1000; // 3 دقیقه
+const REFRESH_INTERVAL = 3 * 60 * 1000; 
 const MIN_EXPLOIT_YEAR = 2023;
-const EXPLOIT_POOL_SIZE = 200; // واکشی 200 مورد برای استخر رندوم
+const EXPLOIT_POOL_SIZE = 200; 
 
-// [اصلاح شد] تابع استخراج سال از ID (بر اساس درخواست کاربر)
 const extractYearFromId = (id) => {
-    // به دنبال الگوهایی شبیه EDB-ID یا CVE-YYYY می‌گردد
-    // اگر هیچکدام نبود، به دنبال اولین عدد ۴ رقمی می‌گردد
     const cveMatch = id?.match(/CVE-(\d{4})/);
     if (cveMatch) return parseInt(cveMatch[1], 10);
-    
-    const edbMatch = id?.match(/EDB-ID: (\d+)/); // (فرض بر اینکه ID در توضیحات است)
-    // این الگو دیگر مفید نیست چون فقط ID عددی را داریم
-    
-    // اگر فقط ID عددی (مثلاً 49517) داریم، استخراج سال از آن غیرممکن است
-    // اما در دیتابیس شما، IDها شبیه 2023-12345 هستند
     const generalMatch = id?.match(/(\d{4})/); 
     if(generalMatch) return parseInt(generalMatch[1], 10);
-
     return null;
 };
 
-// [جدید] تابع کمکی برای مخلوط کردن آرایه
 const shuffleArray = (array) => {
     let currentIndex = array.length, randomIndex;
-    // تا زمانی که عنصری برای مخلوط کردن باقی مانده است
     while (currentIndex !== 0) {
-        // یک عنصر باقی‌مانده را انتخاب کن
         randomIndex = Math.floor(Math.random() * currentIndex);
         currentIndex--;
-        // و آن را با عنصر فعلی جابجا کن
         [array[currentIndex], array[randomIndex]] = [
             array[randomIndex], array[currentIndex]];
     }
@@ -690,20 +762,17 @@ const ExploitDBTable = () => {
       }
   };
 
-  // [اصلاح شد] منطق واکشی برای رندوم‌سازی و فیلتر تاریخ بر اساس ID
   const fetchLatestExploits = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // [اصلاح شد] کوئری‌ها ستون 'date' را واکشی نمی‌کنند و از gte استفاده نمی‌کنند
-      // ما pool بزرگتری واکشی می‌کنیم و در کلاینت فیلتر می‌کنیم
       const query1 = supabase
         .from('exploits') 
-        .select('ID, Description, Exploitability') // فقط ستون‌های مورد نیاز
+        .select('ID, Description, Exploitability') 
         .eq('Exploitability', 1) 
-        .order('ID', { ascending: false }) // مرتب‌سازی بر اساس ID (که تاریخ در آن است)
-        .limit(EXPLOIT_POOL_SIZE); // واکشی استخر بزرگ
+        .order('ID', { ascending: false }) 
+        .limit(EXPLOIT_POOL_SIZE); 
 
       const query0 = supabase
         .from('exploits')
@@ -717,7 +786,6 @@ const ExploitDBTable = () => {
       if (response1.error) throw response1.error;
       if (response0.error) throw response0.error;
 
-      // [اصلاح شد] فیلتر تاریخ (2023+) در سمت کلاینت بر اساس ID
       const filterByYear = (item) => {
           const year = extractYearFromId(item.ID);
           return year && year >= MIN_EXPLOIT_YEAR;
@@ -728,17 +796,11 @@ const ExploitDBTable = () => {
 
       console.log(`ExploitDBTable: Fetched ${pool1.length} (Label 1) and ${pool0.length} (Label 0) exploits from 2023+.`);
 
-      // [اصلاح شد] 5 آیتم رندوم از هر استخر انتخاب کن
       const randomPool1 = shuffleArray([...pool1]).slice(0, HALF_EXPLOITS);
       const randomPool0 = shuffleArray([...pool0]).slice(0, HALF_EXPLOITS);
 
-      // [اصلاح شد] 10 آیتم نهایی را دوباره مخلوط کن تا ترتیب کاملاً رندوم باشد
       let combinedData = [...randomPool1, ...randomPool0];
       const finalSet = shuffleArray(combinedData);
-      
-      if (finalSet.length === 0 && (pool1.length > 0 || pool0.length > 0)) {
-          console.warn("ExploitDBTable: Random selection resulted in 0 items, but pools were not empty.");
-      }
       
       if (finalSet.length < EXPLOITS_TO_SHOW && finalSet.length > 0) {
            console.warn(`ExploitDBTable: Not enough data for 2023+ to fill 10 slots. Displaying ${finalSet.length}.`);
@@ -758,11 +820,10 @@ const ExploitDBTable = () => {
     console.log('ExploitDBTable: Component mounted, starting initial fetch.');
     fetchLatestExploits();
     
-    // [اصلاح شد] رفرش خودکار هر 3 دقیقه به جای Realtime
     const refreshInterval = setInterval(() => {
         console.log('ExploitDBTable: Auto-refreshing random exploits...');
         fetchLatestExploits();
-    }, REFRESH_INTERVAL); // 3 minutes
+    }, REFRESH_INTERVAL); 
 
     return () => {
         console.log('ExploitDBTable: Component unmounting, clearing interval.');
@@ -812,7 +873,6 @@ const ExploitDBTable = () => {
                     >
                       {exploit.ID}
                     </span>
-                    {/* [اصلاح شد] استفاده از ID برای تاریخ */}
                     <span className="text-xs text-gray-500 bg-gray-900/50 px-2 py-0.5 rounded-full">
                        YEAR: {extractYearFromId(exploit.ID) || 'N/A'}
                     </span>
@@ -851,7 +911,6 @@ const ExploitDBTable = () => {
 
 // --- کامپوننت‌های Wrapper برای تب‌ها ---
 
-// Wrapper برای مدل‌های AI
 const AIModels = () => (
     <section id="ai-models-section" className="cyber-card mb-12">
       <div className="flex items-center mb-6">
@@ -881,7 +940,6 @@ const AIModels = () => (
     </section>
 );
 
-// Wrapper برای NVD
 const NVDTab = () => (
     <section id="nvd-section" className="cyber-card mb-12">
       <div className="flex items-center mb-6">
@@ -892,7 +950,6 @@ const NVDTab = () => (
     </section>
 );
 
-// Wrapper برای ExploitDB
 const ExploitDBTab = () => (
     <section id="exploit-db-section" className="cyber-card mb-12">
       <div className="flex items-center mb-6">
@@ -903,7 +960,6 @@ const ExploitDBTab = () => (
    </section>
 );
 
-// [جدید] کامپوننت Placeholder برای تب User
 const LoginTab = () => (
     <section id="user-section" className="cyber-card mb-12">
         <div className="flex items-center mb-6">
@@ -920,7 +976,6 @@ const LoginTab = () => (
     </section>
 );
 
-// [جدید] کامپوننت دکمه تب
 const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
     <button
         onClick={onClick}
@@ -936,7 +991,6 @@ const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
 
 // --- کامپوننت اصلی App (با چیدمان واکنش‌گرا) ---
 function App() {
-  // [اصلاح شد] تب پیش‌فرض AI و ترتیب دکمه‌ها در موبایل تغییر کرد
   const [activeTab, setActiveTab] = useState('ai'); 
 
   return (
@@ -954,19 +1008,16 @@ function App() {
 
         {/* --- [START] چیدمان دسکتاپ (md به بالا) --- */}
         <div className="hidden md:block">
-          {/* چیدمان قبلی شما برای دسکتاپ حفظ شده است */}
           <AIModels />
           <NVDTab />
           <ExploitDBTab />
-          {/* <LoginTab /> */} {/* می‌توانید تب User را در دسکتاپ نیز فعال کنید */}
         </div>
         {/* --- [END] چیدمان دسکتاپ --- */}
 
 
         {/* --- [START] چیدمان اپلیکیشن موبایل (زیر md) --- */}
-        <div className="md:hidden pb-20"> {/* pb-20 برای ایجاد فضا برای نوار تب پایین */}
+        <div className="md:hidden pb-20"> 
           
-          {/* محتوای تب‌ها بر اساس activeTab رندر می‌شود */}
           <div id="mobile-tab-content">
             {activeTab === 'ai' && <AIModels />}
             {activeTab === 'nvd' && <NVDTab />}
@@ -974,9 +1025,7 @@ function App() {
             {activeTab === 'user' && <LoginTab />}
           </div>
 
-          {/* نوار تب ثابت در پایین */}
           <nav className="fixed bottom-0 left-0 right-0 h-16 bg-cyber-card border-t border-solid border-cyber-cyan/30 z-50 flex justify-around items-center shadow-lg backdrop-blur-sm bg-opacity-90">
-            {/* [اصلاح شد] ترتیب دکمه‌ها تغییر کرد */}
             <TabButton 
               icon={BrainCircuit} 
               label="AI Models" 
@@ -1011,4 +1060,3 @@ function App() {
 }
 
 export default App;
-
