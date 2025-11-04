@@ -1,30 +1,41 @@
 // frontend/src/components/AIModelCard.jsx
-// [اصلاح شد] این فایل برای استفاده از اندپوینت پایدار /run/predict به‌روزرسانی شد.
+// [اصلاح شد] بازگشت به منطق API قدیمی (/queue/join) برای مطابقت با اسکریپت پایتون کاربر
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
-// این کامپوننت دیگر نیازی به supabaseClient.js ندارد
+// [اصلاح شد] ایمپورت supabaseClient (با فرض اینکه App.jsx آن را import می‌کند)
+// اگر این فایل به صورت جداگانه استفاده می‌شود، باید مسیردهی صحیح باشد
+import { supabase } from '../supabaseClient.js'; 
 
 // --- Configuration ---
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
-// [اصلاح شد] آدرس API مستقیم به اندپوینت نام‌گذاری شده
-const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`;
+const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
-// [NOTE] این توکن باید در متغیرهای محیطی Vercel تنظیم شود (VITE_HF_API_TOKEN)
-// [اصلاح شد] افزودن یک مقدار پیش‌فرض خالی برای جلوگیری از خطای import.meta در محیط‌های خاص
-const HF_API_TOKEN = (import.meta.env && import.meta.env.VITE_HF_API_TOKEN) || "";
+// [بازگشت به API قدیمی] استفاده از /queue/join
+const API_PREFIX = "/gradio_api";
+const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
+const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
+
+const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
 
 if (!HF_API_TOKEN) {
   console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! (Using public mode)");
 } else {
-  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded.");
+  console.log("✅ [AIModelCard] VITE_HF_API_TOKEN loaded (though likely not needed for public space).");
 }
 
-// --- [حذف شد] منطق قدیمی /queue/join ---
-// generateSessionHash() حذف شد.
+// [بازگشت به API قدیمی] تابع تولید هش
+const generateSessionHash = () => {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 11; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+};
 
-// --- Typewriter Hook (بدون تغییر) ---
+// Typewriter Hook (بدون تغییر)
 const useTypewriter = (text, speed = 50) => {
     const [displayText, setDisplayText] = useState('');
     const [internalText, setInternalText] = useState(text);
@@ -67,7 +78,6 @@ const useTypewriter = (text, speed = 50) => {
 
     return [displayText, startTypingProcess, isTyping];
 };
-// --- [END] Typewriter Hook ---
 
 
 const AIModelCard = ({ title, description, placeholder, modelId }) => {
@@ -76,8 +86,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
-  
-  // [حذف شد] eventSourceRef.current حذف شد چون دیگر از EventSource استفاده نمی‌کنیم
+  const eventSourceRef = useRef(null); // [بازگشت به API قدیمی]
 
   // منطق شبیه‌سازی برای مدل‌های غیر از ExBERT (بدون تغییر)
   const simulateAnalysis = (query, modelId) => {
@@ -90,9 +99,17 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return simulatedResponse;
   };
 
-  // [حذف شد] useEffect مربوط به eventSourceRef.current.close() حذف شد.
+  useEffect(() => {
+    // [بازگشت به API قدیمی]
+    return () => {
+      if (eventSourceRef.current) {
+        console.log("Closing existing EventSource connection.");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
+  }, []);
 
-  // [اصلاح شد] تابع handleModelQuery برای استفاده از /run/predict
   const handleModelQuery = async (e) => {
     e.preventDefault();
     const query = input.trim();
@@ -101,8 +118,15 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     setLoading(true);
     setError(null);
     startTypingProcess('');
+    
+    // [بازگشت به API قدیمی]
+    if (eventSourceRef.current) {
+        console.log("Closing previous EventSource before new request.");
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+    }
 
-    // شبیه‌سازی برای مدل‌های دیگر (بدون تغییر)
+    // شبیه‌سازی (بدون تغییر)
     if (modelId !== 'exbert') {
       const response = simulateAnalysis(query, modelId);
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -112,72 +136,158 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
       return;
     }
     
-    // --- [START] پیاده‌سازی API پایدار (Named Endpoint) ---
+    // --- [START] پیاده‌سازی منطق /queue/join (مطابق اسکریپت پایتون شما) ---
+    const sessionHash = generateSessionHash(); // 1. تولید هش
+    
     try {
-        console.log(`Step 1: Calling Gradio API at ${API_URL}...`);
+        console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
         
-        const headers = {
+        // 2. ساخت هدرها (بدون نیاز به توکن Auth برای Space عمومی)
+        const joinHeaders = {
             'Content-Type': 'application/json',
+            // [اصلاح شد] اضافه کردن هدرهای Cache-busting برای موبایل
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
         };
         
-        // اگر توکن HF دارید، آن را اضافه کنید (برای Spaces خصوصی)
-        if (HF_API_TOKEN) {
-            headers['Authorization'] = `Bearer ${HF_API_TOKEN}`;
-        }
-        
-        // Payload بسیار ساده‌تر شده است
+        // 3. ساخت Payload (دقیقاً مطابق اسکریپت پایتون شما)
         const payload = {
-            "data": [query] // ورودی مدل شما فقط یک رشته است
+            "data": [query],
+            "event_data": null,
+            "fn_index": 2,       // <-- مطابق اسکریپت پایتون شما
+            "trigger_id": 12,    // <-- مطابق اسکریپت پایتون شما
+            "session_hash": sessionHash
         };
 
-        const response = await fetch(API_URL, {
+        const joinResponse = await fetch(QUEUE_JOIN_URL, {
             method: 'POST',
-            headers: headers, 
-            body: JSON.stringify(payload)
+            headers: joinHeaders, 
+            body: JSON.stringify(payload) // 4. ارسال Payload
         });
 
-        if (!response.ok) {
-             const errorText = await response.text();
-             console.error("API Call Error:", response.status, errorText);
-             let detailedError = `Failed to call API: ${response.status}.`;
-             if (response.status === 401) {
-                 detailedError = "API ERROR: 401 Unauthorized. Check Space permissions/token.";
-             } else if (response.status === 503) {
-                 detailedError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/loading. Wait 30s and retry.";
-             } else if (response.status === 404) {
-                 detailedError = "API ERROR: 404 Not Found. Check if api_name='predict' is set in app.py.";
-             } else {
-                 detailedError += ` ${errorText.substring(0, 150)}`;
+        if (!joinResponse.ok) {
+             const errorText = await joinResponse.text();
+             console.error("Queue Join Error:", joinResponse.status, errorText);
+             let detailedError = `Failed to join queue: ${joinResponse.status}.`;
+             if (response.status === 404) {
+                 detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
              }
+             // ... (سایر کدهای مدیریت خطا)
              throw new Error(detailedError);
         }
 
-        const result = await response.json();
-        console.log("API Result:", result);
-
-        // استخراج خروجی
-        if (result.data && result.data.length > 0) {
-            const rawPrediction = result.data[0];
-            // فرمت‌بندی خروجی بر اساس app.py
-            const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
-            setOutput(formattedOutput);
-            startTypingProcess(formattedOutput);
-        } else if (result.error) {
-            throw new Error(`API returned an error: ${result.error}`);
-        } else {
-            throw new Error("Invalid response structure from API.");
+        const joinResult = await joinResponse.json();
+        
+        // 5. بررسی event_id
+        if (!joinResult.event_id) {
+             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
+             throw new Error("Failed to get event_id from queue join.");
         }
+        console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
+
+        // --- Listening for data (EventSource) ---
+        // 6. گوش دادن به /queue/data
+        const dataUrl = QUEUE_DATA_URL(sessionHash);
+        eventSourceRef.current = new EventSource(dataUrl); 
+
+        eventSourceRef.current.onmessage = (event) => {
+            try {
+                // 7. دریافت جریان داده‌ها
+                const message = JSON.parse(event.data);
+                console.log("Parsed SSE message:", message);
+
+                switch (message.msg) {
+                    case "process_starts":
+                        setOutput("Processing started...");
+                        startTypingProcess("Processing started...");
+                        break;
+                    case "process_generating": break;
+                    case "process_completed":
+                        // 8. دریافت نتیجه نهایی
+                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
+                            
+                            // 9. استخراج خروجی
+                            const rawPrediction = message.output.data[0];
+                            // (فرمت خروجی app.py شما: "Predicted Label: X\nProbability: Y")
+                            const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
+
+                            setOutput(formattedOutput);
+                            startTypingProcess(formattedOutput);
+                        } else {
+                             const errorMsg = message.output?.error || "Unknown server processing error.";
+                             setError(`Processing failed: ${errorMsg}`);
+                             setOutput(''); startTypingProcess('');
+                        }
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        setLoading(false);
+                        break;
+                     case "queue_full":
+                         setError("API Error: The queue is full, please try again later.");
+                         if(eventSourceRef.current) eventSourceRef.current.close();
+                         eventSourceRef.current = null;
+                         setLoading(false);
+                         break;
+                     case "estimation":
+                         const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
+                         const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
+                         const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
+                         const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
+                         if (loading) {
+                             setOutput(waitMsg);
+                             startTypingProcess(waitMsg);
+                         }
+                         break;
+                    case "close_stream":
+                        console.log("Stream closed by server.");
+                        if(eventSourceRef.current) eventSourceRef.current.close();
+                        eventSourceRef.current = null;
+                        if (loading) { 
+                            setLoading(false);
+                            if (!output && !error) {
+                                setError("Stream closed unexpectedly before result.");
+                            }
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } catch (parseError) {
+                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
+            }
+        };
+
+        eventSourceRef.current.onerror = (error) => {
+            let errorMsg = "Error connecting to API stream.";
+             if (!navigator.onLine) {
+                 errorMsg += " Check your network connection.";
+             } else {
+                 errorMsg += " Could not maintain connection. Check Space status/logs."; 
+             }
+            setError(errorMsg);
+             if(eventSourceRef.current) eventSourceRef.current.close();
+            eventSourceRef.current = null;
+            setLoading(false);
+            setOutput('');
+            startTypingProcess('');
+        };
 
     } catch (err) {
         let displayError = err.message || "An unknown error occurred.";
         if (err.message.includes("Failed to fetch")) {
             displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
+        } else if (err.message.includes("503")) {
+             displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
         }
        setError(displayError);
+       setLoading(false);
        setOutput('');
        startTypingProcess('');
-    } finally {
-        setLoading(false);
+        if (eventSourceRef.current) {
+           eventSourceRef.current.close();
+           eventSourceRef.current = null;
+        }
     }
     // --- [END] پیاده‌سازی ---
   };
@@ -185,7 +295,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
   // --- Render logic (بدون تغییر) ---
   return (
     <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
-      <h3 className="text-xl font-bold mb-2 text-white">{title}</h3>
+      <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
       <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
 
       <form onSubmit={handleModelQuery}>
@@ -219,6 +329,7 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         </p>
       )}
 
+      {/* [اصلاح شد] اضافه کردن whitespace-pre-wrap برای نمایش صحیح \n */}
       <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto whitespace-pre-wrap">
          {typedOutput}
          {isTyping ? <span className="typing-cursor"></span> : null}
