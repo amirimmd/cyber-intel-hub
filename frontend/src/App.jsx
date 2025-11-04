@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
-// [فایل کامل] ادغام همه کامپوننت‌ها و رفع خطای قبلی
-// [اصلاح شد] منطق ExploitDB برای استفاده از ID برای فیلتر تاریخ (2023+) در سمت کلاینت
-// [اصلاح شد] بازگشت کامل AIModelCard به منطق /queue/join برای حل خطای 404
+// [فایل کامل] 
+// [ویرایش شد] بخش AIModels به یک رابط چت واحد با قابلیت انتخاب مدل تبدیل شد.
+// [حفظ شد] تمام کامپوننت‌های دیگر (NVD, ExploitDB) و منطق آن‌ها.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
@@ -10,7 +10,8 @@ import {
   BrainCircuit, ShieldAlert, Swords, 
   Loader2, Filter, DatabaseZap, Clipboard, 
   User, Database, BarChart2,
-  Swords as SwordsIcon 
+  Swords as SwordsIcon,
+  Send // [جدید] آیکون ارسال
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- Supabase Client (ادغام شده) ---
@@ -104,6 +105,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 
 
 // --- کامپوننت NVDTable ---
+// [بدون تغییر]
 const DEFAULT_ROWS_TO_SHOW = 10;
 const INITIAL_DATE_FILTER = ''; 
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -410,12 +412,13 @@ const NVDTable = () => {
 };
 
 
-// --- کامپوننت AIModelCard (بازگشت به API قدیمی /queue/join) ---
+// --- [START] منطق چت هوش مصنوعی ---
+// این بخش جایگزین کامپوننت AIModelCard می‌شود
+
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 
-// [بازگشت به API قدیمی] استفاده از /queue/join
 const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
@@ -476,15 +479,62 @@ const useTypewriter = (text, speed = 50) => {
 };
 
 
-const AIModelCard = ({ title, description, placeholder, modelId }) => {
-  const [input, setInput] = useState('');
-  const [output, setOutput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
-  const eventSourceRef = useRef(null); 
+// [جدید] کامپوننت رابط چت هوش مصنوعی
+const AIChatInterface = () => {
+    const [activeModel, setActiveModel] = useState('exbert');
+    const [messages, setMessages] = useState([
+        { 
+            id: 'init',
+            sender: 'model', 
+            model: 'exbert', 
+            text: 'SYSTEM.BOOT_UP: AI Analysis Unit is online. Please select a model and initiate your query.' 
+        }
+    ]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const eventSourceRef = useRef(null);
+    const messagesEndRef = useRef(null);
 
-  const simulateAnalysis = (query, modelId) => {
+    // تعریف مدل‌ها
+    const models = {
+        'exbert': { 
+            title: "MODEL::EXBERT_", 
+            description: "Custom BERT+LSTM model for exploitability estimation.", 
+            placeholder: "INITIATE_EXBERT_QUERY..." 
+        },
+        'xai': { 
+            title: "MODEL::EXBERT.XAI_", 
+            description: "[SIMULATED] Explainable AI for threat assessment.", 
+            placeholder: "INITIATE_XAI_QUERY..." 
+        },
+        'other': { 
+            title: "MODEL::GENERAL.PURPOSE_", 
+            description: "[SIMULATED] Versatile language processing.", 
+            placeholder: "INITIATE_GENERAL_QUERY..." 
+        },
+    };
+    
+    // Typewriter برای آخرین پیام
+    const [typedOutput, startTypingProcess, isTyping] = useTypewriter('', 20);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    useEffect(scrollToBottom, [messages, typedOutput]); // اسکرول با پیام جدید یا تایپ
+
+    useEffect(() => {
+        // پاکسازی EventSource در زمان unmount
+        return () => {
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
+        };
+    }, []);
+
+    // منطق شبیه‌سازی برای مدل‌های دوم و سوم
+    const simulateAnalysis = (query, modelId) => {
       let simulatedResponse = '';
       switch (modelId) {
         case 'xai': simulatedResponse = `[SIMULATED_XAI_REPORT]:\nAnalysis for "${query.substring(0,15)}..." shows high attention on token [X].\nPredicted Label: 1\nConfidence: 0.85`; break;
@@ -492,234 +542,345 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
         default: simulatedResponse = "ERROR: Simulated model not found.";
       }
       return simulatedResponse;
-  };
-
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        console.log("Closing existing EventSource connection.");
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
     };
-  }, []);
 
-  const handleModelQuery = async (e) => {
-    e.preventDefault();
-    const query = input.trim();
-    if (!query) return;
+    // تابع اصلی ارسال کوئری
+    const handleQuerySubmit = async (e) => {
+        e.preventDefault();
+        const query = input.trim();
+        if (!query || loading) return;
 
-    setLoading(true);
-    setError(null);
-    startTypingProcess('');
-    
-    if (eventSourceRef.current) {
-        console.log("Closing previous EventSource before new request.");
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-    }
+        setLoading(true);
+        setError(null);
+        startTypingProcess(''); // پاک کردن تایپ قبلی
 
-    if (modelId !== 'exbert') {
-      const response = simulateAnalysis(query, modelId);
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setOutput(response);
-      startTypingProcess(response);
-      setLoading(false);
-      return;
-    }
-    
-    // --- [START] منطق /queue/join (مطابق اسکریپت پایتون شما) ---
-    const sessionHash = generateSessionHash(); 
-    
-    try {
-        console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-        
-        const joinHeaders = {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0',
+        const userMessage = {
+            id: `user-${messages.length}`,
+            sender: 'user',
+            model: activeModel,
+            text: query
         };
         
-        // [مهم] این مقادیر مطابق اسکریپت پایتون شما تنظیم شده‌اند
-        const payload = {
-            "data": [query],
-            "event_data": null,
-            "fn_index": 2,       
-            "trigger_id": 12,    
-            "session_hash": sessionHash
-        };
-
-        const joinResponse = await fetch(QUEUE_JOIN_URL, {
-            method: 'POST',
-            headers: joinHeaders, 
-            body: JSON.stringify(payload) 
-        });
-
-        if (!joinResponse.ok) {
-             const errorText = await joinResponse.text();
-             console.error("Queue Join Error:", joinResponse.status, errorText);
-             let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-             if (joinResponse.status === 404) { // اگر Gradio /queue/join را نشناسد
-                 detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
-             }
-             throw new Error(detailedError);
-        }
-
-        const joinResult = await joinResponse.json();
+        // اضافه کردن پیام کاربر و یک نگه‌دارنده (placeholder) برای پاسخ مدل
+        setMessages(prev => [
+            ...prev, 
+            userMessage, 
+            { id: `model-${messages.length}`, sender: 'model', model: activeModel, text: '', isLoading: true }
+        ]);
         
-        if (!joinResult.event_id) {
-             if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
-             throw new Error("Failed to get event_id from queue join.");
+        setInput(''); // پاک کردن فیلد ورودی
+
+        if (eventSourceRef.current) {
+            console.log("Closing previous EventSource before new request.");
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
         }
-        console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
 
-        // --- Listening for data (EventSource) ---
-        const dataUrl = QUEUE_DATA_URL(sessionHash);
-        eventSourceRef.current = new EventSource(dataUrl); 
+        // --- مدیریت منطق مدل ---
+        if (activeModel !== 'exbert') {
+            const response = simulateAnalysis(query, activeModel);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // شبیه‌سازی تاخیر شبکه
+            
+            // به‌روزرسانی آخرین پیام (نگه‌دارنده)
+            setMessages(prev => prev.map((msg, index) => 
+                index === prev.length - 1 
+                ? { ...msg, text: response, isLoading: false } 
+                : msg
+            ));
+            startTypingProcess(response); // شروع تایپ پاسخ کامل
+            setLoading(false);
+            return;
+        }
 
-        eventSourceRef.current.onmessage = (event) => {
-            try {
-                const message = JSON.parse(event.data);
+        // --- [START] منطق /queue/join مدل ExBERT ---
+        const sessionHash = generateSessionHash(); 
+        
+        try {
+            console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
+            
+            const joinHeaders = {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            };
+            
+            const payload = {
+                "data": [query],
+                "event_data": null,
+                "fn_index": 2,       
+                "trigger_id": 12,    
+                "session_hash": sessionHash
+            };
 
-                switch (message.msg) {
-                    case "process_starts":
-                        setOutput("Processing started...");
-                        startTypingProcess("Processing started...");
-                        break;
-                    case "process_completed":
-                        if (message.success && message.output && message.output.data && message.output.data.length > 0) {
-                            const rawPrediction = message.output.data[0];
-                            const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
+            const joinResponse = await fetch(QUEUE_JOIN_URL, {
+                method: 'POST',
+                headers: joinHeaders, 
+                body: JSON.stringify(payload) 
+            });
 
-                            setOutput(formattedOutput);
-                            startTypingProcess(formattedOutput);
-                        } else {
-                             const errorMsg = message.output?.error || "Unknown server processing error.";
-                             setError(`Processing failed: ${errorMsg}`);
-                             setOutput(''); startTypingProcess('');
-                        }
+            if (!joinResponse.ok) {
+                 const errorText = await joinResponse.text();
+                 let detailedError = `Failed to join queue: ${joinResponse.status}.`;
+                 if (joinResponse.status === 404) {
+                     detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
+                 }
+                 throw new Error(detailedError);
+            }
+
+            const joinResult = await joinResponse.json();
+            
+            if (!joinResult.event_id) {
+                 if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
+                 throw new Error("Failed to get event_id from queue join.");
+            }
+            console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
+
+            // --- گوش دادن به EventSource ---
+            const dataUrl = QUEUE_DATA_URL(sessionHash);
+            eventSourceRef.current = new EventSource(dataUrl); 
+
+            let fullResponseText = '';
+
+            eventSourceRef.current.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    let currentText = '';
+                    let isComplete = false;
+                    let isError = false;
+
+                    switch (message.msg) {
+                        case "process_starts":
+                            currentText = "Processing started...";
+                            break;
+                        case "estimation":
+                            const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
+                            const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
+                            const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
+                            currentText = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
+                            break;
+                        case "process_completed":
+                            if (message.success && message.output?.data?.[0]) {
+                                fullResponseText = `[EXBERT_REPORT]:\n${message.output.data[0]}`;
+                                currentText = fullResponseText;
+                            } else {
+                                currentText = `Processing failed: ${message.output?.error || "Unknown error."}`;
+                                isError = true;
+                            }
+                            isComplete = true;
+                            break;
+                        case "queue_full":
+                            currentText = "API Error: The queue is full, please try again later.";
+                            isComplete = true;
+                            isError = true;
+                            break;
+                        case "close_stream":
+                            isComplete = true;
+                            if (!fullResponseText && !error) {
+                                currentText = "Stream closed unexpectedly.";
+                                isError = true;
+                            }
+                            break;
+                        default:
+                            return; // عدم به‌روزرسانی برای پیام‌های ناشناخته
+                    }
+
+                    if (isComplete) {
                         if(eventSourceRef.current) eventSourceRef.current.close();
                         eventSourceRef.current = null;
                         setLoading(false);
-                        break;
-                     case "queue_full":
-                         setError("API Error: The queue is full, please try again later.");
-                         if(eventSourceRef.current) eventSourceRef.current.close();
-                         eventSourceRef.current = null;
-                         setLoading(false);
-                         break;
-                     case "estimation":
-                         const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
-                         const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
-                         const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
-                         const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
-                         if (loading) {
-                             setOutput(waitMsg);
-                             startTypingProcess(waitMsg);
-                         }
-                         break;
-                    case "close_stream":
-                        if(eventSourceRef.current) eventSourceRef.current.close();
-                        eventSourceRef.current = null;
-                        if (loading) { 
-                            setLoading(false);
-                            if (!output && !error) {
-                                setError("Stream closed unexpectedly before result.");
-                            }
-                        }
-                        break;
-                    default:
-                        break;
+                        if (isError) setError(currentText);
+                        
+                        // تنظیم متن نهایی در نگه‌دارنده
+                        setMessages(prev => prev.map((msg, index) => 
+                            index === prev.length - 1 
+                            ? { ...msg, text: fullResponseText || currentText, isLoading: false } 
+                            : msg
+                        ));
+                        // شروع تایپ پاسخ نهایی (اگر موفق بود)
+                        if (fullResponseText) startTypingProcess(fullResponseText);
+
+                    } else {
+                        // به‌روزرسانی نگه‌دارنده با وضعیت لودینگ
+                        setMessages(prev => prev.map((msg, index) => 
+                            index === prev.length - 1 
+                            ? { ...msg, text: currentText, isLoading: true } 
+                            : msg
+                        ));
+                    }
+                } catch (parseError) {
+                    console.warn("Could not parse SSE message:", event.data);
                 }
-            } catch (parseError) {
-                 console.warn("Could not parse SSE message, maybe it's not JSON:", event.data);
+            };
+
+            eventSourceRef.current.onerror = (err) => {
+                let errorMsg = "Error connecting to API stream.";
+                 if (!navigator.onLine) {
+                     errorMsg += " Check your network connection.";
+                 } else {
+                     errorMsg += " Could not maintain connection. Check Space status/logs."; 
+                 }
+                setError(errorMsg);
+                setMessages(prev => prev.map((msg, index) => 
+                    index === prev.length - 1 
+                    ? { ...msg, text: errorMsg, isLoading: false } 
+                    : msg
+                ));
+                 if(eventSourceRef.current) eventSourceRef.current.close();
+                eventSourceRef.current = null;
+                setLoading(false);
+            };
+
+        } catch (err) {
+            let displayError = err.message || "An unknown error occurred.";
+            if (err.message.includes("Failed to fetch")) {
+                displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
+            } else if (err.message.includes("503")) {
+                 displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
             }
-        };
-
-        eventSourceRef.current.onerror = (error) => {
-            let errorMsg = "Error connecting to API stream.";
-             if (!navigator.onLine) {
-                 errorMsg += " Check your network connection.";
-             } else {
-                 errorMsg += " Could not maintain connection. Check Space status/logs."; 
-             }
-            setError(errorMsg);
-             if(eventSourceRef.current) eventSourceRef.current.close();
-            eventSourceRef.current = null;
-            setLoading(false);
-            setOutput('');
-            startTypingProcess('');
-        };
-
-    } catch (err) {
-        let displayError = err.message || "An unknown error occurred.";
-        if (err.message.includes("Failed to fetch")) {
-            displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
-        } else if (err.message.includes("503")) {
-             displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
+           setError(displayError);
+           setMessages(prev => prev.map((msg, index) => 
+                index === prev.length - 1 
+                ? { ...msg, text: displayError, isLoading: false } 
+                : msg
+            ));
+           setLoading(false);
+            if (eventSourceRef.current) {
+               eventSourceRef.current.close();
+               eventSourceRef.current = null;
+            }
         }
-       setError(displayError);
-       setLoading(false);
-       setOutput('');
-       startTypingProcess('');
-        if (eventSourceRef.current) {
-           eventSourceRef.current.close();
-           eventSourceRef.current = null;
+        // --- [END] منطق ExBERT ---
+    };
+
+    // تابع کمکی برای استایل‌دهی حباب‌های چت
+    const getMessageStyle = (sender, model) => {
+        if (sender === 'user') {
+            return 'chat-bubble-user';
         }
-    }
-    // --- [END] پیاده‌سازی ---
-  };
+        // Model message
+        let colorClass = 'chat-bubble-model-green'; // Default (exbert)
+        if (model === 'xai') colorClass = 'chat-bubble-model-cyan';
+        if (model === 'other') colorClass = 'chat-bubble-model-yellow';
+        return colorClass;
+    };
 
-  return (
-    <div className="bg-gray-900 rounded-lg p-5 shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-full">
-      <h3 className="text-xl font-bold mb-2 text-white break-words">{title}</h3>
-      <p className="text-sm text-gray-400 mb-4 flex-grow">{description}</p>
+    // تابع کمکی برای آیکون مدل
+    const getModelIcon = (model) => {
+        if (model === 'xai') return <BrainCircuit className="w-4 h-4 mr-2 text-cyber-cyan/70 flex-shrink-0" />;
+        if (model === 'other') return <Database className="w-4 h-4 mr-2 text-cyber-yellow/70 flex-shrink-0" />;
+        return <BrainCircuit className="w-4 h-4 mr-2 text-cyber-green/70 flex-shrink-0" />; // Default (exbert)
+    };
 
-      <form onSubmit={handleModelQuery}>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          rows="4"
-          className="cyber-textarea w-full"
-          placeholder={placeholder}
-          disabled={loading} 
-        />
-        <button 
-            type="submit" 
-            className="cyber-button w-full mt-3 flex items-center justify-center" 
-            disabled={loading || !input.trim()}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="animate-spin h-5 w-5 mr-3" />
-              ANALYZING...
-            </>
-          ) : (
-            'EXECUTE_QUERY_'
-          )}
-        </button>
-      </form>
+    return (
+        <div className="bg-gray-900 rounded-lg shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-[80vh] max-h-[700px] min-h-[500px]">
+            {/* هدر / تب‌های انتخاب مدل */}
+            <div className="flex flex-col sm:flex-row border-b border-cyber-green/20 p-2 space-y-2 sm:space-y-0">
+                {/* دکمه‌های تب */}
+                <div className="flex flex-wrap flex-1">
+                    {Object.keys(models).map(modelId => (
+                        <button
+                            key={modelId}
+                            onClick={() => !loading && setActiveModel(modelId)}
+                            disabled={loading}
+                            className={`px-4 py-2 text-sm font-bold rounded-md mr-2 mb-2 sm:mb-0 transition-all duration-200 animate-border-pulse-fast ${
+                                activeModel === modelId
+                                ? 'bg-cyber-green text-dark-bg shadow-lg shadow-cyber-green/50'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white'
+                            } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                            {models[modelId].title}
+                        </button>
+                    ))}
+                </div>
+                 {/* توضیحات مدل فعلی */}
+                 <p className="text-xs text-cyber-cyan/80 text-left sm:text-right px-2 py-1 bg-dark-bg rounded-md flex-shrink-0 self-start sm:self-center max-w-full">
+                    <span className="font-bold text-white">ACTIVE:</span> {models[activeModel].description}
+                 </p>
+            </div>
 
-      {error && (
-        <p className="mt-2 text-xs text-cyber-red p-2 bg-red-900/30 rounded border border-red-500/50">
-          {error}
-        </p>
-      )}
+            {/* تاریخچه چت */}
+            <div className="flex-grow p-4 overflow-y-auto space-y-4 chat-history-bg">
+                {messages.map((msg, index) => {
+                    const isLastMessage = index === messages.length - 1;
+                    // آیا این آخرین پیام است، در حال تایپ است، و از طرف مدل است؟
+                    const isTypingMessage = isLastMessage && isTyping && msg.sender === 'model' && !msg.isLoading;
+                    
+                    return (
+                        <div 
+                            key={msg.id} 
+                            className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                        >
+                            <div className={`chat-bubble ${getMessageStyle(msg.sender, msg.model)}`}>
+                                <div className="flex items-center text-xs font-bold mb-1 opacity-70">
+                                    {msg.sender === 'model' 
+                                        ? getModelIcon(msg.model) 
+                                        : <User className="w-4 h-4 mr-2 text-cyber-cyan/70 flex-shrink-0" />
+                                    }
+                                    {msg.sender === 'user' ? 'USER_QUERY' : models[msg.model]?.title || 'SYSTEM'}
+                                </div>
+                                {/* [ویرایش شد] منطق نمایش متن برای تایپ‌رایتر */}
+                                <div className="whitespace-pre-wrap break-words">
+                                    {isTypingMessage ? (
+                                        <>
+                                            {typedOutput}
+                                            <span className="typing-cursor"></span>
+                                        </>
+                                    ) : msg.isLoading ? (
+                                        <span className="flex items-center">
+                                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                          {msg.text || 'Processing...'}
+                                        </span>
+                                    ) : (
+                                        msg.text
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+                <div ref={messagesEndRef} />
+            </div>
 
-      <div className="mt-4 bg-dark-bg rounded-lg p-3 text-cyber-green text-sm min-h-[100px] border border-cyber-green/30 overflow-auto whitespace-pre-wrap">
-         {typedOutput}
-         {isTyping ? <span className="typing-cursor"></span> : null}
-         {!loading && !error && !output && !typedOutput && (
-             <span className="text-gray-500">MODEL.RESPONSE.STANDBY...</span>
-         )}
-      </div>
-    </div>
-  );
+            {/* نمایش خطا */}
+            {error && (
+                <p className="m-4 mt-0 text-xs text-cyber-red p-2 bg-red-900/30 rounded border border-red-500/50">
+                    {error}
+                </p>
+            )}
+
+            {/* فرم ورودی */}
+            <form onSubmit={handleQuerySubmit} className="p-4 border-t border-cyber-green/20">
+                <div className="flex space-x-3">
+                    <input
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        className="cyber-input flex-grow"
+                        placeholder={loading ? 'ANALYZING...' : models[activeModel].placeholder}
+                        disabled={loading}
+                    />
+                    <button 
+                        type="submit" 
+                        className="cyber-button flex-shrink-0 px-4" // پدینگ کمتر برای دکمه آیکون
+                        disabled={loading || !input.trim()}
+                    >
+                        {loading ? (
+                            <Loader2 className="animate-spin h-5 w-5" />
+                        ) : (
+                            <Send className="h-5 w-5" />
+                        )}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
 };
+// --- [END] منطق چت هوش مصنوعی ---
 
 
 // --- [START] کامپوننت ExploitDBTable (اصلاح شده) ---
+// [بدون تغییر]
 const EXPLOITS_TO_SHOW = 10;
 const HALF_EXPLOITS = EXPLOITS_TO_SHOW / 2;
 const REFRESH_INTERVAL = 3 * 60 * 1000; 
@@ -910,36 +1071,7 @@ const ExploitDBTable = () => {
 
 
 // --- کامپوننت‌های Wrapper برای تب‌ها ---
-
-const AIModels = () => (
-    <section id="ai-models-section" className="cyber-card mb-12">
-      <div className="flex items-center mb-6">
-        <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
-        <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <AIModelCard 
-          title="MODEL::EXBERT_"
-          description="Custom BERT+LSTM model fine-tuned for estimating exploitability probability."
-          placeholder="INITIATE_EXBERT_QUERY... (e.g., Buffer overflow in...)"
-          modelId="exbert"
-        />
-        <AIModelCard 
-          title="MODEL::EXBERT.XAI_"
-          description="[SIMULATED] Explainable AI (XAI) for transparent threat assessment."
-          placeholder="INITIATE_XAI_QUERY..."
-          modelId="xai"
-        />
-        <AIModelCard 
-          title="MODEL::GENERAL.PURPOSE_"
-          description="[SIMULATED] Versatile language processing for auxiliary tasks."
-          placeholder="INITIATE_GENERAL_QUERY..."
-          modelId="other"
-        />
-      </div>
-    </section>
-);
-
+// [بدون تغییر]
 const NVDTab = () => (
     <section id="nvd-section" className="cyber-card mb-12">
       <div className="flex items-center mb-6">
@@ -993,6 +1125,19 @@ const TabButton = ({ icon: Icon, label, isActive, onClick }) => (
 function App() {
   const [activeTab, setActiveTab] = useState('ai'); 
 
+  // --- [جدید] کامپوننت Wrapper برای رابط چت هوش مصنوعی ---
+  const AIModelsChat = () => (
+    <section id="ai-models-section" className="cyber-card mb-12">
+      <div className="flex items-center mb-6">
+        <BrainCircuit className="icon-green w-8 h-8 mr-3 flex-shrink-0" />
+        <h2 className="text-2xl font-semibold text-green-300 break-words min-w-0">INTELLIGENT.ANALYSIS.UNIT_</h2>
+      </div>
+      {/* جایگزینی گرید قبلی با رابط چت جدید */}
+      <AIChatInterface />
+    </section>
+  );
+  // --- [END] کامپوننت Wrapper ---
+
   return (
     <>
       {/* Background Grid Effect */}
@@ -1008,7 +1153,8 @@ function App() {
 
         {/* --- [START] چیدمان دسکتاپ (md به بالا) --- */}
         <div className="hidden md:block">
-          <AIModels />
+          {/* [ویرایش شد] استفاده از Wrapper جدید چت */}
+          <AIModelsChat />
           <NVDTab />
           <ExploitDBTab />
         </div>
@@ -1019,7 +1165,8 @@ function App() {
         <div className="md:hidden pb-20"> 
           
           <div id="mobile-tab-content">
-            {activeTab === 'ai' && <AIModels />}
+            {/* [ویرایش شد] استفاده از Wrapper جدید چت */}
+            {activeTab === 'ai' && <AIModelsChat />}
             {activeTab === 'nvd' && <NVDTab />}
             {activeTab === 'exploits' && <ExploitDBTab />}
             {activeTab === 'user' && <LoginTab />}
