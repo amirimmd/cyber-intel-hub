@@ -986,7 +986,8 @@ const TabButton = ({ icon: Icon, label, tabName, activeTab, setActiveTab }) => (
 // --- [بازنویسی شده] کامپوننت اصلی App ---
 function App() {
   // state برای مدیریت تب فعال در موبایل
-  const [activeTab, setActiveTab] = useState('nvd');
+  // تب پیش فرض 'ai' (مدل‌های هوش مصنوعی) است
+  const [activeTab, setActiveTab] = useState('ai');
 
   return (
     <>
@@ -1060,9 +1061,10 @@ function App() {
           </div>
 
           {/* نوار تب ثابت در پایین صفحه */}
+          {/* [اصلاح شد] ترتیب دکمه‌ها تغییر کرد تا 'AI Models' اول باشد */}
           <nav className="fixed bottom-0 left-0 right-0 bg-cyber-card border-t border-cyber-cyan/30 flex justify-around items-center z-50 shadow-lg shadow-cyber-cyan/10">
-            <TabButton icon={ShieldAlert} label="NVD" tabName="nvd" activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton icon={BrainCircuit} label="AI Models" tabName="ai" activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton icon={ShieldAlert} label="NVD" tabName="nvd" activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton icon={Swords} label="Exploits" tabName="exploits" activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton icon={User} label="User" tabName="user" activeTab={activeTab} setActiveTab={setActiveTab} />
           </nav>
@@ -1074,5 +1076,4 @@ function App() {
 }
 
 export default App;
-
 

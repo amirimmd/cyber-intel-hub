@@ -6,7 +6,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   // [FIX] افزودن تارگت es2020 برای پشتیبانی از 'import.meta.env'
-  // این کار خطای مربوط به 'es2015' را برطرف می‌کند.
+  // این کار هشدارهای مربوط به 'es2015' را برطرف می‌کند.
   build: {
     target: 'es2020'
   },
@@ -14,3 +14,4 @@ export default defineConfig({
     target: 'es2020'
   }
 });
+
