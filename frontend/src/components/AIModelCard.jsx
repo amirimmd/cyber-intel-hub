@@ -12,7 +12,8 @@ const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space/run/predict`;
 
 // [NOTE] این توکن باید در متغیرهای محیطی Vercel تنظیم شود (VITE_HF_API_TOKEN)
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN;
+// [اصلاح شد] افزودن یک مقدار پیش‌فرض خالی برای جلوگیری از خطای import.meta در محیط‌های خاص
+const HF_API_TOKEN = (import.meta.env && import.meta.env.VITE_HF_API_TOKEN) || "";
 
 if (!HF_API_TOKEN) {
   console.warn("⚠️ [AIModelCard] VITE_HF_API_TOKEN is missing! (Using public mode)");
@@ -230,3 +231,4 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
 };
 
 export default AIModelCard;
+
