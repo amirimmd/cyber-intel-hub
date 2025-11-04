@@ -15,8 +15,8 @@ import {
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- Supabase Client (ادغام شده) ---
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; 
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
+const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; 
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
 
 let supabase;
 if (supabaseUrl && supabaseAnonKey && supabaseUrl !== "https://your-project-url.supabase.co") {
@@ -423,7 +423,7 @@ const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
 
-const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
+const HF_API_TOKEN = process.env.VITE_HF_API_TOKEN || ""; 
 
 const generateSessionHash = () => {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
@@ -773,7 +773,7 @@ const AIChatInterface = () => {
     };
 
     return (
-        <div className="bg-gray-900 rounded-lg shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-[80vh] max-h-[700px] min-h-[500px]">
+        <div className="bg-gray-900 rounded-lg shadow-inner shadow-cyber-green/10 border border-cyber-green/20 flex flex-col h-[80vh] md:h-[80vh] md:max-h-[700px] md:min-h-[500px]">
             {/* هدر / تب‌های انتخاب مدل */}
             <div className="flex flex-col sm:flex-row border-b border-cyber-green/20 p-2 space-y-2 sm:space-y-0">
                 {/* دکمه‌های تب */}
@@ -1207,3 +1207,5 @@ function App() {
 }
 
 export default App;
+
+
