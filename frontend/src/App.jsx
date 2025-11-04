@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { 
   ShieldAlert, 
   BrainCircuit, 
@@ -10,7 +10,7 @@ import {
   Filter, 
   DatabaseZap, 
   Clipboard 
-} from 'lucide-react';
+} from 'https://esm.sh/lucide-react@0.395.0';
 
 // --- [ادغام شد] Supabase Client (از supabaseClient.js) ---
 // این متغیرها باید در Vercel تنظیم شوند
@@ -1064,7 +1064,7 @@ function App() {
             <TabButton icon={ShieldAlert} label="NVD" tabName="nvd" activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton icon={BrainCircuit} label="AI Models" tabName="ai" activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton icon={Swords} label="Exploits" tabName="exploits" activeTab={activeTab} setActiveTab={setActiveTab} />
-            <TabButton icon={User} label="User" tabName="user" activeTab={activeTabb} setActiveTab={setActiveTab} />
+            <TabButton icon={User} label="User" tabName="user" activeTab={activeTab} setActiveTab={setActiveTab} />
           </nav>
         </div>
 
@@ -1074,3 +1074,5 @@ function App() {
 }
 
 export default App;
+
+
