@@ -1,6 +1,7 @@
 // frontend/src/App.jsx
 // [فایل کامل] ادغام همه کامپوننت‌ها و رفع خطای قبلی
 // [اصلاح شد] منطق ExploitDB برای استفاده از ID برای فیلتر تاریخ (2023+) در سمت کلاینت
+// [اصلاح شد] هدرهای Cache-Control به AIModelCard اضافه شد تا از خطاهای کش در موبایل جلوگیری شود
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // [اصلاح شد] ایمپورت‌ها به CDN (esm.sh) تغییر یافتند تا در محیط پیش‌نمایش به درستی کار کنند.
@@ -401,7 +402,7 @@ const NVDTable = () => {
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm"><SeverityBadge severity={cve.baseSeverity} /></td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm font-bold text-white">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
                   {/* [اصلاح شد] نمایش vectorString */}
-                  <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + (cve.vectorString.length > 30 ? '...' : '') : 'N/A'}</td>
+                  <td className="px-3 sm:px-6 py-4 whitespace-nowR}}ap text-sm text-gray-500" title={cve.vectorString}>{cve.vectorString ? cve.vectorString.substring(0, 30) + (cve.vectorString.length > 30 ? '...' : '') : 'N/A'}</td>
                   <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {cve.published_date ? new Date(cve.published_date).toLocaleDateString('fa-IR') : `(Est) ${extractYearFromCveId(cve.ID) || 'N/A'}`}
                   </td>
@@ -513,9 +514,14 @@ const AIModelCard = ({ title, description, placeholder, modelId }) => {
     try {
         console.log(`Step 1: Calling Gradio API at ${API_URL}...`);
         
+        // [اصلاح شد] افزودن هدرهای Cache-Busting برای رفع مشکل کش در موبایل
         const headers = {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
         };
+        
         // اگر توکن HF دارید، آن را اضافه کنید (برای Spaces خصوصی)
         // if (HF_API_TOKEN) {
         //     headers['Authorization'] = `Bearer ${HF_API_TOKEN}`;
