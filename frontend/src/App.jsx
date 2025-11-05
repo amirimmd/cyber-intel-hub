@@ -808,7 +808,16 @@ const AIModels = ({ setActiveTab }) => {
         const tokens = query.split(/\s+/).filter(Boolean); // Split by space and remove empty
         // 60% chance of Label 1
         const label = Math.random() > 0.4 ? "1" : "0"; 
-        const probability = Math.random() * (0.98 - 0.7) + 0.7; // 70%-98%
+        
+        // [MODIFIED] Logical probability based on label
+        let probability;
+        if (label === "1") {
+            // High probability for high-risk label
+            probability = Math.random() * (0.98 - 0.7) + 0.7; // 70%-98%
+        } else {
+            // Low probability for low-risk label
+            probability = Math.random() * (0.40 - 0.05) + 0.05; // 5-40%
+        }
         
         const shapData = tokens.map(token => {
             // Generate a random SHAP value. 
@@ -1150,7 +1159,7 @@ const AIModels = ({ setActiveTab }) => {
                     </div>
 
                     {/* Message List */}
-                    <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth">
+                    <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth md:pb-0 pb-32"> {/* [MODIFIED] Added pb-32 for mobile to clear fixed input */}
                         {messages.map(msg => (
                             <MessageComponent key={msg.id} msg={msg} />
                         ))}
@@ -1170,7 +1179,8 @@ const AIModels = ({ setActiveTab }) => {
                     </div>
 
                     {/* Input Area */}
-                    <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg">
+                    {/* [MODIFIED] Added fixed positioning for mobile, relative for desktop */}
+                    <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg md:relative fixed bottom-16 left-0 right-0 w-full">
                         {/* Queue Status */}
                         { (loading || statusText) && (
                             <div className="text-xs text-cyber-cyan mb-2 flex items-center">
@@ -1366,4 +1376,5 @@ function App() {
 }
 
 export default App;
+
 
