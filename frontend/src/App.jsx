@@ -1,11 +1,10 @@
 // frontend/src/App.jsx
-// [MAJOR REFACTOR]
-// - All Persian text and comments translated to English.
-// - Desktop layout: Added a tabbed interface for NVD and ExploitDB below the AI Chat module.
-// - Mobile layout: AI Chat is no longer fullscreen. It now respects the main tab navigation, fixing layout/scrolling issues.
-// - AI Chat: ExBERT model responses (Label 0) are colored green, and (Label 1, 2) are colored red.
-// - AI Chat: Removed mobile "Back" button as it's no longer needed.
-// - NVDTable: Date formatting changed to 'en-US'.
+// [XAI/SHAP IMPLEMENTATION]
+// - Added a new component `ShapVisualization` to render SHAP values.
+// - Updated `AIModels` component to support the new XAI model.
+// - Created `simulateXaiAnalysis` to return a simulated response with Label, Probability, and SHAP data.
+// - Updated `MessageComponent` to receive and render the `ShapVisualization` component.
+// - `pendingShapData` state was added to hold SHAP data while the AI response is typing.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 // Imports switched to CDN (esm.sh) to work in preview environments.
@@ -115,7 +114,7 @@ const CopyButton = ({ textToCopy, isId = false }) => {
 };
 
 
-// --- NVDTable Component (Date format changed) ---
+// --- NVDTable Component (No changes) ---
 const DEFAULT_ROWS_TO_SHOW = 10;
 const INITIAL_DATE_FILTER = ''; 
 const EARLIEST_MANUAL_DATA_YEAR = '2016-01-01'; 
@@ -677,11 +676,11 @@ const useTypewriter = (text, speed = 50) => {
     return [displayText, startTypingProcess, isTyping];
 };
 
-// Simulation function
+// Simulation function for 'other' model
 const simulateAnalysis = (query, modelId) => {
     let simulatedResponse = '';
     switch (modelId) {
-      case 'xai': simulatedResponse = `[SIMULATED_XAI_REPORT]:\nAnalysis for "${query.substring(0,15)}..." shows high attention on token [X].\nPredicted Label: 1\nConfidence: 0.85`; break;
+      // 'xai' is now handled by its own function
       case 'other': simulatedResponse = `[SIMULATED_GENERAL_REPORT]:\nQuery processed by General Purpose Model.\nInput Length: ${query.length} chars.\nStatus: OK`; break;
       default: simulatedResponse = "ERROR: Simulated model not found.";
     }
@@ -690,11 +689,61 @@ const simulateAnalysis = (query, modelId) => {
 // --- [END] Logic from former AIModelCard ---
 
 
+// --- [NEW] SHAP Visualization Component ---
+const ShapVisualization = ({ shapData }) => {
+    if (!shapData || shapData.length === 0) return null;
+
+    // 1. Find min/max absolute values for normalization
+    let maxAbsVal = 0;
+    shapData.forEach(([, val]) => {
+        if (Math.abs(val) > maxAbsVal) {
+            maxAbsVal = Math.abs(val);
+        }
+    });
+    
+    if (maxAbsVal === 0) maxAbsVal = 1; // Avoid division by zero
+
+    const getColor = (value) => {
+        // Opacity is scaled from 0% to 80%
+        const alpha = Math.min(Math.abs(value) / maxAbsVal, 1.0) * 0.8; 
+        if (value > 0) { // High Attention (Red, predicts Label 1/2)
+            return `rgba(255, 0, 0, ${alpha})`;
+        } else if (value < 0) { // Low Attention (Green, predicts Label 0)
+            return `rgba(0, 255, 0, ${alpha})`;
+        }
+        return 'rgba(255, 255, 255, 0.05)'; // Neutral (near zero)
+    };
+
+    return (
+        <div className="mt-3 p-2 bg-dark-bg/50 rounded border border-gray-700">
+            <p className="text-xs font-bold text-gray-400 mb-2">XAI - SHAP Word Importance:</p>
+            <div className="flex flex-wrap" style={{ gap: '4px' }}>
+                {shapData.map(([token, value], index) => (
+                    <span 
+                        key={index} 
+                        title={`SHAP: ${value.toFixed(4)}`}
+                        className="p-1 rounded"
+                        // Add a space for readability if the token isn't punctuation
+                        style={{ backgroundColor: getColor(value), marginRight: '4px', marginBottom: '4px' }}
+                    >
+                        {token}
+                    </span>
+                ))}
+            </div>
+            <div className="flex justify-between text-xs mt-2 text-gray-500">
+                <span><span className="w-3 h-3 inline-block rounded-sm bg-cyber-green/50 mr-1 align-middle"></span> Low (Label 0)</span>
+                <span><span className="w-3 h-3 inline-block rounded-sm bg-cyber-red/50 mr-1 align-middle"></span> High (Label 1/2)</span>
+            </div>
+        </div>
+    );
+};
+
+
 // --- [START] New AIModels Chat Component ---
 const AIModels = ({ setActiveTab }) => {
     const [activeModel, setActiveModel] = useState('exbert');
     const [messages, setMessages] = useState([
-        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.' }
+        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.', shapData: null }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -711,24 +760,32 @@ const AIModels = ({ setActiveTab }) => {
     // Typewriter hook for the incoming message
     const [typedMessage, startTypingProcess, isTyping] = useTypewriter('', 20);
     const [lastAiMessageText, setLastAiMessageText] = useState('');
+    // [NEW] State to hold SHAP data while text is typing
+    const [pendingShapData, setPendingShapData] = useState(null);
     const prevIsTyping = useRef(false);
 
     const models = {
       'exbert': { title: 'MODEL::EXBERT_', description: 'Exploitability Probability Analysis' },
-      'xai': { title: 'MODEL::EXBERT.XAI_', description: '[SIMULATED] Explainable AI' },
+      'xai': { title: 'MODEL::EXBERT.XAI_', description: '[SIMULATED] Explainable AI (SHAP)' },
       'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[SIMULATED] General Purpose Model' },
     };
 
     // Effect to add the message to the list after typing is complete
     useEffect(() => {
         if (prevIsTyping.current && !isTyping && lastAiMessageText) {
-            const aiMessage = { id: Date.now(), sender: 'ai', model: activeModel, text: lastAiMessageText };
+            const aiMessage = { 
+                id: Date.now(), 
+                sender: 'ai', 
+                model: activeModel, 
+                text: lastAiMessageText,
+                shapData: pendingShapData // [NEW] Add pending SHAP data
+            };
             setMessages(prev => [...prev, aiMessage]);
             setLastAiMessageText('');
-            startTypingProcess('');
+            setPendingShapData(null); // [NEW] Clear pending data
         }
         prevIsTyping.current = isTyping;
-    }, [isTyping, lastAiMessageText, activeModel, startTypingProcess]);
+    }, [isTyping, lastAiMessageText, activeModel, startTypingProcess, pendingShapData]); // [NEW] Add dependency
 
     // Effect to auto-scroll to bottom
     useEffect(() => {
@@ -745,6 +802,33 @@ const AIModels = ({ setActiveTab }) => {
         }
       };
     }, []);
+
+    // [NEW] Simulation function for XAI
+    const simulateXaiAnalysis = (query) => {
+        const tokens = query.split(/\s+/).filter(Boolean); // Split by space and remove empty
+        // 60% chance of Label 1
+        const label = Math.random() > 0.4 ? "1" : "0"; 
+        const probability = Math.random() * (0.98 - 0.7) + 0.7; // 70%-98%
+        
+        const shapData = tokens.map(token => {
+            // Generate a random SHAP value. 
+            // If Label 1, bias towards positive. If 0, bias towards negative.
+            let shapVal = (Math.random() - 0.5) * 2; // -1.0 to 1.0
+            if (label === "1") {
+                shapVal = (Math.random() - 0.3) * 1.5; // Biased positive
+            } else {
+                shapVal = (Math.random() - 0.7) * 1.5; // Biased negative
+            }
+            // Simple keyword check
+            if (token.toLowerCase().match(/vulnerability|exploit|rce|cve|buffer|overflow/)) shapVal = 0.9 + Math.random() * 0.1;
+            if (token.toLowerCase().match(/the|a|is|and|of|for/)) shapVal = (Math.random() - 0.5) * 0.1; // Low impact for common words
+            
+            return [token, parseFloat(shapVal.toFixed(4))];
+        });
+
+        const text = `[XAI_REPORT]:\nPredicted Label: ${label}\nProbability: ${probability.toFixed(3)}`;
+        return { text, shapData };
+    };
 
     // Send message function (combined logic from AIModelCard)
     const handleSend = async () => {
@@ -766,14 +850,23 @@ const AIModels = ({ setActiveTab }) => {
         }
 
         // --- Simulation Logic ---
-        if (activeModel !== 'exbert') {
-          const response = simulateAnalysis(query, activeModel);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          setLastAiMessageText(response);
-          startTypingProcess(response);
-          setLoading(false);
-          return;
+        if (activeModel === 'xai') { // [NEW] Handle XAI
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
+            const { text, shapData } = simulateXaiAnalysis(query);
+            setLastAiMessageText(text);
+            setPendingShapData(shapData); // [NEW]
+            startTypingProcess(text);
+            setLoading(false);
+            return;
+        }
+        if (activeModel === 'other') { // [CHANGED]
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const response = simulateAnalysis(query, activeModel);
+            setLastAiMessageText(response);
+            setPendingShapData(null); // No SHAP data for this model
+            startTypingProcess(response);
+            setLoading(false);
+            return;
         }
         
         // --- Real ExBERT Logic (/queue/join) ---
@@ -834,6 +927,7 @@ const AIModels = ({ setActiveTab }) => {
                                 const rawPrediction = message.output.data[0];
                                 const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
                                 setLastAiMessageText(formattedOutput);
+                                setPendingShapData(null); // ExBERT has no SHAP data
                                 startTypingProcess(formattedOutput);
                             } else {
                                  const errorMsg = message.output?.error || "Unknown server processing error.";
@@ -918,15 +1012,15 @@ const AIModels = ({ setActiveTab }) => {
     const MessageComponent = ({ msg, isTyping = false, colorOverride = '' }) => {
         const isAi = msg.sender === 'ai';
 
-        // [NEW] Logic for coloring ExBERT output
+        // [MODIFIED] Logic for coloring text output (for ExBERT and XAI)
         const labelMatch = msg.text.match(/Predicted Label: (\d)/);
         const label = labelMatch ? labelMatch[1] : null;
         
         let labelColor = '';
-        if (msg.model === 'exbert') {
+        if (msg.model === 'exbert' || msg.model === 'xai') {
             if (label === '0') labelColor = 'text-cyber-green';
-            // Per request, Label 2 is red. Also coloring Label 1 red.
-            else if (label === '2' || label === '1') labelColor = 'text-cyber-red';
+            // Label 1 and 2 are red
+            else if (label === '1' || label === '2') labelColor = 'text-cyber-red';
         }
         
         const finalColor = colorOverride || labelColor;
@@ -949,6 +1043,8 @@ const AIModels = ({ setActiveTab }) => {
                             {msg.text}
                             {isTyping && <span className="typing-cursor"></span>}
                         </p>
+                        {/* [NEW] Render SHAP visualization if data exists and typing is done */}
+                        {!isTyping && msg.shapData && <ShapVisualization shapData={msg.shapData} />}
                     </div>
                 </div>
             </div>
@@ -972,7 +1068,7 @@ const AIModels = ({ setActiveTab }) => {
                             setActiveModel(key);
                             // Start new conversation on model switch
                             setMessages([
-                                { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...` }
+                                { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...`, shapData: null }
                             ]);
                         }}
                         className={`w-full text-left p-3 rounded-lg transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
@@ -1028,7 +1124,7 @@ const AIModels = ({ setActiveTab }) => {
                                                 setModelSelectorOpen(false);
                                                 // Start new conversation
                                                 setMessages([
-                                                    { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...` }
+                                                    { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...`, shapData: null }
                                                 ]);
                                             }}
                                             className={`w-full text-left p-3 transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
