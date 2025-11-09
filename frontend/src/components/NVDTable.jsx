@@ -1,8 +1,10 @@
 // --- components/NVDTable.jsx ---
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '../supabaseClient';
+// --- رفع خطا: استفاده از @ alias ---
+import { supabase } from '@/supabaseClient';
 import { Loader2, DatabaseZap, Filter } from 'https://esm.sh/lucide-react@0.395.0'; 
-import { CopyButton } from './CopyButton';
+// --- رفع خطا: استفاده از @ alias ---
+import { CopyButton } from '@/components/CopyButton';
 
 // --- NVDTable Component ---
 const DEFAULT_ROWS_TO_SHOW = 10;

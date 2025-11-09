@@ -6,12 +6,12 @@ import {
   BrainCircuit, ShieldAlert, Swords, User, Rss, FileCode 
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
-// --- کامپوننت‌های تفکیک شده ---
-import { AIModels } from './components/ai/AIModels';
-import { NVDTab } from './components/tabs/NVDTab';
-import { ExploitDBTab } from './components/tabs/ExploitDBTab';
-import { LoginTab } from './components/tabs/LoginTab';
-import { TabButton } from './components/ui/TabButton';
+// --- رفع خطا: استفاده از @ alias ---
+import { AIModels } from '@/components/ai/AIModels';
+import { NVDTab } from '@/components/tabs/NVDTab';
+import { ExploitDBTab } from '@/components/tabs/ExploitDBTab';
+import { LoginTab } from '@/components/tabs/LoginTab';
+import { TabButton } from '@/components/ui/TabButton';
 
 // --- کامپوننت اصلی App (فقط مدیریت چیدمان) ---
 function App() {
