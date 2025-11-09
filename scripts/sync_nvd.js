@@ -1,11 +1,12 @@
 /**
  * NVD Data Sync Script
  *
- * This script fetches CVE data from the NEW NVD API (api.nvd.nist.gov)
+ * This script fetches CVE data from the NVD API 2.0
+ * (services.nvd.nist.gov/rest/json/cves/2.0)
  * and upserts it into a Supabase database.
  *
- * This script is patched to handle the 2024 NVD API migration.
- * The old endpoint (services.nvd.nist.gov) is DEPRECATED and returns 404.
+ * This version corrects the API endpoint, parameter names, and places
+ * the NVD_API_KEY in the request HEADERS, which is required.
  *
  * It supports two modes:
  * 1. Default (npm run sync:nvd): Syncs new/modified data since the last run.
@@ -34,15 +35,15 @@ if (!NVD_API_KEY) {
   process.exit(1);
 }
 
-// *** API MIGRATION FIX ***
-// The old 'services.nvd.nist.gov' endpoint is deprecated (returns 404).
-// Using the new NVD API endpoint.
-const API_URL = 'https://api.nvd.nist.gov/cves/v1';
+// *** API FIX ***
+// Correcting the API URL back to the NVD 2.0 endpoint.
+// The 'api.nvd.nist.gov' domain was incorrect and caused ENOTFOUND.
+const API_URL = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
 
-const RESULTS_PER_PAGE = 1000; // New API max is 1000
+const RESULTS_PER_PAGE = 2000; // API 2.0 max is 2000
 const START_YEAR = 2016;
 const CURRENT_YEAR = new Date().getFullYear();
-const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds (New API: 50 reqs/30s)
+const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds (API 2.0: 50 reqs/30s w/ key)
 const MAX_RETRIES = 3;
 
 // Tables
@@ -83,10 +84,10 @@ async function syncNewData() {
 
   console.log(`::INFO:: Syncing modified data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
-  // API MIGRATION FIX: Parameter names changed
+  // API 2.0 Parameter names
   const params = {
-    lastModUpdatedStart: startDate.toISOString(),
-    lastModUpdatedEnd: endDate.toISOString(),
+    lastModStartDate: startDate.toISOString(),
+    lastModEndDate: endDate.toISOString(),
   };
 
   await fetchAndProcessPages(params, `new/modified data`);
@@ -109,10 +110,10 @@ async function syncAllData() {
     const endDateRaw = new Date(`${year}-12-31T23:59:59.999Z`);
     const endDate = (endDateRaw > new Date() ? new Date() : endDateRaw).toISOString();
 
-    // API MIGRATION FIX: Parameter names changed
+    // API 2.0 Parameter names
     const params = {
-      publishedStart: startDate,
-      publishedEnd: endDate,
+      pubStartDate: startDate,
+      pubEndDate: endDate,
     };
 
     await fetchAndProcessPages(params, `year ${year}`);
@@ -131,37 +132,35 @@ async function syncAllData() {
  * @param {string} logContext - A string for logging (e.g., "year 2024").
  */
 async function fetchAndProcessPages(baseParams, logContext) {
-  // API MIGRATION FIX: Use offset, not startIndex
-  let offset = 0;
+  // API 2.0 uses startIndex
+  let startIndex = 0;
   let totalResults = 0;
   let processedCount = 0;
 
   try {
     do {
-      console.log(`::INFO:: Fetching NVD page (offset: ${offset}) for ${logContext}...`);
+      console.log(`::INFO:: Fetching NVD page (start index: ${startIndex}) for ${logContext}...`);
 
       const url = new URL(API_URL);
-      // API MIGRATION FIX: Add apiKey as query param
-      url.searchParams.append('apiKey', NVD_API_KEY);
 
       Object.entries(baseParams).forEach(([key, value]) => {
         url.searchParams.append(key, value);
       });
-      // API MIGRATION FIX: Use 'limit' and 'offset'
-      url.searchParams.append('limit', RESULTS_PER_PAGE);
-      url.searchParams.append('offset', offset);
+      // API 2.0 uses 'resultsPerPage' and 'startIndex'
+      url.searchParams.append('resultsPerPage', RESULTS_PER_PAGE);
+      url.searchParams.append('startIndex', startIndex);
 
       // Fetch data
-      const data = await fetchNVDPageWithRetry(url, offset);
+      const data = await fetchNVDPageWithRetry(url, startIndex);
 
       if (!data || !data.vulnerabilities) {
-        console.warn(`::WARN:: No data or vulnerabilities found for offset ${offset}.`);
+        console.warn(`::WARN:: No data or vulnerabilities found for index ${startIndex}.`);
         break;
       }
 
       if (totalResults === 0) {
-        // API MIGRATION FIX: Use 'totalCount'
-        totalResults = data.totalCount;
+        // API 2.0 uses 'totalResults'
+        totalResults = data.totalResults;
         console.log(`::INFO:: Found ${totalResults} total vulnerabilities for ${logContext}.`);
         if (totalResults === 0) break;
       }
@@ -174,18 +173,18 @@ async function fetchAndProcessPages(baseParams, logContext) {
         console.log(`::INFO:: Processed ${processedCount} of ${totalResults} vulnerabilities...`);
       }
 
-      // API MIGRATION FIX: Increment offset
-      offset += RESULTS_PER_PAGE;
+      // API 2.0: Increment startIndex
+      startIndex += RESULTS_PER_PAGE;
 
       // Respect rate limiting
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY_MS));
 
-    } while (offset < totalResults);
+    } while (startIndex < totalResults);
 
     console.log(`::INFO:: Successfully processed all ${totalResults} vulnerabilities for ${logContext}.`);
 
   } catch (error) {
-    console.error(`::ERROR:: Failed processing page for ${logContext} at offset ${offset}: ${error.message}`);
+    console.error(`::ERROR:: Failed processing page for ${logContext} at index ${startIndex}: ${error.message}`);
     throw error; // Propagate error up
   }
 }
@@ -193,14 +192,20 @@ async function fetchAndProcessPages(baseParams, logContext) {
 /**
  * Fetches a single page of NVD data with retry logic.
  * @param {URL} url - The URL object to fetch.
- * @param {number} offset - The offset for logging.
+ * @param {number} index - The startIndex for logging.
  * @returns {object} The JSON response data.
  */
-async function fetchNVDPageWithRetry(url, offset) {
+async function fetchNVDPageWithRetry(url, index) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      // API MIGRATION FIX: API key is now in URL, not headers
-      const response = await fetch(url.toString());
+      // *** API KEY FIX ***
+      // NVD API 2.0 requires the apiKey in the HEADERS, not the URL.
+      // This was the cause of the 404 error.
+      const response = await fetch(url.toString(), {
+        headers: {
+          'apiKey': NVD_API_KEY
+        }
+      });
 
       if (response.ok) {
         return await response.json();
@@ -215,7 +220,7 @@ async function fetchNVDPageWithRetry(url, offset) {
       }
 
     } catch (error) {
-      console.error(`::ERROR:: Network/Fetch error for offset ${offset} (Attempt ${attempt}/${MAX_RETRIES}): ${error.message}`);
+      console.error(`::ERROR:: Network/Fetch error for index ${index} (Attempt ${attempt}/${MAX_RETRIES}): ${error.message}`);
       if (attempt === MAX_RETRIES) {
         throw error; // Re-throw after max retries
       }
@@ -263,14 +268,13 @@ function parseVectorString(vectorString) {
  * @returns {object} A flat object for the database.
  */
 function transformCve(cveItem) {
-  // New API structure is { cve: { ... } }
+  // API 2.0 structure is { cve: { ... } }
   const { cve } = cveItem;
 
   // Get description (English only)
   const description = cve.descriptions?.find(d => d.lang === 'en')?.value || 'No description provided.';
 
   // Get metrics (prefer v3.1, fallback to v3.0, then v2)
-  // Structure appears unchanged
   const metricsV31 = cve.metrics?.cvssMetricV31?.[0];
   const metricsV30 = cve.metrics?.cvssMetricV30?.[0];
   const metricsV2 = cve.metrics?.cvssMetricV2?.[0];
