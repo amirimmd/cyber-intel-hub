@@ -1,10 +1,10 @@
 import React from 'react';
 import { ShieldAlert } from 'https://esm.sh/lucide-react@0.395.0'; 
-import { NVDTable } from '@/components/NVDTable'; // مسیر صحیح
+import { NVDTable } from '@/components/NVDTable';
 
 export const NVDTab = () => (
-    // [FIX] اضافه کردن padding که قبلاً در App.jsx بود
-    // این کامپوننت اکنون اسکرول داخلی خود را مدیریت می‌کند
+    // [FIX] اضافه کردن padding به این کامپوننت (که قبلاً در App.jsx بود)
+    // h-full و overflow-y-auto برای اسکرول صحیح این تب اضافه شد
     <div className="p-4 md:p-8 h-full overflow-y-auto">
       <section id="nvd-section" className="cyber-card mb-12">
         <div className="flex items-center mb-6">

@@ -61,9 +61,9 @@ function App() {
           sidebarOpen={sidebarOpen} 
           setSidebarOpen={setSidebarOpen} 
           activeTab={activeTab}
-          setActiveTab={handleTabSelect} // تابع جدید پاس داده شد
+          setActiveTab={handleTabSelect} 
           activeModel={activeModel}
-          setActiveModel={handleModelSelect} // تابع جدید پاس داده شد
+          setActiveModel={handleModelSelect} 
         />
 
         {/* Main Content Area */}
@@ -71,10 +71,9 @@ function App() {
           
           {/* [FIX] هدر موبایل با دکمه همبرگری اصلاح شده */}
           <header className="md:hidden flex items-center justify-between p-3 bg-cyber-card border-b border-cyber-cyan/20">
-            {/* دکمه همبرگری با استایل بهتر */}
             <button 
               onClick={() => setSidebarOpen(true)} 
-              className="cyber-button !w-auto px-3 py-2 rounded-lg" // استایل دکمه اصلاح شد
+              className="cyber-button !w-auto px-3 py-2 rounded-lg"
               aria-label="Open menu"
             >
               <Menu size={20} />
@@ -82,11 +81,14 @@ function App() {
             
             <h1 className="text-lg font-bold text-white">{currentTabTitle}</h1>
             
-            <div className="w-10"></div> {/* Spacer برای تراز وسط */}
+            <div className="w-10"></div> {/* Spacer */}
           </header>
 
-          {/* کانتینر اصلی محتوا (اصلاح شده در مکالمه قبلی) */}
-          <main className={`flex-1 ${activeTab === 'ai' ? 'overflow-hidden p-4 md:p-8' : 'overflow-y-auto p-4 md:p-8'}`}>
+          {/* [FIX] کانتینر اصلی محتوا اصلاح شد.
+            - padding (p-4 md:p-8) از اینجا حذف شد.
+            - overflow-y-auto (اسکرول) فقط برای تب‌های غیر چت اعمال می‌شود.
+          */}
+          <main className={`flex-1 ${activeTab === 'ai' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             <ActiveComponent 
               {...(TABS[activeTab].props || {})}
               {...(activeTab === 'ai' && { activeModel, setActiveTab })}
