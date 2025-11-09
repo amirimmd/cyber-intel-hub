@@ -1,16 +1,23 @@
-// frontend/vite.config.js
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import path from 'path' // <-- 1. ایمپورت کردن ماژول path
 
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // [CRITICAL FIX] تنظیم target به es2020 یا esnext برای پشتیبانی از import.meta.env
-  // این کار اخطار "import.meta is not available" را برطرف می‌کند.
-  build: {
-    target: 'es2020'
+  // --- 2. اضافه کردن بلاک resolve ---
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
   },
-  // تنظیم مشابه برای سرور توسعه (dev server)
-  esbuild: {
-    target: 'es2020'
+  // --- پایان بلاک ---
+  build: {
+    target: 'es2020' // (این خط از قبل وجود داشت، فقط برای کامل بودن)
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'es2020' // (این خط از قبل وجود داشت)
+    }
   }
-});
+})
