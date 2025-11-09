@@ -472,13 +472,11 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     };
 
     // [FIX] چیدمان اصلاح شده است.
-    // md:h-[calc(100vh-14rem)] حذف شد و h-full جایگزین شد.
-    // padding به داخل این کامپوننت منتقل شد.
+    // h-full برای پر کردن فضا اضافه شد.
     return (
         <section id="ai-models-section" className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
             
             {/* --- Main Chat Area --- */}
-            {/* [FIX] h-full اضافه شد */}
             <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
                 
                 {/* Chat Header (ساده شده) */}
