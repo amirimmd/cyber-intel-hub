@@ -1,7 +1,7 @@
 // [FIX] این فایل به طور کامل اصلاح شده است تا:
 // 1. باگ اتصال API (نبودن Authorization header) را رفع کند.
 // 2. باگ توقف (setLoading) در صورت نبودن توکن را رفع کند.
-// 3. چیدمان (layout) را اصلاح کند تا تمام صفحه شود (h-full).
+// 3. چیدمان (layout) را با اضافه کردن padding به تگ section اصلاح کند.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
@@ -472,12 +472,17 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     };
 
     // [FIX] چیدمان اصلاح شده است.
+    // p-4 md:p-8 (padding) به اینجا اضافه شد تا از App.jsx جبران شود
     // h-full برای پر کردن فضا اضافه شد.
     return (
-        <section id="ai-models-section" className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
+        <section 
+          id="ai-models-section" 
+          className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10 p-4 md:p-8"
+        >
             
             {/* --- Main Chat Area --- */}
-            <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
+            {/* [FIX] h-full حذف شد تا flex-1 به درستی کار کند */}
+            <div className="flex-1 flex flex-col bg-dark-bg/50 overflow-hidden rounded-lg">
                 
                 {/* Chat Header (ساده شده) */}
                 <div className="flex-shrink-0 flex items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card text-center">
