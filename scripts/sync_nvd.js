@@ -19,9 +19,9 @@ import fetch from 'node-fetch';
 
 // Supabase config
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // FIX: Changed from SUPABASE_KEY
 if (!supabaseUrl || !supabaseKey) {
-  console.error('::FATAL:: Missing SUPABASE_URL or SUPABASE_KEY environment variables.');
+  console.error('::FATAL:: Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables.');
   process.exit(1);
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
