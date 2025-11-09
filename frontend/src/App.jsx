@@ -1,23 +1,22 @@
 // --- App.jsx (فایل اصلی و پاکسازی شده) ---
-// تمام منطق‌ها به کامپوننت‌های وارد شده منتقل شده‌اند.
-
 import React, { useState } from 'react';
 import { 
-  BrainCircuit, ShieldAlert, Swords, User, Rss, FileCode 
+  BrainCircuit, ShieldAlert, Swords, User, 
+  Rss, FileCode 
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
-// --- رفع خطا: استفاده از @ alias ---
+// [FIX] Using @ alias for all imports
 import { AIModels } from '@/components/ai/AIModels';
 import { NVDTab } from '@/components/tabs/NVDTab';
 import { ExploitDBTab } from '@/components/tabs/ExploitDBTab';
 import { LoginTab } from '@/components/tabs/LoginTab';
 import { TabButton } from '@/components/ui/TabButton';
 
-// --- کامپوننت اصلی App (فقط مدیریت چیدمان) ---
+// --- Main App Component (Layout logic updated) ---
 function App() {
   // 'ai' is the default tab for both mobile and desktop
   const [activeTab, setActiveTab] = useState('ai'); 
-  // State for desktop data tabs (NVD vs ExploitDB)
+  // [NEW] State for desktop data tabs (NVD vs ExploitDB)
   const [desktopDataTab, setDesktopDataTab] = useState('nvd');
 
   return (
@@ -54,11 +53,20 @@ function App() {
                 <FileCode className="w-5 h-5 mr-2" />
                 <span className="font-bold text-lg">EXPLOIT_FEED_</span>
             </button>
+            {/* --- [NEW] Login Icon Button for Desktop (FIXED) --- */}
+            <button 
+                onClick={() => setDesktopDataTab('user')}
+                className={`flex-auto w-16 flex items-center justify-center p-3 rounded-lg transition-all ${desktopDataTab === 'user' ? 'bg-cyber-card border border-cyber-green text-cyber-green shadow-lg' : 'bg-gray-900/50 text-gray-500 hover:bg-gray-800'}`}
+                title="User Login / Authentication"
+            >
+                <User className="w-5 h-5" />
+            </button>
           </div>
           
-          {/* Conditional Rendering for Desktop Tabs */}
+          {/* Conditional Rendering for Desktop Tabs (FIXED) */}
           {desktopDataTab === 'nvd' && <NVDTab />}
           {desktopDataTab === 'exploits' && <ExploitDBTab />}
+          {desktopDataTab === 'user' && <LoginTab />} {/* <-- [NEW] Added render logic for LoginTab */}
         </div>
         {/* --- [END] Desktop Layout --- */}
 
