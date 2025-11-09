@@ -1,10 +1,10 @@
 // --- components/ui/Sidebar.jsx ---
-// (کامپوننت جدید برای نوار کناری اصلی)
+// [FIX] کل محتوای سایدبار اکنون در موبایل اسکرول می‌شود.
 
 import React from 'react';
 import { 
   BrainCircuit, ShieldAlert, Swords, User, X, 
-  Rss, FileCode // (آیکون‌های قبلی App.jsx به اینجا منتقل شدند)
+  Rss, FileCode 
 } from 'https://esm.sh/lucide-react@0.395.0';
 
 // کامپوننت دکمه نویگیشن سایدبار
@@ -84,56 +84,60 @@ export const Sidebar = ({
             <X size={20} />
           </button>
         </div>
+        
+        {/* [FIX] کانتینر اسکرول برای کل محتوای سایدبار */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Main Navigation */}
+          <nav className="flex-shrink-0 py-4 border-b border-cyber-cyan/20">
+            <NavButton 
+              icon={BrainCircuit} 
+              label="AI Models"
+              isActive={activeTab === 'ai'}
+              onClick={() => handleNavClick('ai')}
+              colorClass="cyan"
+            />
+            <NavButton 
+              icon={ShieldAlert} 
+              label="NVD Feed"
+              isActive={activeTab === 'nvd'}
+              onClick={() => handleNavClick('nvd')}
+              colorClass="cyan"
+            />
+            <NavButton 
+              icon={Swords} 
+              label="Exploit Feed"
+              isActive={activeTab === 'exploits'}
+              onClick={() => handleNavClick('exploits')}
+              colorClass="red"
+            />
+            <NavButton 
+              icon={User} 
+              label="User Login"
+              isActive={activeTab === 'user'}
+              onClick={() => handleNavClick('user')}
+              colorClass="cyan"
+            />
+          </nav>
 
-        {/* Main Navigation */}
-        <nav className="flex-shrink-0 py-4 border-b border-cyber-cyan/20">
-          <NavButton 
-            icon={BrainCircuit} 
-            label="AI Models"
-            isActive={activeTab === 'ai'}
-            onClick={() => handleNavClick('ai')}
-            colorClass="cyan"
-          />
-          <NavButton 
-            icon={ShieldAlert} 
-            label="NVD Feed"
-            isActive={activeTab === 'nvd'}
-            onClick={() => handleNavClick('nvd')}
-            colorClass="cyan"
-          />
-          <NavButton 
-            icon={Swords} 
-            label="Exploit Feed"
-            isActive={activeTab === 'exploits'}
-            onClick={() => handleNavClick('exploits')}
-            colorClass="red"
-          />
-          <NavButton 
-            icon={User} 
-            label="User Login"
-            isActive={activeTab === 'user'}
-            onClick={() => handleNavClick('user')}
-            colorClass="cyan"
-          />
-        </nav>
-
-        {/* Conditional Model Selector (فقط زمانی که تب AI فعال است) */}
-        {activeTab === 'ai' && (
-          <div className="flex-1 flex flex-col p-4 overflow-y-auto">
-            <h3 className="text-sm font-medium text-gray-400 mb-2 uppercase">Select Model</h3>
-            <div className="flex flex-col space-y-2">
-              {Object.keys(models).map(key => (
-                <ModelButton
-                  key={key}
-                  title={models[key].title}
-                  description={models[key].description}
-                  isActive={activeModel === key}
-                  onClick={() => setActiveModel(key)}
-                />
-              ))}
+          {/* Conditional Model Selector (فقط زمانی که تب AI فعال است) */}
+          {activeTab === 'ai' && (
+            <div className="flex flex-col p-4">
+              <h3 className="text-sm font-medium text-gray-400 mb-2 uppercase">Select Model</h3>
+              <div className="flex flex-col space-y-2">
+                {Object.keys(models).map(key => (
+                  <ModelButton
+                    key={key}
+                    title={models[key].title}
+                    description={models[key].description}
+                    isActive={activeModel === key}
+                    onClick={() => setActiveModel(key)}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+        {/* [END FIX] پایان کانتینر اسکرول */}
       </div>
     </>
   );
