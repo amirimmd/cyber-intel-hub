@@ -1,19 +1,13 @@
 // --- components/ai/AIModels.jsx ---
-// (شامل کامپوننت‌های AIModels, ShapVisualization, MessageComponent, ModelSidebar)
+// (شامل کامپوننت‌های AIModels, ShapVisualization, MessageComponent)
+// (سایدبار داخلی و هدرهای پیچیده حذف شده‌اند تا در چیدمان جدید قرار گیرند)
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
-  BrainCircuit, ShieldAlert, Swords, 
-  Loader2, Filter, DatabaseZap, Clipboard, 
-  User, Database, BarChart2,
-  Swords as SwordsIcon,
-  Menu, // For desktop sidebar
-  X, // For closing sidebar
+  Loader2, 
+  User, 
   Send, // Chat send button
   Bot, // AI icon
-  ChevronDown, // For mobile model selector
-  Rss, // For NVD Tab
-  FileCode // For ExploitDB Tab
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- [START] Logic from former AIModelCard ---
@@ -143,18 +137,16 @@ const ShapVisualization = ({ shapData }) => {
 };
 
 
-// --- [START] New AIModels Chat Component ---
-export const AIModels = ({ setActiveTab }) => {
-    const [activeModel, setActiveModel] = useState('exbert');
+// --- [START] New AIModels Chat Component (MODIFIED) ---
+// (State و کامپوننت سایدبار داخلی حذف شده و از App.jsx به عنوان props می‌آید)
+export const AIModels = ({ activeModel }) => { 
+    // (State های activeModel, sidebarOpen حذف شدند)
     const [messages, setMessages] = useState([
-        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.', shapData: null }
+        { id: 'welcome', sender: 'ai', model: activeModel, text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.', shapData: null }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    // Sidebar is open by default on desktop
-    const [sidebarOpen, setSidebarOpen] = useState(true); 
-    // Mobile model selector is closed by default
-    const [modelSelectorOpen, setModelSelectorOpen] = useState(false); 
+    // (State های modelSelectorOpen حذف شدند)
     const [statusText, setStatusText] = useState(''); // For queue status
 
     const eventSourceRef = useRef(null);
@@ -206,6 +198,14 @@ export const AIModels = ({ setActiveTab }) => {
         }
       };
     }, []);
+    
+    // [NEW] Reset chat when activeModel prop changes
+    useEffect(() => {
+      setMessages([
+        { id: 'welcome-' + activeModel, sender: 'ai', model: activeModel, text: `:: Model switched to ${models[activeModel].title} ::\nReady for query...`, shapData: null }
+      ]);
+    }, [activeModel]);
+
 
     // [NEW] Simulation function for XAI
     const simulateXaiAnalysis = (query) => {
@@ -464,36 +464,8 @@ export const AIModels = ({ setActiveTab }) => {
         );
     };
 
-    // Internal component for Desktop Sidebar
-    const ModelSidebar = () => (
-        <div className={`hidden md:flex flex-col flex-shrink-0 bg-cyber-card border-r border-cyber-cyan/20 transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? 'w-72 p-4' : 'w-0 p-0'}`}>
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white whitespace-nowrap">Select Model</h3>
-                <button onClick={() => setSidebarOpen(false)} className="text-gray-500 hover:text-white">
-                    <X size={20} />
-                </button>
-            </div>
-            <div className="flex flex-col space-y-2">
-                {Object.keys(models).map(key => (
-                    <button
-                        key={key}
-                        onClick={() => {
-                            setActiveModel(key);
-                            // Start new conversation on model switch
-                            setMessages([
-                                { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...`, shapData: null }
-                            ]);
-                        }}
-                        className={`w-full text-left p-3 rounded-lg transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
-                    >
-                        <span className="font-bold block">{models[key].title}</span>
-                        <span className="text-xs text-gray-400">{models[key].description}</span>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-    
+    // (کامپوننت ModelSidebar به طور کامل حذف شد و به Sidebar.jsx منتقل شد)
+
     // Handle textarea auto-resize
     const handleInput = (e) => {
         setInput(e.target.value);
@@ -501,69 +473,34 @@ export const AIModels = ({ setActiveTab }) => {
         e.target.style.height = (e.target.scrollHeight) + 'px';
     };
 
-    // [MODIFIED] Removed fixed height h-[85vh] to allow natural flow on mobile
+    // [MODIFIED] چیدمان بازنویسی شده است تا سایدبار و هدر داخلی حذف شود
     return (
-        <section id="ai-models-section" className="mb-12">
-            <div className="flex flex-col md:flex-row md:h-[85vh] bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
+        <section id="ai-models-section">
+            {/* (کلاس h-[85vh] حذف شد تا کامپوننت ارتفاع طبیعی داشته باشد) */}
+            <div className="flex flex-col md:flex-row bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
                 
-                {/* --- Sidebar (Desktop) --- */}
-                <ModelSidebar />
+                {/* --- سایدبار داخلی حذف شد --- */}
 
                 {/* --- Main Chat Area --- */}
-                {/* [MODIFIED] Added min-h-[70vh] for mobile to ensure it fills most of the screen */}
-                <div className="flex-1 flex flex-col h-full min-h-[70vh] md:min-h-0 bg-dark-bg/50">
+                {/* (ارتفاع min-h-[70vh] حذف شد) */}
+                {/* [FIX] ارتفاع چت در دسکتاپ برای پر کردن صفحه تنظیم شد */}
+                <div className="flex-1 flex flex-col h-full md:h-[calc(100vh-14rem)] bg-dark-bg/50">
                     
-                    {/* Chat Header */}
-                    <div className="flex-shrink-0 flex items-center justify-between p-3 border-b border-cyber-cyan/20 bg-cyber-card">
-                        {/* Desktop: Sidebar Toggle Button */}
-                        <button onClick={() => setSidebarOpen(true)} className={`hidden md:block text-cyber-cyan hover:text-cyber-green ${sidebarOpen ? 'hidden' : ''}`}>
-                            <Menu size={24} />
-                        </button>
-                        
-                        {/* Mobile: Model Selector */}
-                        <div className="relative md:hidden">
-                            <button onClick={() => setModelSelectorOpen(o => !o)} className="flex items-center text-lg font-bold text-white">
-                                {models[activeModel].title}
-                                <ChevronDown size={20} className={`ml-1 transition-transform ${modelSelectorOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            {/* Mobile: Model Dropdown Menu */}
-                            {modelSelectorOpen && (
-                                <div className="absolute top-full left-0 mt-2 w-60 bg-cyber-card border border-cyber-cyan/30 rounded-lg shadow-lg z-20">
-                                    {Object.keys(models).map(key => (
-                                        <button
-                                            key={key}
-                                            onClick={() => {
-                                                setActiveModel(key);
-                                                setModelSelectorOpen(false);
-                                                // Start new conversation
-                                                setMessages([
-                                                    { id: 'welcome-' + key, sender: 'ai', model: key, text: `:: Model switched to ${models[key].title} ::\nReady for query...`, shapData: null }
-                                                ]);
-                                            }}
-                                            className={`w-full text-left p-3 transition-colors duration-150 ${activeModel === key ? 'bg-cyber-green/20 text-cyber-green' : 'text-cyber-text hover:bg-gray-800/50'}`}
-                                        >
-                                            <span className="font-bold block">{models[key].title}</span>
-                                            <span className="text-xs text-gray-400">{models[key].description}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
+                    {/* [MODIFIED] هدر چت ساده‌تر شد - دکمه منو و انتخابگر مدل حذف شدند */}
+                    <div className="flex-shrink-0 flex items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card">
                         {/* Desktop: Model Title */}
                         <div className="hidden md:block text-center">
                             <h3 className="text-lg font-bold text-white">{models[activeModel].title}</h3>
                             <p className="text-xs text-gray-400">{models[activeModel].description}</p>
                         </div>
-                        
-                        {/* Spacer */}
-                        <div className="w-8">
-                            {/* <User size={24} className="text-cyber-cyan" /> */}
+                         {/* Mobile: Model Title */}
+                        <div className="md:hidden text-center">
+                             <h3 className="text-base font-bold text-white">{models[activeModel].title}</h3>
                         </div>
                     </div>
 
                     {/* Message List */}
-                    <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth md:pb-0 pb-32"> {/* [MODIFIED] Added pb-32 for mobile to clear fixed input */}
+                    <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth">
                         {messages.map(msg => (
                             <MessageComponent key={msg.id} msg={msg} />
                         ))}
@@ -583,8 +520,8 @@ export const AIModels = ({ setActiveTab }) => {
                     </div>
 
                     {/* Input Area */}
-                    {/* [MODIFIED] Added fixed positioning for mobile, relative for desktop */}
-                    <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg md:relative fixed bottom-16 left-0 right-0 w-full">
+                    {/* [MODIFIED] موقعیت‌یابی fixed موبایل حذف شد چون App.jsx آن را مدیریت می‌کند */}
+                    <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg">
                         {/* Queue Status */}
                         { (loading || statusText) && (
                             <div className="text-xs text-cyber-cyan mb-2 flex items-center">
