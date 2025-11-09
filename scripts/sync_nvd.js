@@ -1,14 +1,15 @@
 /**
  * NVD Data Sync Script
  *
- * This script fetches CVE data from the NVD 2.0 API and upserts it into a Supabase database.
+ * This script fetches CVE data from the NEW NVD API (api.nvd.nist.gov)
+ * and upserts it into a Supabase database.
+ *
+ * This script is patched to handle the 2024 NVD API migration.
+ * The old endpoint (services.nvd.nist.gov) is DEPRECATED and returns 404.
  *
  * It supports two modes:
- * 1. Default (npm run sync:nvd): Syncs new/modified data since the last run (or past 120 days).
- * 2. Full Sync (npm run sync:nvd:all): Fetches all data, year by year, from START_YEAR.
- *
- * Note: This script is updated to use the 'api.nvd.nist.gov' endpoint, as the legacy
- * 'services.nvd.nist.gov' (v2.0) and 'nvd.nist.gov/feeds' (v1.1) are deprecated.
+ * 1. Default (npm run sync:nvd): Syncs new/modified data since the last run.
+ * 2. Full Sync (npm run sync:nvd:all): Fetches all data, year by year.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -19,7 +20,7 @@ import fetch from 'node-fetch';
 
 // Supabase config
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY; // FIX: Changed from SUPABASE_KEY
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 if (!supabaseUrl || !supabaseKey) {
   console.error('::FATAL:: Missing SUPABASE_URL or SUPABASE_SERVICE_KEY environment variables.');
   process.exit(1);
@@ -33,19 +34,19 @@ if (!NVD_API_KEY) {
   process.exit(1);
 }
 
-// *** VITAL FIX ***
-// The 'api.nvd.nist.gov' domain does not exist (ENOTFOUND).
-// Reverting to the correct, official NVD 2.0 endpoint.
-const API_URL = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
+// *** API MIGRATION FIX ***
+// The old 'services.nvd.nist.gov' endpoint is deprecated (returns 404).
+// Using the new NVD API endpoint.
+const API_URL = 'https://api.nvd.nist.gov/cves/v1';
 
-const RESULTS_PER_PAGE = 2000; // Max allowed by NVD API
-const START_YEAR = 2016; // NVD data is extensive; starting from 2016 is reasonable
+const RESULTS_PER_PAGE = 1000; // New API max is 1000
+const START_YEAR = 2016;
 const CURRENT_YEAR = new Date().getFullYear();
-const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds delay (NVD API w/ key allows 50 reqs/30s)
+const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds (New API: 50 reqs/30s)
 const MAX_RETRIES = 3;
 
 // Tables
-const NVD_TABLE = 'vulnerabilities'; // SCHEMA FIX: Use user's table name
+const NVD_TABLE = 'vulnerabilities'; // User's table name
 const METADATA_TABLE = 'metadata';
 const LAST_SYNC_KEY = 'nvdLastSyncTimestamp';
 
@@ -82,9 +83,10 @@ async function syncNewData() {
 
   console.log(`::INFO:: Syncing modified data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
+  // API MIGRATION FIX: Parameter names changed
   const params = {
-    lastModStartDate: startDate.toISOString(),
-    lastModEndDate: endDate.toISOString(),
+    lastModUpdatedStart: startDate.toISOString(),
+    lastModUpdatedEnd: endDate.toISOString(),
   };
 
   await fetchAndProcessPages(params, `new/modified data`);
@@ -95,7 +97,6 @@ async function syncNewData() {
 
 /**
  * Fetches and backfills all historical NVD data, year by year.
- * This is rewritten to use the NVD 2.0 API instead of the deprecated 1.1 feeds.
  */
 async function syncAllData() {
   console.log(`::INFO:: Starting FULL NVD sync from ${START_YEAR} to ${CURRENT_YEAR}...`);
@@ -108,9 +109,10 @@ async function syncAllData() {
     const endDateRaw = new Date(`${year}-12-31T23:59:59.999Z`);
     const endDate = (endDateRaw > new Date() ? new Date() : endDateRaw).toISOString();
 
+    // API MIGRATION FIX: Parameter names changed
     const params = {
-      pubStartDate: startDate,
-      pubEndDate: endDate,
+      publishedStart: startDate,
+      publishedEnd: endDate,
     };
 
     await fetchAndProcessPages(params, `year ${year}`);
@@ -129,35 +131,42 @@ async function syncAllData() {
  * @param {string} logContext - A string for logging (e.g., "year 2024").
  */
 async function fetchAndProcessPages(baseParams, logContext) {
-  let startIndex = 0;
+  // API MIGRATION FIX: Use offset, not startIndex
+  let offset = 0;
   let totalResults = 0;
   let processedCount = 0;
 
   try {
     do {
-      console.log(`::INFO:: Fetching NVD page (start index: ${startIndex}) for ${logContext}...`);
+      console.log(`::INFO:: Fetching NVD page (offset: ${offset}) for ${logContext}...`);
 
       const url = new URL(API_URL);
+      // API MIGRATION FIX: Add apiKey as query param
+      url.searchParams.append('apiKey', NVD_API_KEY);
+
       Object.entries(baseParams).forEach(([key, value]) => {
         url.searchParams.append(key, value);
       });
-      url.searchParams.append('resultsPerPage', RESULTS_PER_PAGE);
-      url.searchParams.append('startIndex', startIndex);
+      // API MIGRATION FIX: Use 'limit' and 'offset'
+      url.searchParams.append('limit', RESULTS_PER_PAGE);
+      url.searchParams.append('offset', offset);
 
       // Fetch data
-      const data = await fetchNVDPageWithRetry(url, startIndex);
+      const data = await fetchNVDPageWithRetry(url, offset);
 
       if (!data || !data.vulnerabilities) {
-        console.warn(`::WARN:: No data or vulnerabilities found for index ${startIndex}.`);
+        console.warn(`::WARN:: No data or vulnerabilities found for offset ${offset}.`);
         break;
       }
 
       if (totalResults === 0) {
-        totalResults = data.totalResults;
+        // API MIGRATION FIX: Use 'totalCount'
+        totalResults = data.totalCount;
         console.log(`::INFO:: Found ${totalResults} total vulnerabilities for ${logContext}.`);
         if (totalResults === 0) break;
       }
 
+      // The CVE structure 'data.vulnerabilities[].cve' seems unchanged
       const cves = data.vulnerabilities.map(transformCve);
       if (cves.length > 0) {
         await upsertData(cves);
@@ -165,17 +174,18 @@ async function fetchAndProcessPages(baseParams, logContext) {
         console.log(`::INFO:: Processed ${processedCount} of ${totalResults} vulnerabilities...`);
       }
 
-      startIndex += RESULTS_PER_PAGE;
+      // API MIGRATION FIX: Increment offset
+      offset += RESULTS_PER_PAGE;
 
       // Respect rate limiting
       await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY_MS));
 
-    } while (startIndex < totalResults);
+    } while (offset < totalResults);
 
     console.log(`::INFO:: Successfully processed all ${totalResults} vulnerabilities for ${logContext}.`);
 
   } catch (error) {
-    console.error(`::ERROR:: Failed processing page for ${logContext} at index ${startIndex}: ${error.message}`);
+    console.error(`::ERROR:: Failed processing page for ${logContext} at offset ${offset}: ${error.message}`);
     throw error; // Propagate error up
   }
 }
@@ -183,15 +193,14 @@ async function fetchAndProcessPages(baseParams, logContext) {
 /**
  * Fetches a single page of NVD data with retry logic.
  * @param {URL} url - The URL object to fetch.
- * @param {number} index - The startIndex for logging.
+ * @param {number} offset - The offset for logging.
  * @returns {object} The JSON response data.
  */
-async function fetchNVDPageWithRetry(url, index) {
+async function fetchNVDPageWithRetry(url, offset) {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url.toString(), {
-        headers: { 'apiKey': NVD_API_KEY }
-      });
+      // API MIGRATION FIX: API key is now in URL, not headers
+      const response = await fetch(url.toString());
 
       if (response.ok) {
         return await response.json();
@@ -206,7 +215,7 @@ async function fetchNVDPageWithRetry(url, index) {
       }
 
     } catch (error) {
-      console.error(`::ERROR:: Network/Fetch error for index ${index} (Attempt ${attempt}/${MAX_RETRIES}): ${error.message}`);
+      console.error(`::ERROR:: Network/Fetch error for offset ${offset} (Attempt ${attempt}/${MAX_RETRIES}): ${error.message}`);
       if (attempt === MAX_RETRIES) {
         throw error; // Re-throw after max retries
       }
@@ -254,12 +263,14 @@ function parseVectorString(vectorString) {
  * @returns {object} A flat object for the database.
  */
 function transformCve(cveItem) {
+  // New API structure is { cve: { ... } }
   const { cve } = cveItem;
 
   // Get description (English only)
   const description = cve.descriptions?.find(d => d.lang === 'en')?.value || 'No description provided.';
 
   // Get metrics (prefer v3.1, fallback to v3.0, then v2)
+  // Structure appears unchanged
   const metricsV31 = cve.metrics?.cvssMetricV31?.[0];
   const metricsV30 = cve.metrics?.cvssMetricV30?.[0];
   const metricsV2 = cve.metrics?.cvssMetricV2?.[0];
@@ -285,7 +296,7 @@ function transformCve(cveItem) {
   // Parse vector components
   const vectorComponents = parseVectorString(vector_string);
 
-  // SCHEMA FIX: Map to user's 'vulnerabilities' table
+  // Map to user's 'vulnerabilities' table
   return {
     ID: cve.id, // 'cve_id' -> 'ID'
     text: description, // 'description' -> 'text'
@@ -301,8 +312,6 @@ function transformCve(cveItem) {
     score: base_score, // 'base_score' -> 'score'
     baseSeverity: severity, // 'severity' -> 'baseSeverity'
     published_date: cve.published,
-    // Dropped 'last_modified_date', 'exploitability_score', 'full_cve_json'
-    // as they are not in the user's 'vulnerabilities' table.
   };
 }
 
@@ -313,11 +322,10 @@ function transformCve(cveItem) {
 async function upsertData(data) {
   const { error } = await supabase
     .from(NVD_TABLE)
-    .upsert(data, { onConflict: 'ID' }); // SCHEMA FIX: Use 'ID' for conflict
+    .upsert(data, { onConflict: 'ID' }); // Use 'ID' for conflict
 
   if (error) {
     console.error('::ERROR:: Failed to upsert data into Supabase:', error.message);
-    // Don't throw, just log, to allow the process to continue if possible
   }
 }
 
@@ -340,7 +348,8 @@ async function getLastSyncTimestamp() {
       return null;
     }
     return data?.[0]?.value || null;
-  } catch (error) {
+  } catch (error)
+{
     console.error('::ERROR:: Exception in getLastSyncTimestamp:', error.message);
     return null;
   }
