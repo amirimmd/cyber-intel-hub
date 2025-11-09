@@ -34,9 +34,9 @@ if (!NVD_API_KEY) {
 }
 
 // *** VITAL FIX ***
-// The old 'services.nvd.nist.gov' endpoint is deprecated and returns 404.
-// Using the new, correct NVD API 2.0 endpoint.
-const API_URL = 'https://api.nvd.nist.gov/cves/2.0';
+// The 'api.nvd.nist.gov' domain does not exist (ENOTFOUND).
+// Reverting to the correct, official NVD 2.0 endpoint.
+const API_URL = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
 
 const RESULTS_PER_PAGE = 2000; // Max allowed by NVD API
 const START_YEAR = 2016; // NVD data is extensive; starting from 2016 is reasonable
