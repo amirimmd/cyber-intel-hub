@@ -1,4 +1,4 @@
-// --- App.jsx (کاملاً بازنویسی شده برای چیدمان جدید) ---
+// --- App.jsx (اصلاح شده) ---
 import React, { useState } from 'react';
 import { 
   Menu, // برای هدر موبایل
@@ -12,7 +12,7 @@ import { NVDTab } from '@/components/tabs/NVDTab';
 import { ExploitDBTab } from '@/components/tabs/ExploitDBTab';
 import { LoginTab } from '@/components/tabs/LoginTab';
 
-// آبجکت مدل‌ها به اینجا منتقل شد تا هم توسط سایدبار و هم کامپوننت چت استفاده شود
+// آبجکت مدل‌ها
 const models = {
   'exbert': { title: 'MODEL::EXBERT_', description: 'Exploitability Probability Analysis' },
   'xai': { title: 'MODEL::EXBERT.XAI_', description: '[SIMULATED] Explainable AI (SHAP)' },
@@ -20,19 +20,15 @@ const models = {
 };
 
 function App() {
-  // 'ai' تب پیش‌فرض است
   const [activeTab, setActiveTab] = useState('ai'); 
-  // State برای باز/بسته بودن سایدبار در موبایل
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  // State برای مدل هوش مصنوعی (از AIModels به اینجا منتقل شد)
   const [activeModel, setActiveModel] = useState('exbert');
 
-  // مپ کردن تب فعال به کامپوننت و عنوان آن
   const TABS = {
     'ai': {
       Component: AIModels,
       Title: "Intelligent Analysis Unit",
-      props: { activeModel } // پاس دادن مدل فعال به کامپوننت چت
+      props: { activeModel } 
     },
     'nvd': {
       Component: NVDTab,
@@ -53,13 +49,10 @@ function App() {
 
   return (
     <>
-      {/* Background Grid Effect */}
       <div className="background-grid"></div>
 
-      {/* Main Layout Container (Full Screen) */}
       <div className="flex h-screen w-full bg-dark-bg text-cyber-text">
         
-        {/* --- Sidebar (New Component) --- */}
         <Sidebar
           models={models}
           activeTab={activeTab}
@@ -70,10 +63,8 @@ function App() {
           setSidebarOpen={setSidebarOpen}
         />
 
-        {/* --- Main Content Area --- */}
         <div className="flex-1 flex flex-col overflow-hidden">
           
-          {/* Header (for Mobile Menu Button & Title) */}
           <header className="flex md:hidden items-center justify-between p-3 border-b border-cyber-cyan/20 bg-cyber-card flex-shrink-0">
             <button 
               onClick={() => setSidebarOpen(true)} 
@@ -85,8 +76,11 @@ function App() {
             <div className="w-8"></div> {/* Spacer */}
           </header>
 
-          {/* Scrollable Content */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-8">
+          {/* [FIX] ناحیه محتوای اصلی اکنون overflow-hidden است.
+            اسکرول داخلی توسط خود کامپوننت‌ها مدیریت می‌شود.
+            padding به داخل این تگ منتقل شد.
+          */}
+          <main className="flex-1 overflow-hidden p-4 md:p-8">
             <ActiveComponent {...(TABS[activeTab].props || {})} />
           </main>
         </div>

@@ -10,7 +10,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // [FIX] هشدار 'import.meta' را با تنظیم هدف بیلد برطرف کنید
+  // [FIX] اضافه کردن این بخش برای رفع هشدار import.meta
+  // و فعال کردن VITE_HF_API_TOKEN
   build: {
     target: 'es2020'
   },

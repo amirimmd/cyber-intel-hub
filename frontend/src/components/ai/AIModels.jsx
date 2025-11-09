@@ -1,6 +1,5 @@
 // --- components/ai/AIModels.jsx ---
-// (شامل کامپوننت‌های AIModels, ShapVisualization, MessageComponent)
-// [FIX] ارتفاع کامپوننت برای پر کردن صفحه اصلاح شد.
+// [FIX] ارتفاع کامپوننت برای پر کردن صفحه اصلاح شد (h-full).
 // [FIX] هدر Authorization به درخواست Hugging Face اضافه شد.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -12,7 +11,6 @@ import {
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- [START] Logic from former AIModelCard ---
-// This logic is now used by the new AIModels chat component
 const HF_USER = "amirimmd";
 const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
 const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
@@ -80,7 +78,6 @@ const useTypewriter = (text, speed = 50) => {
 const simulateAnalysis = (query, modelId) => {
     let simulatedResponse = '';
     switch (modelId) {
-      // 'xai' is now handled by its own function
       case 'other': simulatedResponse = `[SIMULATED_GENERAL_REPORT]:\nQuery processed by General Purpose Model.\nInput Length: ${query.length} chars.\nStatus: OK`; break;
       default: simulatedResponse = "ERROR: Simulated model not found.";
     }
@@ -93,7 +90,6 @@ const simulateAnalysis = (query, modelId) => {
 const ShapVisualization = ({ shapData }) => {
     if (!shapData || shapData.length === 0) return null;
 
-    // 1. Find min/max absolute values for normalization
     let maxAbsVal = 0;
     shapData.forEach(([, val]) => {
         if (Math.abs(val) > maxAbsVal) {
@@ -101,17 +97,16 @@ const ShapVisualization = ({ shapData }) => {
         }
     });
     
-    if (maxAbsVal === 0) maxAbsVal = 1; // Avoid division by zero
+    if (maxAbsVal === 0) maxAbsVal = 1; 
 
     const getColor = (value) => {
-        // Opacity is scaled from 0% to 80%
         const alpha = Math.min(Math.abs(value) / maxAbsVal, 1.0) * 0.8; 
-        if (value > 0) { // High Attention (Red, predicts Label 1/2)
+        if (value > 0) { 
             return `rgba(255, 0, 0, ${alpha})`;
-        } else if (value < 0) { // Low Attention (Green, predicts Label 0)
+        } else if (value < 0) { 
             return `rgba(0, 255, 0, ${alpha})`;
         }
-        return 'rgba(255, 255, 255, 0.05)'; // Neutral (near zero)
+        return 'rgba(255, 255, 255, 0.05)'; 
     };
 
     return (
@@ -123,7 +118,6 @@ const ShapVisualization = ({ shapData }) => {
                         key={index} 
                         title={`SHAP: ${value.toFixed(4)}`}
                         className="p-1 rounded"
-                        // Add a space for readability if the token isn't punctuation
                         style={{ backgroundColor: getColor(value), marginRight: '4px', marginBottom: '4px' }}
                     >
                         {token}
@@ -146,13 +140,12 @@ export const AIModels = ({ activeModel }) => {
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [statusText, setStatusText] = useState(''); // For queue status
+    const [statusText, setStatusText] = useState(''); 
 
     const eventSourceRef = useRef(null);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
 
-    // Typewriter hook for the incoming message
     const [typedMessage, startTypingProcess, isTyping] = useTypewriter('', 20);
     const [lastAiMessageText, setLastAiMessageText] = useState('');
     const [pendingShapData, setPendingShapData] = useState(null);
@@ -164,7 +157,6 @@ export const AIModels = ({ activeModel }) => {
       'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[SIMULATED] General Purpose Model' },
     };
 
-    // Effect to add the message to the list after typing is complete
     useEffect(() => {
         if (prevIsTyping.current && !isTyping && lastAiMessageText) {
             const aiMessage = { 
@@ -181,12 +173,10 @@ export const AIModels = ({ activeModel }) => {
         prevIsTyping.current = isTyping;
     }, [isTyping, lastAiMessageText, activeModel, startTypingProcess, pendingShapData]); 
 
-    // Effect to auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, typedMessage]); 
 
-    // Cleanup EventSource on unmount
     useEffect(() => {
       return () => {
         if (eventSourceRef.current) {
@@ -197,9 +187,8 @@ export const AIModels = ({ activeModel }) => {
       };
     }, []);
     
-    // [NEW] Reset chat when activeModel prop changes
     useEffect(() => {
-      if (models[activeModel]) { // اطمینان از اینکه مدل وجود دارد
+      if (models[activeModel]) { 
         setMessages([
           { id: 'welcome-' + activeModel, sender: 'ai', model: activeModel, text: `:: Model switched to ${models[activeModel].title} ::\nReady for query...`, shapData: null }
         ]);
@@ -207,24 +196,23 @@ export const AIModels = ({ activeModel }) => {
     }, [activeModel]);
 
 
-    // [NEW] Simulation function for XAI
     const simulateXaiAnalysis = (query) => {
         const tokens = query.split(/\s+/).filter(Boolean); 
         const label = Math.random() > 0.4 ? "1" : "0"; 
         
         let probability;
         if (label === "1") {
-            probability = Math.random() * (0.98 - 0.7) + 0.7; // 70%-98%
+            probability = Math.random() * (0.98 - 0.7) + 0.7; 
         } else {
-            probability = Math.random() * (0.40 - 0.05) + 0.05; // 5-40%
+            probability = Math.random() * (0.40 - 0.05) + 0.05; 
         }
         
         const shapData = tokens.map(token => {
-            let shapVal = (Math.random() - 0.5) * 2; // -1.0 to 1.0
+            let shapVal = (Math.random() - 0.5) * 2; 
             if (label === "1") {
-                shapVal = (Math.random() - 0.3) * 1.5; // Biased positive
+                shapVal = (Math.random() - 0.3) * 1.5; 
             } else {
-                shapVal = (Math.random() - 0.7) * 1.5; // Biased negative
+                shapVal = (Math.random() - 0.7) * 1.5; 
             }
             if (token.toLowerCase().match(/vulnerability|exploit|rce|cve|buffer|overflow/)) shapVal = 0.9 + Math.random() * 0.1;
             if (token.toLowerCase().match(/the|a|is|and|of|for/)) shapVal = (Math.random() - 0.5) * 0.1; 
@@ -236,7 +224,6 @@ export const AIModels = ({ activeModel }) => {
         return { text, shapData };
     };
 
-    // Send message function (combined logic from AIModelCard)
     const handleSend = async () => {
         const query = input.trim();
         if (!query || loading) return;
@@ -255,7 +242,6 @@ export const AIModels = ({ activeModel }) => {
             eventSourceRef.current = null;
         }
 
-        // --- Simulation Logic ---
         if (activeModel === 'xai') { 
             await new Promise(resolve => setTimeout(resolve, 1500)); 
             const { text, shapData } = simulateXaiAnalysis(query);
@@ -275,14 +261,13 @@ export const AIModels = ({ activeModel }) => {
             return;
         }
         
-        // --- Real ExBERT Logic (/queue/join) ---
-        // [FIX] بررسی وجود توکن HF
+        // [FIX] بررسی توکن در اینجا انجام می‌شود
         if (activeModel === 'exbert' && !HF_API_TOKEN) {
              console.error("FATAL: VITE_HF_API_TOKEN is missing.");
              const errorMsg = "API Error: Hugging Face API Token is not configured. Please contact the administrator.";
              setLastAiMessageText(errorMsg);
              startTypingProcess(errorMsg);
-             setLoading(false);
+             setLoading(false); // [FIX] اطمینان از ریست شدن loading
              return;
         }
         
@@ -321,7 +306,7 @@ export const AIModels = ({ activeModel }) => {
                  } else if (joinResponse.status === 404) {
                      detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
                  }
-                 throw new Error(detailedError);
+                 throw new Error(detailedError); // پرتاب خطا به catch block
             }
 
             const joinResult = await joinResponse.json();
@@ -410,7 +395,7 @@ export const AIModels = ({ activeModel }) => {
                 setStatusText('Connection Error.');
             };
 
-        } catch (err) {
+        } catch (err) { // [FIX] این بلاک catch اکنون به درستی loading=false را تنظیم می‌کند
             let displayError = err.message || "An unknown error occurred.";
             if (err.message.includes("Failed to fetch")) {
                 displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
@@ -419,7 +404,7 @@ export const AIModels = ({ activeModel }) => {
             }
            setLastAiMessageText(displayError);
            startTypingProcess(displayError);
-           setLoading(false);
+           setLoading(false); // [FIX] اطمینان از ریست شدن loading
            setStatusText('Failed to connect.');
             if (eventSourceRef.current) {
                eventSourceRef.current.close();
@@ -428,7 +413,6 @@ export const AIModels = ({ activeModel }) => {
         }
     };
     
-    // Internal component for rendering messages
     const MessageComponent = ({ msg, isTyping = false, colorOverride = '' }) => {
         const isAi = msg.sender === 'ai';
 
@@ -452,7 +436,7 @@ export const AIModels = ({ activeModel }) => {
                     <div className={`mx-3 rounded-lg p-3 ${isAi ? 'bg-cyber-card' : 'bg-cyber-green text-dark-bg'}`}>
                         {isAi && (
                             <span className="text-xs font-bold text-cyber-green block mb-1">
-                                {models[msg.model]?.title || 'AI Model'}
+                                {models[activeModel]?.title || 'AI Model'}
                             </span>
                         )}
                         <p className={`text-sm whitespace-pre-wrap break-words ${finalColor}`}>
@@ -466,22 +450,20 @@ export const AIModels = ({ activeModel }) => {
         );
     };
 
-    // Handle textarea auto-resize
     const handleInput = (e) => {
         setInput(e.target.value);
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
     };
 
-    // [MODIFIED] <section> حذف شد و h-full به div اصلی اضافه شد
+    // [FIX] ارتفاع (h-full) برای پر کردن کانتینر والد (main) اضافه شد
     return (
         <div className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10">
             
             {/* --- Main Chat Area --- */}
-            {/* [FIX] ارتفاع چت در دسکتاپ برای پر کردن صفحه تنظیم شد */}
+            {/* [FIX] ارتفاع ثابت حذف شد، flex-1 اجازه می‌دهد تا پر شود */}
             <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
                 
-                {/* [MODIFIED] هدر چت ساده‌تر شد */}
                 <div className="flex-shrink-0 flex items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card">
                     <div className="text-center">
                         <h3 className="text-lg font-bold text-white">{models[activeModel]?.title || 'AI Model'}</h3>
