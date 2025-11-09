@@ -1,23 +1,46 @@
-// frontend/src/supabaseClient.jsx
-import { createClient } from '@supabase/supabase-js'
+// --- supabaseClient.js ---
+// (منطق Supabase به این فایل منتقل شد)
 
-// Read public keys from .env.local or Vercel environment variables (MUST be prefixed with VITE_)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// [DEBUG] Log the variables to ensure they are loaded correctly
-console.log("Supabase URL:", supabaseUrl ? "Loaded" : "MISSING!");
-console.log("Supabase Anon Key:", supabaseAnonKey ? "Loaded" : "MISSING!");
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://your-project-url.supabase.co"; 
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    "FATAL: Supabase URL or Anon Key is missing. " +
-    "Ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in Vercel Environment Variables."
-  );
-  // Optionally throw an error or return a dummy client
-  // throw new Error("Supabase configuration is missing.");
+let supabase;
+if (supabaseUrl && supabaseAnonKey && supabaseUrl !== "https://your-project-url.supabase.co") {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log("Supabase client initialized.");
+} else {
+    console.error(
+      "FATAL: Supabase URL or Anon Key is missing or is placeholder. " +
+      "Ensure VITE_... variables are set in Vercel and vite.config.js has target: 'es2020'."
+    );
+    // Mock client to prevent crashing in preview
+    supabase = {
+        from: () => ({
+            select: () => ({
+                order: () => ({
+                    limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } })
+                }),
+                eq: () => ({
+                    order: () => ({ limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } }) })
+                }),
+                neq: () => ({
+                    order: () => ({ limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } }) })
+                }),
+                gte: () => ({
+                    order: () => ({ limit: () => Promise.resolve({ data: [], error: { message: "Supabase not configured" } }) })
+                })
+            })
+        }),
+        channel: () => ({
+            on: () => ({
+                subscribe: () => ({}),
+            }),
+            subscribe: () => ({})
+        }),
+        removeChannel: () => {}
+    };
 }
 
-// Export the Supabase client, even if keys are missing initially,
-// so the app doesn't crash immediately. The components will handle the error.
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '')
+export { supabase };
