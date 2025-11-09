@@ -1,56 +1,36 @@
-# .github/workflows/sync_data.yml
-
-name: '::SYNC_SECURITY_FEEDS::'
+name: Sync External Data
 
 on:
-  workflow_dispatch: # Allows manual triggering
   schedule:
-    - cron: '0 */6 * * *' # Runs every 6 hours
+    - cron: '0 0 * * *' # Run daily at midnight
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
-  sync-data:
-    name: 'Sync NVD and ExploitDB Data'
+  sync:
     runs-on: ubuntu-latest
 
     steps:
-      - name: '::CHECKOUT_CODE::'
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: '::SETUP_NODE_JS::'
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: '20' # Use Node.js 20
+          node-version: '18' # Use Node.js 18
 
-      - name: '::INSTALL_SCRIPT_DEPS::'
-        run: |
-          cd scripts
-          npm install
-      
-      # [NEW] Add a debug step to check URLs with curl
-      - name: '::DEBUG_FETCH_URLS::'
-        run: |
-          echo "::DEBUG:: Curling NVD URL..."
-          curl -I "https://raw.githubusercontent.com/fkie-cad/nvd-json-data-feeds/main/data/nvdcve-1.1-modified.json" || echo "NVD curl failed"
-          
-          echo "::DEBUG:: Curling ExploitDB URL..."
-          curl -I "https://raw.githubusercontent.com/offensive-security/exploitdb/main/files_exploits.csv" || echo "ExploitDB curl failed"
-          
-      - name: '::RUN_NVD_SYNC::'
+      - name: Install script dependencies
+        run: cd scripts && npm install
+
+      - name: Run NVD Sync
+        run: cd scripts && npm run sync:nvd
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          cd scripts
-          npm run sync:nvd
-          
-      - name: '::RUN_EXPLOITDB_SYNC::'
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }} # FIX: Added NVD API Key
+
+      - name: Run ExploitDB Sync
+        run: cd scripts && npm run sync:exploitdb
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          cd scripts
-          npm run sync:exploitdb
           
-      - name: '::SYNC_COMPLETE::'
-        run: echo "Data sync job finished at $(date)"
-
