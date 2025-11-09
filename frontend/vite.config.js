@@ -1,23 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path' // <-- 1. ایمپورت کردن ماژول path
+import path from 'path'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // --- 2. اضافه کردن بلاک resolve ---
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // --- پایان بلاک ---
+  // [FIX] هشدار 'import.meta' را با تنظیم هدف بیلد برطرف کنید
   build: {
-    target: 'es2020' // (این خط از قبل وجود داشت، فقط برای کامل بودن)
+    target: 'es2020'
   },
   optimizeDeps: {
     esbuildOptions: {
-      target: 'es2020' // (این خط از قبل وجود داشت)
+      target: 'es2020'
     }
   }
 })
