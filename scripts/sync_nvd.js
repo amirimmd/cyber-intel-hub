@@ -8,6 +8,8 @@
  * This version corrects the API endpoint, parameter names, and places
  * the NVD_API_KEY in the request HEADERS, which is required.
  *
+ * *** FIX: This version also handles the 120-day range limit for 'lastModStartDate' ***
+ *
  * It supports two modes:
  * 1. Default (npm run sync:nvd): Syncs new/modified data since the last run.
  * 2. Full Sync (npm run sync:nvd:all): Fetches all data, year by year.
@@ -36,8 +38,6 @@ if (!NVD_API_KEY) {
 }
 
 // *** API FIX ***
-// Correcting the API URL back to the NVD 2.0 endpoint.
-// The 'api.nvd.nist.gov' domain was incorrect and caused ENOTFOUND.
 const API_URL = 'https://services.nvd.nist.gov/rest/json/cves/2.0';
 
 const RESULTS_PER_PAGE = 2000; // API 2.0 max is 2000
@@ -45,6 +45,7 @@ const START_YEAR = 2016;
 const CURRENT_YEAR = new Date().getFullYear();
 const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds (API 2.0: 50 reqs/30s w/ key)
 const MAX_RETRIES = 3;
+const MAX_DATE_RANGE_DAYS = 120; // NVD API limit
 
 // Tables
 const NVD_TABLE = 'vulnerabilities'; // User's table name
@@ -73,27 +74,47 @@ async function main() {
 
 /**
  * Fetches all new NVD data since the last sync.
+ * *** FIX: This function now chunks requests to respect the 120-day limit. ***
  */
 async function syncNewData() {
   console.log(`::INFO:: Starting NVD sync for new data (${CURRENT_YEAR}+)...`);
 
-  // Get last sync timestamp, or default to 120 days ago
+  // Get last sync timestamp, or default to 120 days ago if never synced
   const lastSync = await getLastSyncTimestamp();
-  const startDate = new Date(lastSync || (Date.now() - 120 * 24 * 60 * 60 * 1000));
-  const endDate = new Date();
+  let startDate = new Date(lastSync || (Date.now() - 120 * 24 * 60 * 60 * 1000));
+  const finalEndDate = new Date(); // Today
 
-  console.log(`::INFO:: Syncing modified data from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+  console.log(`::INFO:: Catching up modified data from ${startDate.toISOString()} to ${finalEndDate.toISOString()}`);
 
-  // API 2.0 Parameter names
-  const params = {
-    lastModStartDate: startDate.toISOString(),
-    lastModEndDate: endDate.toISOString(),
-  };
+  // Loop in 120-day chunks until we are caught up
+  while (startDate < finalEndDate) {
+    let endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + MAX_DATE_RANGE_DAYS);
 
-  await fetchAndProcessPages(params, `new/modified data`);
+    // Ensure the chunk's end date doesn't go past the final end date
+    if (endDate > finalEndDate) {
+      endDate = finalEndDate;
+    }
 
-  // Save the new timestamp
-  await updateLastSyncTimestamp(endDate.toISOString());
+    console.log(`\n::INFO:: Syncing chunk: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+
+    // API 2.0 Parameter names
+    const params = {
+      lastModStartDate: startDate.toISOString(),
+      lastModEndDate: endDate.toISOString(),
+    };
+
+    await fetchAndProcessPages(params, `modified data chunk`);
+
+    // Save the new timestamp *for this chunk*
+    // This ensures if the script fails mid-way, it resumes from the last successful chunk
+    await updateLastSyncTimestamp(endDate.toISOString());
+
+    // Set the start for the next loop
+    startDate = new Date(endDate);
+  }
+
+  console.log('::INFO:: All new/modified data chunks synced.');
 }
 
 /**
@@ -111,6 +132,7 @@ async function syncAllData() {
     const endDate = (endDateRaw > new Date() ? new Date() : endDateRaw).toISOString();
 
     // API 2.0 Parameter names
+    // Use pubStartDate/pubEndDate for yearly sync
     const params = {
       pubStartDate: startDate,
       pubEndDate: endDate,
@@ -200,7 +222,6 @@ async function fetchNVDPageWithRetry(url, index) {
     try {
       // *** API KEY FIX ***
       // NVD API 2.0 requires the apiKey in the HEADERS, not the URL.
-      // This was the cause of the 404 error.
       const response = await fetch(url.toString(), {
         headers: {
           'apiKey': NVD_API_KEY
