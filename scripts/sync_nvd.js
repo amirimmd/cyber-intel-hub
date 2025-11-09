@@ -1,16 +1,16 @@
 /**
-   * NVD Data Sync Script
-   *
-   * This script fetches CVE data from the NVD 2.0 API and upserts it into a Supabase database.
-   *
-   * It supports two modes:
-   * 1. Default (npm run sync:nvd): Syncs new/modified data since the last run (or past 120 days).
-   * 2. Full Sync (npm run sync:nvd:all): Fetches all data, year by year, from START_YEAR.
-   *
-   * Note: This script is updated to use the 'api.nvd.nist.gov' endpoint, as the legacy
-   * 'services.nvd.nist.gov' (v2.0) and 'nvd.nist.gov/feeds' (v1.1) are deprecated.
-   */
-  
+ * NVD Data Sync Script
+ *
+ * This script fetches CVE data from the NVD 2.0 API and upserts it into a Supabase database.
+ *
+ * It supports two modes:
+ * 1. Default (npm run sync:nvd): Syncs new/modified data since the last run (or past 120 days).
+ * 2. Full Sync (npm run sync:nvd:all): Fetches all data, year by year, from START_YEAR.
+ *
+ * Note: This script is updated to use the 'api.nvd.nist.gov' endpoint, as the legacy
+ * 'services.nvd.nist.gov' (v2.0) and 'nvd.nist.gov/feeds' (v1.1) are deprecated.
+ */
+
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
 import fetch from 'node-fetch';
@@ -45,7 +45,7 @@ const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds delay (NVD API w/ key allows 50 r
 const MAX_RETRIES = 3;
 
 // Tables
-const NVD_TABLE = 'nvd';
+const NVD_TABLE = 'vulnerabilities'; // SCHEMA FIX: Use user's table name
 const METADATA_TABLE = 'metadata';
 const LAST_SYNC_KEY = 'nvdLastSyncTimestamp';
 
@@ -217,13 +217,44 @@ async function fetchNVDPageWithRetry(url, index) {
 }
 
 /**
+ * Parses a CVSS vector string (e.g., "CVSS:3.1/AV:N/AC:L...") into its components.
+ * @param {string} vectorString - The CVSS vector string.
+ * @returns {object} An object with key-value pairs (e.g., { AV: 'N', AC: 'L' }).
+ */
+function parseVectorString(vectorString) {
+  const components = {};
+  if (!vectorString) {
+    return components;
+  }
+
+  // Remove the prefix (e.g., "CVSS:3.1/")
+  const parts = vectorString.split('/');
+  if (parts.length < 2) {
+    return components; // Not a valid vector
+  }
+
+  // Iterate over components
+  for (let i = 1; i < parts.length; i++) {
+    const [key, value] = parts[i].split(':');
+    if (key && value) {
+      // Map script keys to schema keys (e.g., 'AV' -> 'av')
+      const lowerKey = key.toLowerCase();
+      // Only include keys that are in the user's schema
+      if (['av', 'ac', 'pr', 'ui', 's', 'c', 'i', 'a'].includes(lowerKey)) {
+        components[lowerKey] = value;
+      }
+    }
+  }
+  return components;
+}
+
+/**
  * Transforms the complex NVD API object into a flat structure for Supabase.
  * @param {object} cveItem - The CVE object from NVD API.
  * @returns {object} A flat object for the database.
  */
 function transformCve(cveItem) {
   const { cve } = cveItem;
-  const cveId = cve.id;
 
   // Get description (English only)
   const description = cve.descriptions?.find(d => d.lang === 'en')?.value || 'No description provided.';
@@ -236,36 +267,42 @@ function transformCve(cveItem) {
   let base_score = null;
   let severity = null;
   let vector_string = null;
-  let exploitability_score = null;
 
   if (metricsV31) {
     base_score = metricsV31.cvssData?.baseScore;
     severity = metricsV31.cvssData?.baseSeverity;
     vector_string = metricsV31.cvssData?.vectorString;
-    exploitability_score = metricsV31.exploitabilityScore;
   } else if (metricsV30) {
     base_score = metricsV30.cvssData?.baseScore;
     severity = metricsV30.cvssData?.baseSeverity;
     vector_string = metricsV30.cvssData?.vectorString;
-    exploitability_score = metricsV30.exploitabilityScore;
   } else if (metricsV2) {
     base_score = metricsV2.cvssData?.baseScore;
     severity = metricsV2.baseSeverity;
     vector_string = metricsV2.cvssData?.vectorString;
-    exploitability_score = metricsV2.exploitabilityScore;
   }
 
+  // Parse vector components
+  const vectorComponents = parseVectorString(vector_string);
+
+  // SCHEMA FIX: Map to user's 'vulnerabilities' table
   return {
-    cve_id: cveId,
-    description: description,
+    ID: cve.id, // 'cve_id' -> 'ID'
+    text: description, // 'description' -> 'text'
+    vectorString: vector_string, // 'vector_string' -> 'vectorString'
+    av: vectorComponents.av || null,
+    ac: vectorComponents.ac || null,
+    pr: vectorComponents.pr || null,
+    ui: vectorComponents.ui || null,
+    s: vectorComponents.s || null,
+    c: vectorComponents.c || null,
+    i: vectorComponents.i || null,
+    a: vectorComponents.a || null,
+    score: base_score, // 'base_score' -> 'score'
+    baseSeverity: severity, // 'severity' -> 'baseSeverity'
     published_date: cve.published,
-    last_modified_date: cve.lastModified,
-    base_score: base_score,
-    severity: severity,
-    vector_string: vector_string,
-    exploitability_score: exploitability_score,
-    // Store the full JSON for potential future use or detailed view
-    full_cve_json: cve,
+    // Dropped 'last_modified_date', 'exploitability_score', 'full_cve_json'
+    // as they are not in the user's 'vulnerabilities' table.
   };
 }
 
@@ -276,7 +313,7 @@ function transformCve(cveItem) {
 async function upsertData(data) {
   const { error } = await supabase
     .from(NVD_TABLE)
-    .upsert(data, { onConflict: 'cve_id' });
+    .upsert(data, { onConflict: 'ID' }); // SCHEMA FIX: Use 'ID' for conflict
 
   if (error) {
     console.error('::ERROR:: Failed to upsert data into Supabase:', error.message);
