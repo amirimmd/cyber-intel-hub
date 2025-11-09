@@ -73,7 +73,7 @@ export const Sidebar = ({
       <div 
         className={`fixed md:relative z-40 flex flex-col flex-shrink-0 w-72 h-full bg-cyber-card border-r border-cyber-cyan/20 transition-transform duration-300 ease-in-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0`}
+        } md:translate-x-0 top-0 left-0`} // [FIX] top-0 left-0 اضافه شد
       >
         {/* Sidebar Header */}
         <div className="flex items-center justify-between p-4 border-b border-cyber-cyan/20 flex-shrink-0">
