@@ -1,7 +1,8 @@
 // --- components/tabs/NVDTab.jsx ---
 import React from 'react';
 import { ShieldAlert } from 'https://esm.sh/lucide-react@0.395.0'; 
-import { NVDTable } from '../NVDTable';
+// [FIX] اصلاح مسیر import برای استفاده از @ alias
+import { NVDTable } from '@/components/NVDTable';
 
 export const NVDTab = () => (
     <section id="nvd-section" className="cyber-card mb-12">
