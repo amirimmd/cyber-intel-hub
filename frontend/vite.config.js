@@ -10,8 +10,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // [FIX] اضافه کردن این بخش برای رفع هشدار import.meta
-  // و فعال کردن VITE_HF_API_TOKEN
+  // [FIX] این بخش برای خواندن VITE_HF_API_TOKEN ضروری است
   build: {
     target: 'es2020'
   },
