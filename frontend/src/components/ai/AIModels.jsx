@@ -502,7 +502,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                         <textarea
                             ref={inputRef}
                             value={input}
-                            onInput={handleInput}
+                            onChange={handleInput} // [FIX] Changed from onInput to onChange for React standard
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
