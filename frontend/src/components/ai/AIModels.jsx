@@ -451,6 +451,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     
     // Handle textarea auto-resize
     const handleInput = (e) => {
+        console.log("DEBUG: handleInput called, value:", e.target.value); // [DEBUG]
         setInput(e.target.value);
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
@@ -501,8 +502,9 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                     <div className="flex items-end space-x-3">
                         <textarea
                             ref={inputRef}
-                            value={input}
-                            onChange={handleInput} // [FIX] برای به‌روزرسانی صحیح state در React، از onInput به onChange تغییر یافت
+                            // [DEBUG] حذف value={input} برای تست اینکه آیا state باعث بلاک شدن است یا خیر
+                            // value={input} 
+                            onInput={handleInput} 
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
