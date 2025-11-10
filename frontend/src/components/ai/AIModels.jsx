@@ -512,14 +512,14 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                                 }
                             }}
                             rows="1"
-                            className="cyber-textarea w-full resize-none max-h-32"
+                            className="cyber-textarea w-full resize-none max-h-32 relative z-50" // [DEBUG] اضافه کردن z-index بالا
                             placeholder="Enter query for analysis..."
                             disabled={loading}
                         />
                         <button 
                             onClick={handleSend} 
                             disabled={loading || !input.trim()}
-                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0"
+                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0 relative z-50" // [DEBUG] اضافه کردن z-index بالا
                         >
                             {loading ? (
                                 <Loader2 className="animate-spin" size={20} />
