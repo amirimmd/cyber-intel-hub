@@ -1,7 +1,7 @@
 // [FIX] این فایل به طور کامل اصلاح شده است تا:
 // 1. باگ اتصال API (نبودن Authorization header) را رفع کند.
 // 2. باگ توقف (setLoading) در صورت نبودن توکن را رفع کند.
-// 3. چیدمان (layout) را با اضافه کردن padding به تگ section اصلاح کند.
+// 3. چیدمان (layout) را با حذف padding از تگ section اصلاح کند.
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
@@ -472,12 +472,12 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     };
 
     // [FIX] چیدمان اصلاح شده است.
-    // p-4 md:p-8 (padding) به اینجا اضافه شد تا از App.jsx جبران شود
+    // p-4 md:p-8 (padding) از اینجا حذف شد.
     // h-full برای پر کردن فضا اضافه شد.
     return (
         <section 
           id="ai-models-section" 
-          className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10 p-4 md:p-8"
+          className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10"
         >
             
             {/* --- Main Chat Area --- */}

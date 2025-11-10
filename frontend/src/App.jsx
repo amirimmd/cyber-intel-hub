@@ -16,7 +16,7 @@ const TABS = {
   'ai': { 
     component: AIModels, 
     title: 'AI Models', 
-    props: {}
+    props: {} // پراپ‌ها به صورت پویا پاس داده می‌شوند
   },
   'nvd': { 
     component: NVDTab, 
@@ -40,11 +40,13 @@ function App() {
   const ActiveComponent = TABS[activeTab].component;
   const currentTabTitle = TABS[activeTab].title;
 
+  // تابع برای بستن سایدبار در موبایل هنگام انتخاب تب
   const handleTabSelect = (tab) => {
     setActiveTab(tab);
     setSidebarOpen(false); // بستن سایدبار در موبایل
   };
 
+  // تابع برای انتخاب مدل (از سایدبار به اینجا منتقل شد)
   const handleModelSelect = (modelKey) => {
     setActiveModel(modelKey);
   };
@@ -73,7 +75,7 @@ function App() {
           <header className="md:hidden flex items-center justify-between p-3 bg-cyber-card border-b border-cyber-cyan/20">
             <button 
               onClick={() => setSidebarOpen(true)} 
-              className="cyber-button !w-auto px-3 py-2 rounded-lg"
+              className="cyber-button !w-auto px-3 py-2 rounded-lg" // استایل دکمه بهبود یافت
               aria-label="Open menu"
             >
               <Menu size={20} />
@@ -91,6 +93,7 @@ function App() {
           <main className={`flex-1 ${activeTab === 'ai' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             <ActiveComponent 
               {...(TABS[activeTab].props || {})}
+              // پراپ‌های مورد نیاز کامپوننت AIModels به صورت شرطی پاس داده شد
               {...(activeTab === 'ai' && { activeModel, setActiveTab })}
             />
           </main>
