@@ -46,7 +46,7 @@ function App() {
     setSidebarOpen(false); // بستن سایدبار در موبایل
   };
 
-  // تابع برای انتخاب مدل (از سایدبار به اینجا منتقل شد)
+  // تابع برای انتخاب مدل
   const handleModelSelect = (modelKey) => {
     setActiveModel(modelKey);
   };
@@ -63,9 +63,9 @@ function App() {
           sidebarOpen={sidebarOpen} 
           setSidebarOpen={setSidebarOpen} 
           activeTab={activeTab}
-          setActiveTab={handleTabSelect} 
+          setActiveTab={handleTabSelect} // تابع جدید پاس داده شد
           activeModel={activeModel}
-          setActiveModel={handleModelSelect} 
+          setActiveModel={handleModelSelect} // تابع جدید پاس داده شد
         />
 
         {/* Main Content Area */}
@@ -73,9 +73,10 @@ function App() {
           
           {/* [FIX] هدر موبایل با دکمه همبرگری اصلاح شده */}
           <header className="md:hidden flex items-center justify-between p-3 bg-cyber-card border-b border-cyber-cyan/20">
+            {/* دکمه همبرگری با استایل بهتر */}
             <button 
               onClick={() => setSidebarOpen(true)} 
-              className="cyber-button !w-auto px-3 py-2 rounded-lg" // استایل دکمه بهبود یافت
+              className="cyber-button !w-auto px-3 py-2 rounded-lg" // استایل دکمه اصلاح شد
               aria-label="Open menu"
             >
               <Menu size={20} />
@@ -83,7 +84,7 @@ function App() {
             
             <h1 className="text-lg font-bold text-white">{currentTabTitle}</h1>
             
-            <div className="w-10"></div> {/* Spacer */}
+            <div className="w-10"></div> {/* Spacer برای تراز وسط */}
           </header>
 
           {/* [FIX] کانتینر اصلی محتوا اصلاح شد.
@@ -93,7 +94,6 @@ function App() {
           <main className={`flex-1 ${activeTab === 'ai' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             <ActiveComponent 
               {...(TABS[activeTab].props || {})}
-              // پراپ‌های مورد نیاز کامپوننت AIModels به صورت شرطی پاس داده شد
               {...(activeTab === 'ai' && { activeModel, setActiveTab })}
             />
           </main>
