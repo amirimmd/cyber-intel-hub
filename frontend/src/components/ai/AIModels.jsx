@@ -502,7 +502,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                         <textarea
                             ref={inputRef}
                             value={input}
-                            onChange={handleInput} // [FIX] Changed from onInput to onChange for React standard
+                            onChange={handleInput} // [FIX] برای به‌روزرسانی صحیح state در React، از onInput به onChange تغییر یافت
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
