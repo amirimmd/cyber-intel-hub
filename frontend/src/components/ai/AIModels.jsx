@@ -1,15 +1,6 @@
-// [FIX] این فایل به طور کامل اصلاح شده است تا:
-// 1. باگ اتصال API (نبودن Authorization header) را رفع کند.
-// 2. باگ توقف (setLoading) در صورت نبودن توکن را رفع کند.
-// 3. چیدمان (layout) را با حذف padding از تگ section اصلاح کند.
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
-  Loader2, 
-  User, 
-  Send, 
-  Bot, 
-  ChevronDown
+  Loader2, User, Send, Bot, ChevronDown, X
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // --- [START] Logic from former AIModelCard ---
@@ -19,8 +10,8 @@ const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
 const API_PREFIX = "/gradio_api";
 const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
 const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
-// [FIX] خواندن توکن از import.meta.env
-// این کار نیازمند تنظیم صحیح vite.config.js است
+
+// [FIX] HF_API_TOKEN now reads correctly thanks to vite.config.js fix
 const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
 
 // Session hash generator
@@ -104,12 +95,12 @@ const ShapVisualization = ({ shapData }) => {
 
     const getColor = (value) => {
         const alpha = Math.min(Math.abs(value) / maxAbsVal, 1.0) * 0.8; 
-        if (value > 0) { // High Attention (Red)
+        if (value > 0) { // High Attention (Red, predicts Label 1/2)
             return `rgba(255, 0, 0, ${alpha})`;
-        } else if (value < 0) { // Low Attention (Green)
+        } else if (value < 0) { // Low Attention (Green, predicts Label 0)
             return `rgba(0, 255, 0, ${alpha})`;
         }
-        return 'rgba(255, 255, 255, 0.05)'; // Neutral
+        return 'rgba(255, 255, 255, 0.05)'; // Neutral (near zero)
     };
 
     return (
@@ -137,15 +128,15 @@ const ShapVisualization = ({ shapData }) => {
 
 
 // --- [START] AIModels Chat Component ---
-// [MODIFIED] Props activeModel و setActiveTab را دریافت می‌کند
+// [FIX] Props 'activeModel' and 'setActiveTab' are now passed from App.jsx
 export const AIModels = ({ activeModel, setActiveTab }) => {
-    
     const [messages, setMessages] = useState([
-        { id: 'welcome', sender: 'ai', model: activeModel, text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.', shapData: null }
+        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.', shapData: null }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [statusText, setStatusText] = useState(''); // For queue status
+    const [modelSelectorOpen, setModelSelectorOpen] = useState(false); 
+    const [statusText, setStatusText] = useState(''); 
 
     const eventSourceRef = useRef(null);
     const messagesEndRef = useRef(null);
@@ -162,14 +153,6 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
       'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[SIMULATED] General Purpose Model' },
     };
 
-    // [FIX] افکت برای به‌روزرسانی پیام خوشامدگویی هنگام تغییر مدل
-    useEffect(() => {
-        setMessages([
-            { id: 'welcome-' + activeModel, sender: 'ai', model: activeModel, text: `:: Model switched to ${models[activeModel].title} ::\nReady for query...`, shapData: null }
-        ]);
-    }, [activeModel]);
-
-    // Effect to add the message to the list after typing is complete
     useEffect(() => {
         if (prevIsTyping.current && !isTyping && lastAiMessageText) {
             const aiMessage = { 
@@ -181,17 +164,15 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
             };
             setMessages(prev => [...prev, aiMessage]);
             setLastAiMessageText('');
-            setPendingShapData(null);
+            setPendingShapData(null); 
         }
         prevIsTyping.current = isTyping;
-    }, [isTyping, lastAiMessageText, activeModel, startTypingProcess, pendingShapData]);
+    }, [isTyping, lastAiMessageText, activeModel, startTypingProcess, pendingShapData]); 
 
-    // Effect to auto-scroll to bottom
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages, typedMessage]);
 
-    // Cleanup EventSource on unmount
     useEffect(() => {
       return () => {
         if (eventSourceRef.current) {
@@ -204,7 +185,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
 
     // [NEW] Simulation function for XAI
     const simulateXaiAnalysis = (query) => {
-        const tokens = query.split(/\s+/).filter(Boolean);
+        const tokens = query.split(/\s+/).filter(Boolean); 
         const label = Math.random() > 0.4 ? "1" : "0"; 
         
         let probability;
@@ -222,7 +203,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                 shapVal = (Math.random() - 0.7) * 1.5; // Biased negative
             }
             if (token.toLowerCase().match(/vulnerability|exploit|rce|cve|buffer|overflow/)) shapVal = 0.9 + Math.random() * 0.1;
-            if (token.toLowerCase().match(/the|a|is|and|of|for/)) shapVal = (Math.random() - 0.5) * 0.1;
+            if (token.toLowerCase().match(/the|a|is|and|of|for/)) shapVal = (Math.random() - 0.5) * 0.1; 
             
             return [token, parseFloat(shapVal.toFixed(4))];
         });
@@ -231,15 +212,29 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         return { text, shapData };
     };
 
-    // Send message function
+    // Send message function (combined logic from AIModelCard)
     const handleSend = async () => {
         const query = input.trim();
         if (!query || loading) return;
 
+        // [FIX] Check for HF_API_TOKEN *before* sending
+        if (activeModel === 'exbert' && !HF_API_TOKEN) {
+            console.error("HF_API_TOKEN is not set. Cannot send real request.");
+            const errorMsg = "API Error: Hugging Face token is not configured by the administrator.";
+            setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: query, model: activeModel }]);
+            setLastAiMessageText(errorMsg);
+            setPendingShapData(null);
+            startTypingProcess(errorMsg);
+            setInput('');
+            // [FIX] Bug: setLoading(false) was missing, causing UI to freeze
+            setLoading(false); 
+            return;
+        }
+
         setLoading(true);
         setInput('');
         setStatusText('');
-        if(inputRef.current) inputRef.current.style.height = 'auto';
+        if(inputRef.current) inputRef.current.style.height = 'auto'; 
         
         const newUserMessage = { id: Date.now(), sender: 'user', text: query, model: activeModel };
         setMessages(prev => [...prev, newUserMessage]);
@@ -251,48 +246,37 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         }
 
         // --- Simulation Logic ---
-        if (activeModel === 'xai') {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+        if (activeModel === 'xai') { 
+            await new Promise(resolve => setTimeout(resolve, 1500)); 
             const { text, shapData } = simulateXaiAnalysis(query);
             setLastAiMessageText(text);
-            setPendingShapData(shapData);
+            setPendingShapData(shapData); 
             startTypingProcess(text);
             setLoading(false);
             return;
         }
-        if (activeModel === 'other') {
+        if (activeModel === 'other') { 
             await new Promise(resolve => setTimeout(resolve, 1000));
             const response = simulateAnalysis(query, activeModel);
             setLastAiMessageText(response);
-            setPendingShapData(null);
+            setPendingShapData(null); 
             startTypingProcess(response);
             setLoading(false);
             return;
         }
         
-        // [FIX] بررسی توکن در اینجا انجام می‌شود
-        if (activeModel === 'exbert' && !HF_API_TOKEN) {
-             console.error("FATAL: VITE_HF_API_TOKEN is missing. Check .env file or Vercel environment variables.");
-             const errorMsg = "API Error: Hugging Face API Token is not configured. Please contact the administrator.";
-             setLastAiMessageText(errorMsg);
-             setPendingShapData(null);
-             startTypingProcess(errorMsg);
-             setLoading(false); // [FIX] اطمینان از ریست شدن loading
-             return;
-        }
-
         // --- Real ExBERT Logic (/queue/join) ---
         const sessionHash = generateSessionHash(); 
         
         try {
             console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-            // [FIX] اضافه کردن هدر Authorization
+            // [FIX] Added Authorization header for HF Spaces
             const joinHeaders = {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
                 'Pragma': 'no-cache',
                 'Expires': '0',
-                'Authorization': `Bearer ${HF_API_TOKEN}` // [FIX]
+                'Authorization': `Bearer ${HF_API_TOKEN}` 
             };
             const payload = {
                 "data": [query],
@@ -313,7 +297,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                 console.error("Queue Join Error:", joinResponse.status, errorText);
                 let detailedError = `Failed to join queue: ${joinResponse.status}.`;
                 if (joinResponse.status === 401) {
-                    detailedError = "API ERROR: 401 Unauthorized. Check your VITE_HF_API_TOKEN.";
+                    detailedError = "API ERROR: 401 Unauthorized. Check VITE_HF_API_TOKEN.";
                 } else if (joinResponse.status === 404) {
                     detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
                 }
@@ -343,7 +327,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                                 const rawPrediction = message.output.data[0];
                                 const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
                                 setLastAiMessageText(formattedOutput);
-                                setPendingShapData(null);
+                                setPendingShapData(null); 
                                 startTypingProcess(formattedOutput);
                             } else {
                                 const errorMsg = message.output?.error || "Unknown server processing error.";
@@ -427,7 +411,6 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     // Internal component for rendering messages
     const MessageComponent = ({ msg, isTyping = false, colorOverride = '' }) => {
         const isAi = msg.sender === 'ai';
-
         const labelMatch = msg.text.match(/Predicted Label: (\d)/);
         const label = labelMatch ? labelMatch[1] : null;
         
@@ -442,11 +425,9 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         return (
             <div className={`flex w-full mb-4 ${isAi ? 'justify-start' : 'justify-end'}`}>
                 <div className={`flex max-w-xs md:max-w-md lg:max-w-2xl ${isAi ? 'flex-row' : 'flex-row-reverse'}`}>
-                    {/* Icon */}
                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isAi ? 'bg-cyber-card text-cyber-green' : 'bg-cyber-green text-dark-bg'}`}>
                         {isAi ? <Bot size={20} /> : <User size={20} />}
                     </div>
-                    {/* Message Text */}
                     <div className={`mx-3 rounded-lg p-3 ${isAi ? 'bg-cyber-card' : 'bg-cyber-green text-dark-bg'}`}>
                         {isAi && (
                             <span className="text-xs font-bold text-cyber-green block mb-1">
@@ -471,34 +452,27 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         e.target.style.height = (e.target.scrollHeight) + 'px';
     };
 
-    // [FIX] چیدمان اصلاح شده است.
-    // p-4 md:p-8 (padding) از اینجا حذف شد.
-    // h-full برای پر کردن فضا اضافه شد.
+    // [FIX] Layout completely changed to work within App.jsx's layout
+    // No more internal sidebar, no more fixed heights
     return (
-        <section 
-          id="ai-models-section" 
-          className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl animate-border-pulse overflow-hidden shadow-lg shadow-cyber-green/10"
-        >
+        <section id="ai-models-section" className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl overflow-hidden shadow-lg shadow-cyber-green/10">
             
-            {/* --- Main Chat Area --- */}
-            {/* [FIX] h-full حذف شد تا flex-1 به درستی کار کند */}
-            <div className="flex-1 flex flex-col bg-dark-bg/50 overflow-hidden rounded-lg">
+            {/* Main Chat Area */}
+            <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
                 
-                {/* Chat Header (ساده شده) */}
-                <div className="flex-shrink-0 flex items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card text-center">
-                    <div>
+                {/* Chat Header (Desktop-only, simplified) */}
+                <div className="hidden md:flex flex-shrink-0 items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card">
+                    <div className="text-center">
                         <h3 className="text-lg font-bold text-white">{models[activeModel].title}</h3>
                         <p className="text-xs text-gray-400">{models[activeModel].description}</p>
                     </div>
                 </div>
 
                 {/* Message List */}
-                {/* [FIX] padding به اینجا منتقل شد */}
                 <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth">
                     {messages.map(msg => (
                         <MessageComponent key={msg.id} msg={msg} />
                     ))}
-                    {/* Typing message */}
                     {isTyping && (
                         <MessageComponent 
                             msg={{ id: 'typing', sender: 'ai', model: activeModel, text: typedMessage }} 
@@ -513,7 +487,6 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                 </div>
 
                 {/* Input Area */}
-                {/* [FIX] موقعیت‌یابی fixed حذف شد */}
                 <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg">
                     { (loading || statusText) && (
                         <div className="text-xs text-cyber-cyan mb-2 flex items-center">
@@ -554,3 +527,4 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         </section>
     );
 };
+// --- [END] New AIModels Chat Component ---
