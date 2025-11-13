@@ -235,9 +235,13 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         */
 
         setLoading(true);
-        setInput('');
+        setInput(''); // <-- [FIX] این state را پاک می‌کند
         setStatusText('');
-        if(inputRef.current) inputRef.current.style.height = 'auto'; 
+        // [FIX] این مقدار ref را پاک نمی‌کند، چون کد شما این خط را نداشت
+        if(inputRef.current) {
+            inputRef.current.value = ''; // <-- [FIX] اضافه کردن این خط برای پاک کردن بصری
+            inputRef.current.style.height = 'auto'; 
+        }
         
         const newUserMessage = { id: Date.now(), sender: 'user', text: query, model: activeModel };
         setMessages(prev => [...prev, newUserMessage]);
@@ -451,7 +455,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     
     // Handle textarea auto-resize
     const handleInput = (e) => {
-        console.log("DEBUG: handleInput called, value:", e.target.value); // [DEBUG]
+        // console.log("DEBUG: handleInput called, value:", e.target.value); // [DEBUG]
         setInput(e.target.value);
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
@@ -502,7 +506,9 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                     <div className="flex items-end space-x-3">
                         <textarea
                             ref={inputRef}
-                            // [DEBUG] حذف value={input} برای تست اینکه آیا state باعث بلاک شدن است یا خیر
+                            // [FIX] این چیزی است که شما گفتید کار می‌کند:
+                            // 'value' کامنت شده است
+                            // 'onInput' فعال است
                             // value={input} 
                             onInput={handleInput} 
                             onKeyDown={(e) => {
@@ -512,14 +518,16 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                                 }
                             }}
                             rows="1"
-                            className="cyber-textarea w-full resize-none max-h-32 relative z-50" // [DEBUG] اضافه کردن z-index بالا
+                            // [FIX] کلاس‌های z-index حذف شدند
+                            className="cyber-textarea w-full resize-none max-h-32" 
                             placeholder="Enter query for analysis..."
                             disabled={loading}
                         />
                         <button 
                             onClick={handleSend} 
                             disabled={loading || !input.trim()}
-                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0 relative z-50" // [DEBUG] اضافه کردن z-index بالا
+                            // [FIX] کلاس‌های z-index حذف شدند
+                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0"
                         >
                             {loading ? (
                                 <Loader2 className="animate-spin" size={20} />
