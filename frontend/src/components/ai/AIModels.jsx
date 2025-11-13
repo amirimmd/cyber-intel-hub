@@ -240,7 +240,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         
         // [FIX] پاک کردن دستی مقدار textarea چون "uncontrolled" است
         if (inputRef.current) {
-            inputRef.current.value = ''; 
+            inputRef.current.value = ''; // <-- [FIX] این خط برای پاک کردن DOM ضروری است
             inputRef.current.style.height = 'auto'; 
         }
         
@@ -457,7 +457,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     // Handle textarea auto-resize
     const handleInput = (e) => {
         // console.log("DEBUG: handleInput called, value:", e.target.value); // [DEBUG]
-        setInput(e.target.value);
+        setInput(e.target.value); // <-- [FIX] همچنان state را آپدیت می‌کنیم
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
     };
@@ -468,7 +468,8 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         <section id="ai-models-section" className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl overflow-hidden shadow-lg shadow-cyber-green/10">
             
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col h-full bg-dark-bg/50">
+            {/* [FIX] حذف h-full اضافه از اینجا */}
+            <div className="flex-1 flex flex-col bg-dark-bg/50">
                 
                 {/* Chat Header (Desktop-only, simplified) */}
                 <div className="hidden md:flex flex-shrink-0 items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card">
@@ -508,8 +509,8 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                         <textarea
                             ref={inputRef}
                             // [FIX] بازگشت به حالت "Uncontrolled"
-                            // value={input} // <-- حذف شد
-                            onInput={handleInput} // <-- بازگشت به onInput
+                            // value={input} // <-- [FIX] کامنت شد
+                            onInput={handleInput} // [FIX] بازگشت به onInput
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
