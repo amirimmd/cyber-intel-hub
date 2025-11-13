@@ -451,7 +451,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
     
     // Handle textarea auto-resize
     const handleInput = (e) => {
-        console.log("DEBUG: handleInput called, value:", e.target.value); // [DEBUG]
+        // [FIX] این تابع دیگر شامل console.log دیباگ نیست
         setInput(e.target.value);
         e.target.style.height = 'auto';
         e.target.style.height = (e.target.scrollHeight) + 'px';
@@ -502,8 +502,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                     <div className="flex items-end space-x-3">
                         <textarea
                             ref={inputRef}
-                            // [DEBUG] حذف value={input} برای تست اینکه آیا state باعث بلاک شدن است یا خیر
-                            // value={input} 
+                            value={input} 
                             onInput={handleInput} 
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -512,14 +511,14 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                                 }
                             }}
                             rows="1"
-                            className="cyber-textarea w-full resize-none max-h-32 relative z-50" // [DEBUG] اضافه کردن z-index بالا
+                            className="cyber-textarea w-full resize-none max-h-32"
                             placeholder="Enter query for analysis..."
                             disabled={loading}
                         />
                         <button 
                             onClick={handleSend} 
                             disabled={loading || !input.trim()}
-                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0 relative z-50" // [DEBUG] اضافه کردن z-index بالا
+                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0"
                         >
                             {loading ? (
                                 <Loader2 className="animate-spin" size={20} />
