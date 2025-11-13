@@ -237,9 +237,9 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         setLoading(true);
         setInput(''); // <-- [FIX] این state را پاک می‌کند
         setStatusText('');
-        // [FIX] این مقدار ref را پاک نمی‌کند، چون کد شما این خط را نداشت
         if(inputRef.current) {
-            inputRef.current.value = ''; // <-- [FIX] اضافه کردن این خط برای پاک کردن بصری
+            // [FIX] این خط دیگر لازم نیست چون کامپوننت کنترل شده است
+            // inputRef.current.value = ''; 
             inputRef.current.style.height = 'auto'; 
         }
         
@@ -506,11 +506,9 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                     <div className="flex items-end space-x-3">
                         <textarea
                             ref={inputRef}
-                            // [FIX] این چیزی است که شما گفتید کار می‌کند:
-                            // 'value' کامنت شده است
-                            // 'onInput' فعال است
-                            // value={input} 
-                            onInput={handleInput} 
+                            // [FIX] بازگشت به حالت کنترل شده (Controlled Component)
+                            value={input} 
+                            onChange={handleInput} // [FIX] تغییر از onInput به onChange
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
