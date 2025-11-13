@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { supabase } from '@/supabaseClient';
+import { supabase } from './supabaseClient.js'; // [FIX] تغییر به مسیر نسبی
 import { 
   BrainCircuit, ShieldAlert, Swords, User, Menu, X
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // کامپوننت‌های تفکیک شده
-import { Sidebar } from '@/components/ui/Sidebar';
-import { AIModels } from '@/components/ai/AIModels';
-import { NVDTab } from '@/components/tabs/NVDTab';
-import { ExploitDBTab } from '@/components/tabs/ExploitDBTab';
-import { LoginTab } from '@/components/tabs/LoginTab';
+// [FIX] اضافه کردن پسوند .jsx و تغییر به مسیر نسبی
+import { Sidebar } from './components/ui/Sidebar.jsx';
+import { AIModels } from './components/ai/AIModels.jsx';
+import { NVDTab } from './components/tabs/NVDTab.jsx';
+import { ExploitDBTab } from './components/tabs/ExploitDBTab.jsx';
+import { LoginTab } from './components/tabs/LoginTab.jsx';
 
 // تعریف تب‌ها
 const TABS = {
@@ -61,6 +62,9 @@ function App() {
         فایل index.css قبلاً overflow: hidden را روی html/body اعمال کرده است.
         وجود overflow: hidden در اینجا می‌تواند stacking context ناخواسته‌ای ایجاد کند
         و مانع از قرارگیری صحیح Sidebar (z-40) روی محتوا در موبایل شود.
+        
+        [FIX 2]
+        تغییر h-screen به h-full برای جلوگیری از پرش صفحه در موبایل هنگام باز شدن کیبورد.
       */}
       <div className="flex h-full w-full bg-dark-bg text-cyber-text">
         
@@ -74,6 +78,7 @@ function App() {
         />
 
         {/* Main Content Area */}
+        {/* [FIX] تغییر h-screen به h-full */}
         <div className="flex flex-col flex-1 h-full">
           
           {/* [FIX] 
@@ -96,11 +101,13 @@ function App() {
             <div className="w-10"></div> {/* Spacer برای تراز وسط */}
           </header>
 
-          {/* [FIX] کانتینر اصلی محتوا اصلاح شد.
-            - padding (p-4 md:p-8) از اینجا حذف شد.
-            - overflow-y-auto (اسکرول) فقط برای تب‌های غیر چت اعمال می‌شود.
+          {/* [FIX] 
+            اضافه کردن 'relative' و 'z-0' به تگ main.
+            این کار یک stacking context جدید ایجاد می‌کند و تضمین می‌کند
+            که محتوای اصلی (شامل باکس چت) بالای '.background-grid'
+            (که z-index: 0 دارد) قرار می‌گیرد و قابل کلیک است.
           */}
-          <main className={`flex-1 ${activeTab === 'ai' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <main className={`relative z-0 flex-1 ${activeTab === 'ai' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             <ActiveComponent 
               {...(TABS[activeTab].props || {})}
               {...(activeTab === 'ai' && { activeModel, setActiveTab })}
