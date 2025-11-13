@@ -56,8 +56,13 @@ function App() {
       {/* Background Grid Effect */}
       <div className="background-grid"></div>
       
-      {/* Main App Layout (Full Screen) */}
-      <div className="flex h-screen w-full bg-dark-bg text-cyber-text overflow-hidden">
+      {/* [FIX] 
+        حذف 'overflow-hidden' از این div. 
+        فایل index.css قبلاً overflow: hidden را روی html/body اعمال کرده است.
+        وجود overflow: hidden در اینجا می‌تواند stacking context ناخواسته‌ای ایجاد کند
+        و مانع از قرارگیری صحیح Sidebar (z-40) روی محتوا در موبایل شود.
+      */}
+      <div className="flex h-screen w-full bg-dark-bg text-cyber-text">
         
         <Sidebar 
           sidebarOpen={sidebarOpen} 
@@ -71,8 +76,12 @@ function App() {
         {/* Main Content Area */}
         <div className="flex flex-col flex-1 h-screen">
           
-          {/* [FIX] هدر موبایل با دکمه همبرگری اصلاح شده */}
-          <header className="md:hidden flex items-center justify-between p-3 bg-cyber-card border-b border-cyber-cyan/20">
+          {/* [FIX] 
+            اضافه کردن 'relative' و 'z-10' به هدر.
+            این تضمین می‌کند که هدر بالای محتوای 'main' (z-auto) قرار می‌گیرد
+            اما همچنان زیر Overlay (z-30) و Sidebar (z-40) باقی می‌ماند.
+          */}
+          <header className="md:hidden relative z-10 flex items-center justify-between p-3 bg-cyber-card border-b border-cyber-cyan/20">
             {/* دکمه همبرگری با استایل بهتر */}
             <button 
               onClick={() => setSidebarOpen(true)} 
