@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { supabase } from './supabaseClient.js'; // [FIX] تغییر به مسیر نسبی
+// [FIX] تغییر به مسیر نسبی
+import { supabase } from './supabaseClient.js'; 
 import { 
   BrainCircuit, ShieldAlert, Swords, User, Menu, X
 } from 'https://esm.sh/lucide-react@0.395.0'; 
 
 // کامپوننت‌های تفکیک شده
-// [FIX] اضافه کردن پسوند .jsx و تغییر به مسیر نسبی
+// [FIX] تغییر به مسیر نسبی و اضافه کردن .jsx
 import { Sidebar } from './components/ui/Sidebar.jsx';
 import { AIModels } from './components/ai/AIModels.jsx';
 import { NVDTab } from './components/tabs/NVDTab.jsx';
@@ -54,38 +55,26 @@ function App() {
 
   return (
     <>
-      {/* Background Grid Effect */}
+      {/* Background Grid Effect (z-index: 0) */}
       <div className="background-grid"></div>
       
-      {/* [FIX] 
-        حذف 'overflow-hidden' از این div. 
-        فایل index.css قبلاً overflow: hidden را روی html/body اعمال کرده است.
-        وجود overflow: hidden در اینجا می‌تواند stacking context ناخواسته‌ای ایجاد کند
-        و مانع از قرارگیری صحیح Sidebar (z-40) روی محتوا در موبایل شود.
-        
-        [FIX 2]
-        تغییر h-screen به h-full برای جلوگیری از پرش صفحه در موبایل هنگام باز شدن کیبورد.
-      */}
+      {/* [FIX] استفاده از h-full به جای h-screen برای جلوگیری از پرش کیبورد */}
       <div className="flex h-full w-full bg-dark-bg text-cyber-text">
         
         <Sidebar 
           sidebarOpen={sidebarOpen} 
           setSidebarOpen={setSidebarOpen} 
           activeTab={activeTab}
-          setActiveTab={handleTabSelect} // تابع جدید پاس داده شد
+          setActiveTab={handleTabSelect} 
           activeModel={activeModel}
-          setActiveModel={handleModelSelect} // تابع جدید پاس داده شد
+          setActiveModel={handleModelSelect}
         />
 
         {/* Main Content Area */}
-        {/* [FIX] تغییر h-screen به h-full */}
+        {/* [FIX] استفاده از h-full به جای h-screen */}
         <div className="flex flex-col flex-1 h-full">
           
-          {/* [FIX] 
-            اضافه کردن 'relative' و 'z-10' به هدر.
-            این تضمین می‌کند که هدر بالای محتوای 'main' (z-auto) قرار می‌گیرد
-            اما همچنان زیر Overlay (z-30) و Sidebar (z-40) باقی می‌ماند.
-          */}
+          {/* [FIX] هدر موبایل با z-10 تا روی <main> باشد */}
           <header className="md:hidden relative z-10 flex items-center justify-between p-3 bg-cyber-card border-b border-cyber-cyan/20">
             {/* دکمه همبرگری با استایل بهتر */}
             <button 
@@ -101,11 +90,11 @@ function App() {
             <div className="w-10"></div> {/* Spacer برای تراز وسط */}
           </header>
 
-          {/* [FIX] 
-            اضافه کردن 'relative' و 'z-0' به تگ main.
+          {/* *** [FIX] راه حل اصلی اینجااست ***
+            اضافه کردن 'relative' و 'z-0' (یا z-1)
             این کار یک stacking context جدید ایجاد می‌کند و تضمین می‌کند
-            که محتوای اصلی (شامل باکس چت) بالای '.background-grid'
-            (که z-index: 0 دارد) قرار می‌گیرد و قابل کلیک است.
+            که محتوای <main> (شامل باکس چت) *بالای* '.background-grid'
+            (که z-index: 0 است) قرار می‌گیرد و قابل کلیک است.
           */}
           <main className={`relative z-0 flex-1 ${activeTab === 'ai' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             <ActiveComponent 
