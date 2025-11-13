@@ -142,7 +142,7 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
 
     const eventSourceRef = useRef(null);
     const messagesEndRef = useRef(null);
-    const inputRef = useRef(null);
+    const inputRef = useRef(null); // <-- ref برای textarea
 
     const [typedMessage, startTypingProcess, isTyping] = useTypewriter('', 20);
     const [lastAiMessageText, setLastAiMessageText] = useState('');
@@ -237,9 +237,10 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
         setLoading(true);
         setInput(''); // <-- [FIX] این state را پاک می‌کند
         setStatusText('');
-        if(inputRef.current) {
-            // [FIX] این خط دیگر لازم نیست چون کامپوننت کنترل شده است
-            // inputRef.current.value = ''; 
+        
+        // [FIX] پاک کردن دستی مقدار textarea چون "uncontrolled" است
+        if (inputRef.current) {
+            inputRef.current.value = ''; 
             inputRef.current.style.height = 'auto'; 
         }
         
@@ -506,9 +507,9 @@ export const AIModels = ({ activeModel, setActiveTab }) => {
                     <div className="flex items-end space-x-3">
                         <textarea
                             ref={inputRef}
-                            // [FIX] بازگشت به حالت کنترل شده (Controlled Component)
-                            value={input} 
-                            onChange={handleInput} // [FIX] تغییر از onInput به onChange
+                            // [FIX] بازگشت به حالت "Uncontrolled"
+                            // value={input} // <-- حذف شد
+                            onInput={handleInput} // <-- بازگشت به onInput
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter' && !e.shiftKey) {
                                     e.preventDefault();
