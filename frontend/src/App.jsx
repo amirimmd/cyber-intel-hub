@@ -62,7 +62,7 @@ function App() {
         وجود overflow: hidden در اینجا می‌تواند stacking context ناخواسته‌ای ایجاد کند
         و مانع از قرارگیری صحیح Sidebar (z-40) روی محتوا در موبایل شود.
       */}
-      <div className="flex h-screen w-full bg-dark-bg text-cyber-text">
+      <div className="flex h-full w-full bg-dark-bg text-cyber-text">
         
         <Sidebar 
           sidebarOpen={sidebarOpen} 
@@ -74,7 +74,7 @@ function App() {
         />
 
         {/* Main Content Area */}
-        <div className="flex flex-col flex-1 h-screen">
+        <div className="flex flex-col flex-1 h-full">
           
           {/* [FIX] 
             اضافه کردن 'relative' و 'z-10' به هدر.
