@@ -1,17 +1,29 @@
 import React from 'react';
-import { ShieldAlert } from 'https://esm.sh/lucide-react@0.395.0'; 
-import { NVDTable } from '@/components/NVDTable';
+import NVDTable from '../NVDTable';
+import NVDLiveFeed from '../NVDLiveFeed';
+import { ShieldAlert } from 'lucide-react';
 
-export const NVDTab = () => (
-    // [FIX] اضافه کردن padding به این کامپوننت (که قبلاً در App.jsx بود)
-    // h-full و overflow-y-auto برای اسکرول صحیح این تب اضافه شد
-    <div className="p-4 md:p-8 h-full overflow-y-auto">
-      <section id="nvd-section" className="cyber-card mb-12">
-        <div className="flex items-center mb-6">
-          <ShieldAlert className="icon-cyan w-8 h-8 mr-3 flex-shrink-0" />
-          <h2 className="text-2xl font-semibold text-cyan-300 break-words min-w-0">NVD Vulnerability Feed_</h2>
+const NVDTab = ({ compact = false, limit = 50 }) => {
+  return (
+    <div className={`space-y-6 ${compact ? '' : 'animate-in fade-in duration-500'}`}>
+      {!compact && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+              <ShieldAlert className="w-6 h-6 text-blue-500" />
+              فید آسیب‌پذیری‌های NVD
+            </h2>
+            <p className="text-slate-500 mt-1">دریافت لحظه‌ای داده‌های CVE از پایگاه داده ملی آسیب‌پذیری‌ها.</p>
+          </div>
+          <NVDLiveFeed />
         </div>
-        <NVDTable />
-      </section>
+      )}
+
+      <div className={`bg-white rounded-2xl border border-slate-200 overflow-hidden ${compact ? 'shadow-none border-0' : 'shadow-sm'}`}>
+        <NVDTable limit={limit} />
+      </div>
     </div>
-);
+  );
+};
+
+export default NVDTab;
