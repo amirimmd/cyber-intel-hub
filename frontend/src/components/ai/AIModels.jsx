@@ -1,544 +1,377 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { 
-  Loader2, User, Send, Bot, ChevronDown, X
-} from 'https://esm.sh/lucide-react@0.395.0'; 
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Bot, User, Loader2, Sparkles, Terminal, AlertTriangle, Cpu } from 'lucide-react';
 
-// --- [START] Logic from former AIModelCard ---
-const HF_USER = "amirimmd";
-const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
-const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
-const API_PREFIX = "/gradio_api";
-const QUEUE_JOIN_URL = `${BASE_API_URL}${API_PREFIX}/queue/join`;
-const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}${API_PREFIX}/queue/data?session_hash=${sessionHash}`;
-
-// [FIX] وابستگی VITE_HF_API_TOKEN حذف شد تا از خطای 'import.meta' در build جلوگیری شود.
-// این کامپوننت اکنون به Gradio Space به صورت عمومی (بدون احراز هویت) دسترسی خواهد داشت.
-// const HF_API_TOKEN = import.meta.env.VITE_HF_API_TOKEN || ""; 
-
-// Session hash generator
-const generateSessionHash = () => {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < 11; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
-// Typewriter hook
-const useTypewriter = (text, speed = 50) => {
-    const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text);
-    const [isTyping, setIsTyping] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null);
-
-    const startTypingProcess = useCallback((newText) => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setInternalText(newText || '');
-        setDisplayText('');
-        setCurrentIndex(0);
-        setIsTyping(!!newText);
-    }, []);
-
-    useEffect(() => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-
-        if (isTyping && internalText && currentIndex < internalText.length) {
-            intervalRef.current = setInterval(() => {
-                 if (currentIndex < internalText.length) {
-                    const nextIndex = currentIndex + 1;
-                    setDisplayText(internalText.substring(0, nextIndex));
-                    setCurrentIndex(nextIndex);
-                 } else {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
-                    setIsTyping(false);
-                 }
-            }, speed);
-        } else if (currentIndex >= (internalText?.length || 0)) {
-            if(isTyping) setIsTyping(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
-        }
-
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isTyping, speed, internalText, currentIndex]);
-
-    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
-
-    return [displayText, startTypingProcess, isTyping];
-};
-
-// Simulation function for 'other' model
-const simulateAnalysis = (query, modelId) => {
-    let simulatedResponse = '';
-    switch (modelId) {
-      case 'other': simulatedResponse = `[SIMULATED_GENERAL_REPORT]:\nQuery processed by General Purpose Model.\nInput Length: ${query.length} chars.\nStatus: OK`; break;
-      default: simulatedResponse = "ERROR: Simulated model not found.";
-    }
-    return simulatedResponse;
-};
-// --- [END] Logic from former AIModelCard ---
-
-
-// --- [NEW] SHAP Visualization Component ---
+// --- کامپوننت نمایش وزن‌های SHAP ---
 const ShapVisualization = ({ shapData }) => {
     if (!shapData || shapData.length === 0) return null;
 
     let maxAbsVal = 0;
-    shapData.forEach(([, val]) => {
-        if (Math.abs(val) > maxAbsVal) {
-            maxAbsVal = Math.abs(val);
-        }
+    shapData.forEach((item) => {
+        // هندل کردن ساختارهای مختلف داده [token, weight] یا {token, weight}
+        const val = Array.isArray(item) ? item[1] : item.weight;
+        if (Math.abs(val) > maxAbsVal) maxAbsVal = Math.abs(val);
     });
-    
-    if (maxAbsVal === 0) maxAbsVal = 1; 
+    if (maxAbsVal === 0) maxAbsVal = 1;
 
-    const getColor = (value) => {
-        const alpha = Math.min(Math.abs(value) / maxAbsVal, 1.0) * 0.8; 
-        if (value > 0) { // High Attention (Red, predicts Label 1/2)
-            return `rgba(255, 0, 0, ${alpha})`;
-        } else if (value < 0) { // Low Attention (Green, predicts Label 0)
-            return `rgba(0, 255, 0, ${alpha})`;
-        }
-        return 'rgba(255, 255, 255, 0.05)'; // Neutral (near zero)
+    const getColor = (item) => {
+        const val = Array.isArray(item) ? item[1] : item.weight;
+        const alpha = Math.min(Math.abs(val) / maxAbsVal, 1.0) * 0.7;
+        if (val > 0) return `rgba(239, 68, 68, ${alpha})`; // قرمز (ریسک)
+        if (val < 0) return `rgba(59, 130, 246, ${alpha})`; // آبی (امن)
+        return 'rgba(255, 255, 255, 0)';
     };
 
     return (
-        <div className="mt-3 p-2 bg-dark-bg/50 rounded border border-gray-700">
-            <p className="text-xs font-bold text-gray-400 mb-2">XAI - SHAP Word Importance:</p>
-            <div className="flex flex-wrap" style={{ gap: '4px' }}>
-                {shapData.map(([token, value], index) => (
-                    <span 
-                        key={index} 
-                        title={`SHAP: ${value.toFixed(4)}`}
-                        className="p-1 rounded"
-                        style={{ backgroundColor: getColor(value), marginRight: '4px', marginBottom: '4px' }}
-                    >
-                        {token}
-                    </span>
-                ))}
+        <div className="mt-3 p-3 bg-slate-950/50 rounded-lg border border-slate-700 font-mono text-xs">
+            <p className="font-bold text-slate-400 mb-2 flex items-center gap-2">
+                <Sparkles className="w-3 h-3 text-indigo-400" />
+                تحلیل SHAP (اهمیت کلمات):
+            </p>
+            <div className="flex flex-wrap gap-1 leading-relaxed" dir="ltr">
+                {shapData.map((item, index) => {
+                    const token = Array.isArray(item) ? item[0] : item.token;
+                    const val = Array.isArray(item) ? item[1] : item.weight;
+                    return (
+                        <span 
+                            key={index} 
+                            title={`Impact: ${val?.toFixed(4)}`}
+                            className="px-1 py-0.5 rounded cursor-help transition-colors hover:ring-1 ring-white/30 text-slate-200"
+                            style={{ backgroundColor: getColor(item) }}
+                        >
+                            {token}
+                        </span>
+                    );
+                })}
             </div>
-            <div className="flex justify-between text-xs mt-2 text-gray-500">
-                <span><span className="w-3 h-3 inline-block rounded-sm bg-cyber-green/50 mr-1 align-middle"></span> Low (Label 0)</span>
-                <span><span className="w-3 h-3 inline-block rounded-sm bg-cyber-red/50 mr-1 align-middle"></span> High (Label 1/2)</span>
+            <div className="flex gap-4 mt-2 text-[10px] text-slate-500" dir="ltr">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> کاهش ریسک</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> افزایش ریسک</span>
             </div>
         </div>
     );
 };
 
+// --- تنظیمات API ---
+const HF_USER = "amirimmd";
+const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
+const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
+const QUEUE_JOIN_URL = `${BASE_API_URL}/gradio_api/queue/join`;
+const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/gradio_api/queue/data?session_hash=${sessionHash}`;
 
-// --- [START] AIModels Chat Component ---
-// [FIX] Props 'activeModel' and 'setActiveTab' are now passed from App.jsx
-// [FIX] مسیر واردات (import) برای supabaseClient که باعث خطای build قبلی شده بود، حذف شد زیرا در این فایل استفاده نمی‌شود.
-export const AIModels = ({ activeModel, setActiveTab }) => {
+// تولید هش تصادفی برای نشست
+const generateSessionHash = () => {
+    return Math.random().toString(36).substring(2, 13);
+};
+
+const AIModels = () => {
+    const [activeModel, setActiveModel] = useState('xai'); // 'exbert' یا 'xai'
     const [messages, setMessages] = useState([
-        { id: 'welcome', sender: 'ai', model: 'exbert', text: ':: CONNECTION ESTABLISHED ::\nWelcome to the Intelligent Analysis Unit. Select a model and submit your query.', shapData: null }
+        { 
+            id: 'welcome', 
+            sender: 'ai', 
+            text: ':: سیستم آنلاین است ::\nهسته عصبی ExBERT-XAI آماده است. مدل مورد نظر را انتخاب کرده و توضیحات آسیب‌پذیری را وارد کنید.', 
+            shapData: null 
+        }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [modelSelectorOpen, setModelSelectorOpen] = useState(false); 
-    const [statusText, setStatusText] = useState(''); 
-
-    const eventSourceRef = useRef(null);
+    const [statusText, setStatusText] = useState('');
+    
     const messagesEndRef = useRef(null);
-    const inputRef = useRef(null); // <-- ref برای textarea
-
-    const [typedMessage, startTypingProcess, isTyping] = useTypewriter('', 20);
-    const [lastAiMessageText, setLastAiMessageText] = useState('');
-    const [pendingShapData, setPendingShapData] = useState(null);
-    const prevIsTyping = useRef(false);
-
-    const models = {
-      'exbert': { title: 'MODEL::EXBERT_', description: 'Exploitability Probability Analysis' },
-      'xai': { title: 'MODEL::EXBERT.XAI_', description: '[SIMULATED] Explainable AI (SHAP)' },
-      'other': { title: 'MODEL::GENERAL.PURPOSE_', description: '[SIMULATED] General Purpose Model' },
-    };
-
+    const eventSourceRef = useRef(null);
+    
+    // اسکرول خودکار به پایین
     useEffect(() => {
-        if (prevIsTyping.current && !isTyping && lastAiMessageText) {
-            const aiMessage = { 
-                id: Date.now(), 
-                sender: 'ai', 
-                model: activeModel, 
-                text: lastAiMessageText,
-                shapData: pendingShapData 
-            };
-            setMessages(prev => [...prev, aiMessage]);
-            setLastAiMessageText('');
-            setPendingShapData(null); 
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
         }
-        prevIsTyping.current = isTyping;
-    }, [isTyping, lastAiMessageText, activeModel, startTypingProcess, pendingShapData]); 
+    }, [messages, statusText]);
 
+    // بستن اتصال هنگام خروج از کامپوننت
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, typedMessage]);
-
-    useEffect(() => {
-      return () => {
-        if (eventSourceRef.current) {
-          console.log("Closing existing EventSource connection on component unmount.");
-          eventSourceRef.current.close();
-          eventSourceRef.current = null;
-        }
-      };
+        return () => {
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
+        };
     }, []);
 
-    // [NEW] Simulation function for XAI
-    const simulateXaiAnalysis = (query) => {
-        const tokens = query.split(/\s+/).filter(Boolean); 
-        const label = Math.random() > 0.4 ? "1" : "0"; 
-        
-        let probability;
-        if (label === "1") {
-            probability = Math.random() * (0.98 - 0.7) + 0.7; // 70%-98%
-        } else {
-            probability = Math.random() * (0.40 - 0.05) + 0.05; // 5-40%
-        }
-        
-        const shapData = tokens.map(token => {
-            let shapVal = (Math.random() - 0.5) * 2; // -1.0 to 1.0
-            if (label === "1") {
-                shapVal = (Math.random() - 0.3) * 1.5; // Biased positive
-            } else {
-                shapVal = (Math.random() - 0.7) * 1.5; // Biased negative
-            }
-            if (token.toLowerCase().match(/vulnerability|exploit|rce|cve|buffer|overflow/)) shapVal = 0.9 + Math.random() * 0.1;
-            if (token.toLowerCase().match(/the|a|is|and|of|for/)) shapVal = (Math.random() - 0.5) * 0.1; 
-            
-            return [token, parseFloat(shapVal.toFixed(4))];
-        });
-
-        const text = `[XAI_REPORT]:\nPredicted Label: ${label}\nProbability: ${probability.toFixed(3)}`;
-        return { text, shapData };
-    };
-
-    // Send message function (combined logic from AIModelCard)
     const handleSend = async () => {
         const query = input.trim();
         if (!query || loading) return;
 
-        // [FIX] بررسی HF_API_TOKEN حذف شد تا با build fix مطابقت داشته باشد
-        /*
-        if (activeModel === 'exbert' && !HF_API_TOKEN) {
-            console.error("HF_API_TOKEN is not set. Cannot send real request.");
-            const errorMsg = "API Error: Hugging Face token is not configured by the administrator.";
-            setMessages(prev => [...prev, { id: Date.now(), sender: 'user', text: query, model: activeModel }]);
-            setLastAiMessageText(errorMsg);
-            setPendingShapData(null);
-            startTypingProcess(errorMsg);
-            setInput('');
-            setLoading(false); 
-            return;
-        }
-        */
-
+        setInput('');
         setLoading(true);
-        setInput(''); // <-- [FIX] این state را پاک می‌کند
-        setStatusText('');
-        
-        // [FIX] پاک کردن دستی مقدار textarea چون "uncontrolled" است
-        if (inputRef.current) {
-            inputRef.current.value = ''; // <-- [FIX] این خط برای پاک کردن DOM ضروری است
-            inputRef.current.style.height = 'auto'; 
-        }
-        
-        const newUserMessage = { id: Date.now(), sender: 'user', text: query, model: activeModel };
-        setMessages(prev => [...prev, newUserMessage]);
-        
+        setStatusText('در حال برقراری ارتباط...');
+
+        // افزودن پیام کاربر
+        const userMsg = { id: Date.now(), sender: 'user', text: query };
+        setMessages(prev => [...prev, userMsg]);
+
+        // بستن اتصال قبلی اگر وجود دارد
         if (eventSourceRef.current) {
-            console.log("Closing previous EventSource before new request.");
             eventSourceRef.current.close();
             eventSourceRef.current = null;
         }
 
-        // --- Simulation Logic ---
-        if (activeModel === 'xai') { 
-            await new Promise(resolve => setTimeout(resolve, 1500)); 
-            const { text, shapData } = simulateXaiAnalysis(query);
-            setLastAiMessageText(text);
-            setPendingShapData(shapData); 
-            startTypingProcess(text);
-            setLoading(false);
-            return;
-        }
-        if (activeModel === 'other') { 
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            const response = simulateAnalysis(query, activeModel);
-            setLastAiMessageText(response);
-            setPendingShapData(null); 
-            startTypingProcess(response);
-            setLoading(false);
-            return;
-        }
-        
-        // --- Real ExBERT Logic (/queue/join) ---
-        const sessionHash = generateSessionHash(); 
-        
         try {
-            console.log(`Step 1: Joining Gradio Queue at ${QUEUE_JOIN_URL}...`);
-            // [FIX] هدر Authorization حذف شد
-            const joinHeaders = {
-                'Content-Type': 'application/json',
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0',
-                // 'Authorization': `Bearer ${HF_API_TOKEN}` // <-- [FIX] REMOVED
-            };
+            const sessionHash = generateSessionHash();
+            
+            // 1. پیوستن به صف (Join Queue)
+            const joinHeaders = { 'Content-Type': 'application/json' };
             const payload = {
                 "data": [query],
-                "event_data": null,
-                "fn_index": 2,       
-                "trigger_id": 12,    
+                "fn_index": 2, // ایندکس تابع در Gradio
                 "session_hash": sessionHash
             };
 
             const joinResponse = await fetch(QUEUE_JOIN_URL, {
                 method: 'POST',
-                headers: joinHeaders, 
-                body: JSON.stringify(payload) 
+                headers: joinHeaders,
+                body: JSON.stringify(payload)
             });
 
             if (!joinResponse.ok) {
-                const errorText = await joinResponse.text();
-                console.error("Queue Join Error:", joinResponse.status, errorText);
-                let detailedError = `Failed to join queue: ${joinResponse.status}.`;
-                if (joinResponse.status === 401) {
-                    // اگرچه ما توکن ارسال نمی‌کنیم، Space ممکن است *همچنان* خصوصی باشد
-                    detailedError = "API ERROR: 401 Unauthorized. The HF Space may be private.";
-                } else if (joinResponse.status === 404) {
-                    detailedError = "API ERROR: 404 Not Found. Check Space URL and /queue/join endpoint.";
-                }
-                throw new Error(detailedError);
+                throw new Error(`خطا در اتصال به صف: ${joinResponse.status}`);
             }
 
-            const joinResult = await joinResponse.json();
-            
-            if (!joinResult.event_id) {
-                if (joinResult.error) { throw new Error(`Queue join returned error: ${joinResult.error}`); }
-                throw new Error("Failed to get event_id from queue join.");
-            }
-            console.log(`Step 2: Joined queue successfully. Listening for session ${sessionHash}...`);
-
+            // 2. گوش دادن به استریم رویدادها
             const dataUrl = QUEUE_DATA_URL(sessionHash);
-            eventSourceRef.current = new EventSource(dataUrl); 
+            eventSourceRef.current = new EventSource(dataUrl);
 
             eventSourceRef.current.onmessage = (event) => {
-                try {
-                    const message = JSON.parse(event.data);
-                    switch (message.msg) {
-                        case "process_starts":
-                            setStatusText("Processing started...");
-                            break;
-                        case "process_completed":
-                            if (message.success && message.output && message.output.data && message.output.data.length > 0) {
-                                const rawPrediction = message.output.data[0];
-                                const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
-                                setLastAiMessageText(formattedOutput);
-                                setPendingShapData(null); 
-                                startTypingProcess(formattedOutput);
-                            } else {
-                                const errorMsg = message.output?.error || "Unknown server processing error.";
-                                setLastAiMessageText(`Processing failed: ${errorMsg}`);
-                                startTypingProcess(`Processing failed: ${errorMsg}`);
-                            }
-                            if(eventSourceRef.current) eventSourceRef.current.close();
-                            eventSourceRef.current = null;
-                            setLoading(false);
-                            setStatusText('');
-                            break;
-                        case "queue_full":
-                            const queueError = "API Error: The queue is full, please try again later.";
-                            setLastAiMessageText(queueError);
-                            startTypingProcess(queueError);
-                            if(eventSourceRef.current) eventSourceRef.current.close();
-                            eventSourceRef.current = null;
-                            setLoading(false);
-                            setStatusText('Queue Full.');
-                            break;
-                        case "estimation":
-                            const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
-                            const queueSize = message.queue_size !== undefined ? message.queue_size : '?';
-                            const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
-                            const waitMsg = `In queue (${queuePosition}/${queueSize}). Est. wait: ${eta}s...`;
-                            setStatusText(waitMsg);
-                            break;
-                        case "close_stream":
-                            if(eventSourceRef.current) eventSourceRef.current.close();
-                            eventSourceRef.current = null;
-                            if (loading) { 
-                                setLoading(false);
-                                if (!lastAiMessageText && !isTyping) {
-                                    const closeError = "Stream closed unexpectedly before result.";
-                                    setLastAiMessageText(closeError);
-                                    startTypingProcess(closeError);
+                const message = JSON.parse(event.data);
+
+                switch (message.msg) {
+                    case "process_starts":
+                        setStatusText("در حال پردازش شبکه عصبی...");
+                        break;
+                    
+                    case "process_completed":
+                        if (message.success && message.output && message.output.data) {
+                            const rawData = message.output.data[0];
+                            
+                            let aiText = "";
+                            let shapData = null;
+                            
+                            try {
+                                const resultData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+
+                                if (activeModel === 'xai') {
+                                    if (resultData.xai_model) {
+                                        const res = resultData.xai_model;
+                                        aiText = `[PHASE 3 - XAI OPTIMIZED]\n\nPrediction: ${res.label}\nConfidence: ${(res.score * 100).toFixed(2)}%\nRisk Level: ${res.score > 0.5 ? 'CRITICAL' : 'SAFE'}`;
+                                        shapData = resultData.explanation;
+                                    } else {
+                                        aiText = `تحلیل کامل شد: ${JSON.stringify(resultData)}`;
+                                    }
+                                } else {
+                                    if (resultData.baseline) {
+                                        const res = resultData.baseline;
+                                        aiText = `[PHASE 2 - BASELINE]\n\nPrediction: ${res.label}\nConfidence: ${(res.score * 100).toFixed(2)}%`;
+                                        shapData = null;
+                                    } else {
+                                        aiText = `تحلیل کامل شد: ${JSON.stringify(resultData)}`;
+                                    }
                                 }
+                            } catch (e) {
+                                aiText = rawData.toString();
                             }
-                            break;
-                        default:
-                            break;
-                    }
-                } catch (parseError) {
-                    console.warn("Could not parse SSE message:", event.data);
+
+                            const aiMsg = { 
+                                id: Date.now() + 1, 
+                                sender: 'ai', 
+                                text: aiText, 
+                                shapData: shapData 
+                            };
+                            setMessages(prev => [...prev, aiMsg]);
+                        } else {
+                            const errorMsg = {
+                                id: Date.now() + 1,
+                                sender: 'ai',
+                                text: `:: خطای پردازش ::\nسرور داده معتبری برنگرداند.`,
+                                isError: true
+                            };
+                            setMessages(prev => [...prev, errorMsg]);
+                        }
+                        
+                        eventSourceRef.current.close();
+                        setLoading(false);
+                        setStatusText('');
+                        break;
+
+                    case "queue_full":
+                        setMessages(prev => [...prev, { id: Date.now(), sender: 'ai', text: "خطا: صف سرور پر است.", isError: true }]);
+                        eventSourceRef.current.close();
+                        setLoading(false);
+                        break;
+                        
+                    case "estimation":
+                        setStatusText(`در صف... زمان تقریبی: ${message.rank_eta?.toFixed(1)} ثانیه`);
+                        break;
                 }
             };
 
-            eventSourceRef.current.onerror = (error) => {
-                let errorMsg = "Error connecting to API stream.";
-                if (!navigator.onLine) {
-                    errorMsg += " Check your network connection.";
-                } else {
-                    errorMsg += " Could not maintain connection. Check Space status/logs."; 
+            eventSourceRef.current.onerror = (err) => {
+                console.error("EventSource Error:", err);
+                if (loading) {
+                    setMessages(prev => [...prev, { 
+                        id: Date.now(), 
+                        sender: 'ai', 
+                        text: "ارتباط با سرور قطع شد.", 
+                        isError: true 
+                    }]);
+                    setLoading(false);
+                    setStatusText('');
                 }
-                setLastAiMessageText(errorMsg);
-                startTypingProcess(errorMsg);
-                if(eventSourceRef.current) eventSourceRef.current.close();
-                eventSourceRef.current = null;
-                setLoading(false);
-                setStatusText('Connection Error.');
+                if (eventSourceRef.current) eventSourceRef.current.close();
             };
 
-        } catch (err) {
-            let displayError = err.message || "An unknown error occurred.";
-            if (err.message.includes("Failed to fetch")) {
-                displayError = "API ERROR: Network error or CORS issue. Check browser console and Space status.";
-            } else if (err.message.includes("503")) {
-                displayError = "API ERROR: 503 Service Unavailable. The Space might be sleeping/overloaded. Wait and retry.";
-            }
-            setLastAiMessageText(displayError);
-            startTypingProcess(displayError);
+        } catch (error) {
+            console.error("Connection Error:", error);
+            setMessages(prev => [...prev, { 
+                id: Date.now(), 
+                sender: 'ai', 
+                text: `:: خطای اتصال ::\n${error.message}`, 
+                isError: true 
+            }]);
             setLoading(false);
-            setStatusText('Failed to connect.');
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-                eventSourceRef.current = null;
-            }
+            setStatusText('');
         }
     };
-    
-    // Internal component for rendering messages
-    const MessageComponent = ({ msg, isTyping = false, colorOverride = '' }) => {
-        const isAi = msg.sender === 'ai';
-        const labelMatch = msg.text.match(/Predicted Label: (\d)/);
-        const label = labelMatch ? labelMatch[1] : null;
-        
-        let labelColor = '';
-        if (msg.model === 'exbert' || msg.model === 'xai') {
-            if (label === '0') labelColor = 'text-cyber-green';
-            else if (label === '1' || label === '2') labelColor = 'text-cyber-red';
-        }
-        
-        const finalColor = colorOverride || labelColor;
 
-        return (
-            <div className={`flex w-full mb-4 ${isAi ? 'justify-start' : 'justify-end'}`}>
-                <div className={`flex max-w-xs md:max-w-md lg:max-w-2xl ${isAi ? 'flex-row' : 'flex-row-reverse'}`}>
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${isAi ? 'bg-cyber-card text-cyber-green' : 'bg-cyber-green text-dark-bg'}`}>
-                        {isAi ? <Bot size={20} /> : <User size={20} />}
-                    </div>
-                    <div className={`mx-3 rounded-lg p-3 ${isAi ? 'bg-cyber-card' : 'bg-cyber-green text-dark-bg'}`}>
-                        {isAi && (
-                            <span className="text-xs font-bold text-cyber-green block mb-1">
-                                {models[msg.model]?.title || 'AI Model'}
-                            </span>
-                        )}
-                        <p className={`text-sm whitespace-pre-wrap break-words ${finalColor}`}>
-                            {msg.text}
-                            {isTyping && <span className="typing-cursor"></span>}
-                        </p>
-                        {!isTyping && msg.shapData && <ShapVisualization shapData={msg.shapData} />}
-                    </div>
-                </div>
-            </div>
-        );
-    };
-    
-    // Handle textarea auto-resize
-    const handleInput = (e) => {
-        // console.log("DEBUG: handleInput called, value:", e.target.value); // [DEBUG]
-        setInput(e.target.value); // <-- [FIX] همچنان state را آپدیت می‌کنیم
-        e.target.style.height = 'auto';
-        e.target.style.height = (e.target.scrollHeight) + 'px';
-    };
-
-    // [FIX] Layout completely changed to work within App.jsx's layout
-    // No more internal sidebar, no more fixed heights
     return (
-        <section id="ai-models-section" className="flex flex-col h-full bg-cyber-card border border-solid border-cyber-cyan/30 rounded-2xl overflow-hidden shadow-lg shadow-cyber-green/10">
+        <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-900 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
             
-            {/* Main Chat Area */}
-            {/* [FIX] حذف h-full اضافه از اینجا */}
-            <div className="flex-1 flex flex-col bg-dark-bg/50">
-                
-                {/* Chat Header (Desktop-only, simplified) */}
-                <div className="hidden md:flex flex-shrink-0 items-center justify-center p-3 border-b border-cyber-cyan/20 bg-cyber-card">
-                    <div className="text-center">
-                        <h3 className="text-lg font-bold text-white">{models[activeModel].title}</h3>
-                        <p className="text-xs text-gray-400">{models[activeModel].description}</p>
+            {/* هدر و انتخابگر مدل */}
+            <div className="bg-slate-950 p-4 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
+                        <Terminal className="w-5 h-5 text-indigo-400" />
+                    </div>
+                    <div>
+                        <h3 className="text-white font-bold text-sm">VulnSight Command Line</h3>
+                        <p className="text-slate-500 text-xs">ExBERT-XAI Inference Engine</p>
                     </div>
                 </div>
 
-                {/* Message List */}
-                <div className="flex-grow p-4 overflow-y-auto space-y-4 scroll-smooth">
-                    {messages.map(msg => (
-                        <MessageComponent key={msg.id} msg={msg} />
-                    ))}
-                    {isTyping && (
-                        <MessageComponent 
-                            msg={{ id: 'typing', sender: 'ai', model: activeModel, text: typedMessage }} 
-                            isTyping={true} 
-                            colorOverride={
-                                (lastAiMessageText.includes('Predicted Label: 0')) ? 'text-cyber-green' :
-                                (lastAiMessageText.includes('Predicted Label: 2') || lastAiMessageText.includes('Predicted Label: 1')) ? 'text-cyber-red' : ''
-                            }
-                        />
-                    )}
-                    <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input Area */}
-                <div className="flex-shrink-0 p-4 border-t border-cyber-cyan/20 bg-dark-bg">
-                    { (loading || statusText) && (
-                        <div className="text-xs text-cyber-cyan mb-2 flex items-center">
-                            <Loader2 size={14} className="animate-spin mr-2" />
-                            {statusText || 'Processing...'}
-                        </div>
-                    )}
-                    <div className="flex items-end space-x-3">
-                        <textarea
-                            ref={inputRef}
-                            // [FIX] بازگشت به حالت "Uncontrolled"
-                            // value={input} // <-- [FIX] کامنت شد
-                            onInput={handleInput} // [FIX] بازگشت به onInput
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSend();
-                                }
-                            }}
-                            rows="1"
-                            // [FIX] کلاس‌های z-index حذف شدند
-                            className="cyber-textarea w-full resize-none max-h-32" 
-                            placeholder="Enter query for analysis..."
-                            disabled={loading}
-                        />
-                        <button 
-                            onClick={handleSend} 
-                            disabled={loading || !input.trim()}
-                            // [FIX] کلاس‌های z-index حذف شدند
-                            className="cyber-button !w-auto px-4 py-3 rounded-lg flex-shrink-0"
-                        >
-                            {loading ? (
-                                <Loader2 className="animate-spin" size={20} />
-                            ) : (
-                                <Send size={20} />
-                            )}
-                        </button>
-                    </div>
+                <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                    <button
+                        onClick={() => setActiveModel('exbert')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                            activeModel === 'exbert' 
+                            ? 'bg-slate-700 text-white shadow-sm' 
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                    >
+                        Baseline (Phase 2)
+                    </button>
+                    <button
+                        onClick={() => setActiveModel('xai')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
+                            activeModel === 'xai' 
+                            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                    >
+                        <Sparkles className="w-3 h-3" />
+                        XAI Optimized (Phase 3)
+                    </button>
                 </div>
             </div>
-        </section>
+
+            {/* ناحیه چت - اسکرول فیکس شده */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth bg-slate-900/50">
+                {messages.map((msg) => (
+                    <div key={msg.id} className={`flex w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`flex max-w-[85%] md:max-w-[75%] gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                            
+                            {/* آواتار */}
+                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
+                                msg.sender === 'user' 
+                                ? 'bg-blue-600 border-blue-500 text-white' 
+                                : msg.isError ? 'bg-red-500/10 border-red-500/50 text-red-500' : 'bg-slate-800 border-slate-700 text-emerald-400'
+                            }`}>
+                                {msg.sender === 'user' ? <User size={16} /> : msg.isError ? <AlertTriangle size={16} /> : <Bot size={16} />}
+                            </div>
+
+                            {/* حباب پیام */}
+                            <div className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
+                                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-md ${
+                                    msg.sender === 'user' 
+                                    ? 'bg-blue-600 text-white rounded-tr-sm shadow-blue-900/20' 
+                                    : 'bg-slate-800 text-slate-200 rounded-tl-sm border border-slate-700'
+                                }`}>
+                                    {msg.text}
+                                </div>
+                                {/* نمایش SHAP (فقط برای پیام‌های هوش مصنوعی) */}
+                                {msg.sender === 'ai' && msg.shapData && (
+                                    <ShapVisualization shapData={msg.shapData} />
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                
+                {/* نشانگر لودینگ */}
+                {loading && (
+                    <div className="flex justify-start w-full animate-pulse">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
+                                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                            </div>
+                            <span className="text-xs text-slate-500">{statusText || "در حال پردازش..."}</span>
+                        </div>
+                    </div>
+                )}
+                
+                <div ref={messagesEndRef} />
+            </div>
+
+            {/* ناحیه ورودی */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 shrink-0">
+                <div className="relative flex items-end gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
+                    <div className="p-2 text-slate-500">
+                        <Cpu className="w-5 h-5" />
+                    </div>
+                    <textarea
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                handleSend();
+                            }
+                        }}
+                        placeholder="توضیحات آسیب‌پذیری (CVE) را وارد کنید..."
+                        className="w-full bg-transparent text-slate-200 text-sm p-2 max-h-32 min-h-[44px] resize-none focus:outline-none placeholder:text-slate-600 text-left dir-ltr"
+                        rows={1}
+                        style={{ height: 'auto' }}
+                        disabled={loading}
+                    />
+                    <button
+                        onClick={handleSend}
+                        disabled={!input.trim() || loading}
+                        className={`p-2 rounded-lg mb-0.5 transition-all ${
+                            !input.trim() || loading
+                            ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/20 active:scale-95'
+                        }`}
+                    >
+                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    </button>
+                </div>
+                <div className="text-center mt-2 flex justify-between px-2">
+                    <p className="text-[10px] text-slate-600">
+                        مدل فعال: {activeModel === 'xai' ? 'ExBERT-XAI (Shapley Values)' : 'ExBERT Baseline'}
+                    </p>
+                    <p className="text-[10px] text-slate-600">
+                        وضعیت: {loading ? 'مشغول' : 'آماده'}
+                    </p>
+                </div>
+            </div>
+        </div>
     );
 };
-// --- [END] New AIModels Chat Component ---
+
+export default AIModels;
