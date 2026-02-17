@@ -4,7 +4,7 @@ import {
   BrainCircuit, Network, Lock, Terminal,
   TrendingUp, Microscope, Zap, CheckCircle2,
   AlertTriangle, BarChart3, ChevronRight, GitCommit,
-  ShieldCheck, RefreshCw, Scale, Lightbulb
+  ShieldCheck, RefreshCw, Scale, Server, FileCode
 } from 'lucide-react';
 
 // --- Components ---
@@ -61,6 +61,23 @@ const PipelineStep = ({ step, title, desc, active, delay, icon: Icon }) => (
     </div>
     <h4 className={`text-xs font-bold uppercase transition-colors ${active ? 'text-white' : 'text-gray-600'}`}>{title}</h4>
     <p className="text-[9px] text-gray-500 mt-1 leading-tight">{desc}</p>
+  </div>
+);
+
+const SessionCard = ({ session, layers, acc, delta, active }) => (
+  <div className={`flex items-center gap-4 p-3 rounded-lg border transition-all duration-300 ${active ? 'bg-green-900/10 border-green-500/30' : 'bg-[#1a1a1a] border-[#333] opacity-60'}`}>
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${active ? 'bg-green-500 text-black' : 'bg-gray-700 text-gray-400'}`}>
+      {session}
+    </div>
+    <div className="flex-1">
+      <div className="flex justify-between items-center mb-1">
+        <span className={`text-xs font-bold ${active ? 'text-white' : 'text-gray-500'}`}>Unfreeze Layers {layers}</span>
+        <span className={`text-xs font-mono ${active ? 'text-green-400' : 'text-gray-500'}`}>{acc}</span>
+      </div>
+      <div className="w-full h-1 bg-[#111] rounded-full overflow-hidden">
+        <div className={`h-full ${active ? 'bg-green-500' : 'bg-gray-600'}`} style={{width: delta}}></div>
+      </div>
+    </div>
   </div>
 );
 
@@ -217,6 +234,16 @@ export default function DashboardTab() {
               </div>
             </div>
 
+            {/* Method 2 Evolution (Reverse Unfreezing) */}
+            <div className="border-t border-[#222] pt-4">
+              <h3 className="text-white font-bold text-sm mb-3">Evolution of Method 2 (Reverse Unfreezing)</h3>
+              <div className="space-y-2">
+                <SessionCard session="1" layers="12 (Top)" acc="92.79%" delta="20%" active={false} />
+                <SessionCard session="2" layers="6 → 12" acc="93.06%" delta="50%" active={false} />
+                <SessionCard session="3" layers="0 → 12 (All)" acc="93.84%" delta="100%" active={true} />
+              </div>
+            </div>
+
             {/* Results Table */}
             <div className="bg-[#111] rounded-xl border border-[#222] overflow-hidden">
               <div className="bg-[#0c0c0c] p-3 border-b border-[#222] flex justify-between items-center">
@@ -233,7 +260,7 @@ export default function DashboardTab() {
                     <th className="px-4 py-2 font-medium">Strategy</th>
                     <th className="px-4 py-2 font-medium text-right">Acc</th>
                     <th className="px-4 py-2 font-medium text-right">Recall</th>
-                    <th className="px-4 py-2 font-medium text-right">AUC</th>
+                    <th className="px-4 py-2 font-medium text-right">Error</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1f1f1f]">
@@ -241,7 +268,7 @@ export default function DashboardTab() {
                     <td className="px-4 py-2 text-gray-400">Baseline</td>
                     <td className="px-4 py-2 text-right">92.58%</td>
                     <td className="px-4 py-2 text-right text-gray-400">93.54%</td>
-                    <td className="px-4 py-2 text-right">97.72%</td>
+                    <td className="px-4 py-2 text-right text-red-400">7.42%</td>
                   </tr>
                   
                   {/* Highlighted Method 2 */}
@@ -252,14 +279,14 @@ export default function DashboardTab() {
                     </td>
                     <td className="px-4 py-3 text-right text-white font-bold">93.84%</td>
                     <td className="px-4 py-3 text-right text-green-400 font-bold">95.02%</td>
-                    <td className="px-4 py-3 text-right text-white">98.16%</td>
+                    <td className="px-4 py-3 text-right text-white">6.16%</td>
                   </tr>
 
                   <tr className="hover:bg-white/5 transition-colors opacity-60">
                     <td className="px-4 py-2 text-gray-500">Method 1 / 3</td>
                     <td className="px-4 py-2 text-right">~93.4%</td>
                     <td className="px-4 py-2 text-right">~94.8%</td>
-                    <td className="px-4 py-2 text-right">~97.8%</td>
+                    <td className="px-4 py-2 text-right">~6.6%</td>
                   </tr>
                 </tbody>
               </table>
