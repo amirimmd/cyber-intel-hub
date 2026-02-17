@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Sidebar from './components/ui/Sidebar';
+import { Sidebar } from './components/ui/Sidebar'; // اصلاح شده: اضافه کردن {} برای Named Import
 import NVDTab from './components/tabs/NVDTab';
 import ExploitDBTab from './components/tabs/ExploitDBTab';
 import AIModels from './components/ai/AIModels';
