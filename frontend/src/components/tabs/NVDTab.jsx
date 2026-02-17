@@ -1,5 +1,5 @@
 import React from 'react';
-import NVDTable from '../NVDTable';
+import { NVDTable } from '../NVDTable'; // تغییر: اضافه کردن آکولاد {}
 import NVDLiveFeed from '../NVDLiveFeed';
 import { ShieldAlert } from 'lucide-react';
 
