@@ -4,7 +4,7 @@ import {
   BrainCircuit, Network, Lock, Terminal,
   TrendingUp, Microscope, Zap, CheckCircle2,
   AlertTriangle, BarChart3, ChevronRight, GitCommit,
-  ShieldCheck
+  ShieldCheck, RefreshCw, Scale, Lightbulb
 } from 'lucide-react';
 
 // --- Components ---
@@ -170,79 +170,103 @@ export default function DashboardTab() {
 
         {/* 4. Phase 3: XAI Optimization */}
         <section>
-          <SectionHeader title="Phase 3: XAI-Driven Results" icon={TrendingUp} color="green" delay={1400} />
-          <div className="cyber-panel p-0 border-l-4 border-l-green-500 overflow-hidden h-auto opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1600ms' }}>
+          <SectionHeader title="Phase 3: XAI-Driven Optimization (Methodology)" icon={Microscope} color="green" delay={1400} />
+          <div className="cyber-panel p-6 border-l-4 border-l-green-500 overflow-hidden h-auto opacity-0 animate-fade-in-up flex flex-col gap-6" style={{ animationDelay: '1600ms' }}>
             
-            <div className="bg-[#111] p-4 border-b border-[#222] flex justify-between items-center">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Benchmarking Strategy</span>
-              <span className="text-[10px] font-mono text-green-500 flex items-center gap-1 bg-green-900/20 px-2 py-1 rounded border border-green-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                Method 2 Selected
-              </span>
+            {/* Logic Flow Visualization */}
+            <div className="relative">
+              <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+                <RefreshCw size={14} className="text-green-400" />
+                SHAP Retraining Loop
+              </h3>
+              
+              <div className="flex flex-col md:flex-row items-center justify-between gap-2 text-center text-[10px] font-mono relative z-10">
+                {/* Step 1 */}
+                <div className="bg-[#1a1a1a] p-3 rounded-lg border border-red-500/30 w-full md:w-32">
+                  <AlertTriangle className="mx-auto text-red-500 mb-2" size={16} />
+                  <div className="text-red-300 font-bold">Misclassified</div>
+                  <div className="text-gray-500">Validation Set</div>
+                </div>
+                
+                <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
+                
+                {/* Step 2 */}
+                <div className="bg-[#1a1a1a] p-3 rounded-lg border border-blue-500/30 w-full md:w-32">
+                  <Microscope className="mx-auto text-blue-500 mb-2" size={16} />
+                  <div className="text-blue-300 font-bold">SHAP Analysis</div>
+                  <div className="text-gray-500">Feature Importance</div>
+                </div>
+
+                <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
+
+                {/* Step 3 */}
+                <div className="bg-[#1a1a1a] p-3 rounded-lg border border-yellow-500/30 w-full md:w-32">
+                  <Scale className="mx-auto text-yellow-500 mb-2" size={16} />
+                  <div className="text-yellow-300 font-bold">Reweighting</div>
+                  <div className="text-gray-500">Hard Samples ↑</div>
+                </div>
+
+                <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
+
+                {/* Step 4 */}
+                <div className="bg-green-900/10 p-3 rounded-lg border border-green-500/50 w-full md:w-32 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
+                  <Zap className="mx-auto text-green-500 mb-2" size={16} />
+                  <div className="text-green-300 font-bold">Retraining</div>
+                  <div className="text-gray-500">Reverse Unfreeze</div>
+                </div>
+              </div>
             </div>
 
-            <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-[#0c0c0c] text-gray-500 uppercase border-b border-[#222]">
+            {/* Results Table */}
+            <div className="bg-[#111] rounded-xl border border-[#222] overflow-hidden">
+              <div className="bg-[#0c0c0c] p-3 border-b border-[#222] flex justify-between items-center">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Performance Comparison</span>
+                <span className="text-[9px] font-mono text-green-500 flex items-center gap-1 bg-green-900/20 px-2 py-0.5 rounded border border-green-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  Method 2 Winner
+                </span>
+              </div>
+
+              <table className="w-full text-left text-[10px] font-mono">
+                <thead className="bg-[#161616] text-gray-500 uppercase">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Model Strategy</th>
-                    <th className="px-4 py-3 font-medium text-right">Accuracy</th>
-                    <th className="px-4 py-3 font-medium text-right">Recall</th>
-                    <th className="px-4 py-3 font-medium text-right">AUC</th>
+                    <th className="px-4 py-2 font-medium">Strategy</th>
+                    <th className="px-4 py-2 font-medium text-right">Acc</th>
+                    <th className="px-4 py-2 font-medium text-right">Recall</th>
+                    <th className="px-4 py-2 font-medium text-right">AUC</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#1f1f1f]">
-                  <tr className="hover:bg-white/5 transition-colors group">
-                    <td className="px-4 py-3 text-gray-400 flex items-center gap-2">
-                      <div className="w-1 h-4 bg-gray-600 rounded-full group-hover:bg-gray-400 transition-colors"></div>
-                      Baseline (Phase 2)
-                    </td>
-                    <td className="px-4 py-3 text-right">92.58%</td>
-                    <td className="px-4 py-3 text-right text-gray-400">93.54%</td>
-                    <td className="px-4 py-3 text-right">97.72%</td>
+                  <tr className="hover:bg-white/5 transition-colors">
+                    <td className="px-4 py-2 text-gray-400">Baseline</td>
+                    <td className="px-4 py-2 text-right">92.58%</td>
+                    <td className="px-4 py-2 text-right text-gray-400">93.54%</td>
+                    <td className="px-4 py-2 text-right">97.72%</td>
                   </tr>
                   
-                  {/* Highlighted Row */}
-                  <tr className="bg-green-900/10 hover:bg-green-900/20 transition-colors relative overflow-hidden group">
-                    <td className="px-4 py-4 text-white font-bold flex items-center gap-2 relative z-10">
-                      <div className="w-1 h-4 bg-green-500 rounded-full shadow-[0_0_10px_#22c55e]"></div>
-                      <Zap size={14} className="text-green-400" />
-                      Method 2 (Reverse)
+                  {/* Highlighted Method 2 */}
+                  <tr className="bg-green-900/10 hover:bg-green-900/20 transition-colors relative group">
+                    <td className="px-4 py-3 text-white font-bold flex items-center gap-2">
+                      <div className="w-1 h-3 bg-green-500 rounded-full"></div>
+                      Method 2 (Rev)
                     </td>
-                    <td className="px-4 py-4 text-right text-white font-bold relative z-10">
-                      93.84% <span className="text-[9px] text-green-500 ml-1">+1.2%</span>
-                    </td>
-                    <td className="px-4 py-4 text-right relative z-10">
-                      <span className="text-green-400 font-bold bg-green-900/30 px-1.5 py-0.5 rounded border border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.2)]">95.02%</span>
-                    </td>
-                    <td className="px-4 py-4 text-right text-white relative z-10">98.16%</td>
-                    
-                    <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <td className="px-4 py-3 text-right text-white font-bold">93.84%</td>
+                    <td className="px-4 py-3 text-right text-green-400 font-bold">95.02%</td>
+                    <td className="px-4 py-3 text-right text-white">98.16%</td>
                   </tr>
 
-                  <tr className="hover:bg-white/5 transition-colors group opacity-60">
-                    <td className="px-4 py-3 text-gray-500 flex items-center gap-2">
-                      <div className="w-1 h-4 bg-yellow-700 rounded-full group-hover:bg-yellow-600"></div>
-                      Method 1 / 3
-                    </td>
-                    <td className="px-4 py-3 text-right">~93.4%</td>
-                    <td className="px-4 py-3 text-right">~94.8%</td>
-                    <td className="px-4 py-3 text-right">~97.8%</td>
+                  <tr className="hover:bg-white/5 transition-colors opacity-60">
+                    <td className="px-4 py-2 text-gray-500">Method 1 / 3</td>
+                    <td className="px-4 py-2 text-right">~93.4%</td>
+                    <td className="px-4 py-2 text-right">~94.8%</td>
+                    <td className="px-4 py-2 text-right">~97.8%</td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
-            <div className="p-4 bg-gradient-to-t from-green-900/10 to-transparent border-t border-[#222]">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="text-yellow-500 shrink-0 mt-0.5 animate-pulse" size={16} />
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase">Critical Analysis</h4>
-                  <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
-                    Method 2 (Reverse Unfreezing) yielded the highest <b>Recall (95.02%)</b>. In cybersecurity, minimizing False Negatives is critical. This method correctly identified 5% more exploits than the baseline.
-                  </p>
-                </div>
-              </div>
+            <div className="p-3 bg-gradient-to-r from-green-900/10 to-transparent border-l-2 border-green-500 rounded-r text-[10px] text-gray-400 leading-relaxed">
+              <strong className="text-white">Why "Reverse Unfreezing"?</strong> Unfreezing layers from top (12) to bottom (0) allowed the model to fine-tune high-level semantic features first, preserving the core language knowledge while adapting to hard samples.
             </div>
           </div>
         </section>
