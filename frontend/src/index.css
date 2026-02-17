@@ -2,21 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* --- [NEW] استایل‌های تمام صفحه --- */
 html, body, #root {
   height: 100%;
-  overflow: hidden; /* جلوگیری از اسکرول کل صفحه */
-  background-color: #0d1117; /* رنگ پس‌شزمینه dark-bg */
+  overflow: hidden;
+  background-color: #0d1117;
 }
 
-/* --- استایل‌های سفارشی قبلی --- */
 body {
-  color: #c9d1d9; /* text-cyber-text */
-  background-color: #0d1117; /* bg-dark-bg */
-  font-family: 'Inter', 'Roboto', 'Helvetica Neue', 'Arial', sans-serif;
+  color: #c9d1d9;
+  font-family: 'JetBrains Mono', 'Roboto Mono', monospace; /* فونت مونو اسپیس برای حس سایبری */
 }
 
-/* --- [NEW] استایل گرید پس‌زمینه (از App.jsx منتقل شد) --- */
+/* Background Effects */
 .background-grid {
   position: fixed;
   inset: 0;
@@ -24,92 +21,69 @@ body {
   height: 100vh;
   z-index: 0;
   background-image:
-    linear-gradient(to right, rgba(55, 125, 113, 0.1) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(55, 125, 113, 0.1) 1px, transparent 1px);
-  background-size: 3rem 3rem;
-  background-position: -1px -1px;
-  mask-image: radial-gradient(ellipse at center, rgba(0,0,0,0.3) 0%, transparent 70%);
+    linear-gradient(to right, rgba(0, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  pointer-events: none;
 }
 
-
-/* --- [NEW] انیمیشن بوردر (از App.jsx منتقل شد) --- */
-@keyframes border-pulse {
-  0% { border-color: rgba(56, 189, 248, 0.1); } /* cyan-400/10 */
-  50% { border-color: rgba(56, 189, 248, 0.4); } /* cyan-400/40 */
-  100% { border-color: rgba(56, 189, 248, 0.1); }
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-.animate-border-pulse {
-  animation: border-pulse 3s ease-in-out infinite;
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00ffff;
 }
 
-/* --- [NEW] هدر گرادیانت (از App.jsx منتقل شد) --- */
-.section-header {
-  text-shadow: 0 0 15px rgba(56, 189, 248, 0.4), 0 0 30px rgba(16, 185, 129, 0.3);
-}
-
-/* --- [NEW] استایل کرسر تایپ (از App.jsx منتقل شد) --- */
-.typing-cursor {
-  display: inline-block;
-  width: 8px;
-  height: 1em;
-  background-color: #22c55e; /* bg-cyber-green */
-  animation: blink 1s steps(1) infinite;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-}
-@keyframes blink { 50% { opacity: 0; } }
-
-/* --- استایل‌های کامپوننت‌های سفارشی --- */
+/* Components Layer */
 @layer components {
-  /* Cards */
   .cyber-card {
-    @apply bg-gray-900/50 backdrop-blur-sm border border-solid border-gray-800 rounded-lg p-4 md:p-6;
+    @apply bg-[#161b22]/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 shadow-lg relative overflow-hidden;
   }
-
-  /* Inputs & Selects (از App.jsx منتقل شد) */
+  
   .cyber-input {
-    @apply w-full bg-dark-bg border border-gray-700 text-cyber-text text-sm rounded-lg focus:ring-cyber-cyan focus:border-cyber-cyan block p-2.5 placeholder-gray-500 transition duration-150 disabled:opacity-50;
+    @apply w-full bg-[#0d1117] border border-gray-700 text-gray-200 text-sm rounded-lg focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 placeholder-gray-600 transition-all;
   }
+  
   .cyber-select {
-    @apply w-full bg-dark-bg border border-gray-700 text-cyber-text text-sm rounded-lg focus:ring-cyber-cyan focus:border-cyber-cyan block p-2.5 transition duration-150 disabled:opacity-50;
-  }
-  .cyber-textarea {
-     @apply w-full bg-dark-bg border border-gray-700 text-cyber-text text-sm rounded-lg focus:ring-cyber-cyan focus:border-cyber-cyan block p-3 placeholder-gray-500 transition duration-150 disabled:opacity-50;
-  }
-  
-  /* Buttons (از App.jsx منتقل شد) */
-  .cyber-button {
-    @apply w-full px-5 py-2.5 text-sm font-medium text-center text-dark-bg bg-cyber-green rounded-lg transition-all duration-200;
-    @apply hover:bg-cyber-green/80 hover:shadow-lg hover:shadow-cyber-green/30;
-    @apply focus:ring-4 focus:outline-none focus:ring-cyber-green/50;
-    @apply disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed disabled:hover:shadow-none;
-  }
-  
-  /* Severity Badges (از App.jsx منتقل شد) */
-  .severity-badge {
-    @apply px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider;
-  }
-  .badge-critical {
-    @apply bg-red-900/50 text-cyber-red border border-cyber-red/50;
-  }
-  .badge-high {
-    @apply bg-orange-800/50 text-orange-300 border border-orange-600/50;
-  }
-  .badge-medium {
-    @apply bg-yellow-800/50 text-yellow-300 border border-yellow-600/50;
-  }
-  .badge-low {
-    @apply bg-cyan-900/50 text-cyber-cyan border border-cyan-500/50;
-  }
-  .badge-unknown {
-     @apply bg-gray-700/50 text-gray-400 border border-gray-600/50;
+    @apply w-full bg-[#0d1117] border border-gray-700 text-gray-200 text-sm rounded-lg focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 transition-all;
   }
 
-  /* Icon Colors (از App.jsx منتقل شد) */
-  .icon-cyan {
-    @apply text-cyber-cyan drop-shadow-[0_0_8px_rgba(56,189,248,0.5)];
+  .cyber-button {
+    @apply px-5 py-2.5 text-sm font-bold text-black bg-cyan-400 rounded-lg transition-all duration-200 hover:bg-cyan-300 hover:shadow-[0_0_15px_rgba(0,255,255,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide;
   }
-  .icon-red {
-    @apply text-cyber-red drop-shadow-[0_0_8px_rgba(248,113,113,0.5)];
+
+  .severity-badge {
+    @apply px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border;
   }
+  .badge-critical { @apply bg-red-900/30 text-red-400 border-red-500/30; }
+  .badge-high { @apply bg-orange-900/30 text-orange-400 border-orange-500/30; }
+  .badge-medium { @apply bg-yellow-900/30 text-yellow-400 border-yellow-500/30; }
+  .badge-low { @apply bg-blue-900/30 text-blue-400 border-blue-500/30; }
+  .badge-unknown { @apply bg-gray-800 text-gray-400 border-gray-700; }
+}
+
+/* Animations */
+@keyframes scanline {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-scanline {
+  animation: scanline 2s linear infinite;
+}
+
+.typing-cursor {
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
 }
