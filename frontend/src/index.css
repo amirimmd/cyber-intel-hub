@@ -2,30 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-dark: #050505;
+  --bg-panel: #0a0a0a;
+  --primary-cyan: #00f0ff;
+  --primary-red: #ff003c;
+  --text-main: #e0e0e0;
+  --text-dim: #707070;
+}
+
 html, body, #root {
   height: 100%;
-  overflow: hidden;
-  background-color: #0d1117;
-}
-
-body {
-  color: #c9d1d9;
-  font-family: 'JetBrains Mono', 'Roboto Mono', monospace; /* فونت مونو اسپیس برای حس سایبری */
-}
-
-/* Background Effects */
-.background-grid {
-  position: fixed;
-  inset: 0;
   width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg-dark);
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  color: var(--text-main);
+}
+
+/* Cyber Grid Background */
+.cyber-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
   height: 100vh;
-  z-index: 0;
-  background-image:
-    linear-gradient(to right, rgba(0, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+  background-size: 30px 30px;
   pointer-events: none;
+  z-index: 0;
+}
+
+.cyber-grid::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% 50%, transparent 0%, var(--bg-dark) 90%);
 }
 
 /* Custom Scrollbar */
@@ -34,36 +53,34 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #0f0f0f;
 }
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: #333;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00ffff;
+  background: var(--primary-cyan);
 }
 
-/* Components Layer */
+/* Utility Classes */
 @layer components {
-  .cyber-card {
-    @apply bg-[#161b22]/80 backdrop-blur-md border border-gray-800 rounded-xl p-6 shadow-lg relative overflow-hidden;
+  .cyber-panel {
+    @apply bg-[#0a0a0a]/90 backdrop-blur-md border border-[#1f1f1f] shadow-lg rounded-xl;
   }
   
+  .cyber-btn {
+    @apply px-4 py-2 bg-cyan-900/20 text-cyan-400 border border-cyan-500/30 rounded-lg
+           hover:bg-cyan-500/20 hover:text-cyan-300 hover:shadow-[0_0_10px_rgba(0,240,255,0.2)]
+           transition-all duration-200 active:scale-95 text-xs font-bold tracking-wider uppercase;
+  }
+
   .cyber-input {
-    @apply w-full bg-[#0d1117] border border-gray-700 text-gray-200 text-sm rounded-lg focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 placeholder-gray-600 transition-all;
+    @apply w-full bg-black/50 border border-[#333] text-gray-300 p-2 text-sm rounded-lg focus:outline-none focus:border-cyan-500/50 transition-colors font-mono;
   }
   
-  .cyber-select {
-    @apply w-full bg-[#0d1117] border border-gray-700 text-gray-200 text-sm rounded-lg focus:ring-1 focus:ring-cyan-500 focus:border-cyan-500 block p-2.5 transition-all;
-  }
-
-  .cyber-button {
-    @apply px-5 py-2.5 text-sm font-bold text-black bg-cyan-400 rounded-lg transition-all duration-200 hover:bg-cyan-300 hover:shadow-[0_0_15px_rgba(0,255,255,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wide;
-  }
-
   .severity-badge {
-    @apply px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border;
+    @apply px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border;
   }
   .badge-critical { @apply bg-red-900/30 text-red-400 border-red-500/30; }
   .badge-high { @apply bg-orange-900/30 text-orange-400 border-orange-500/30; }
@@ -73,17 +90,26 @@ body {
 }
 
 /* Animations */
-@keyframes scanline {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
-}
 .animate-scanline {
-  animation: scanline 2s linear infinite;
+  position: relative;
+  overflow: hidden;
+}
+.animate-scanline::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(to bottom, transparent 50%, rgba(0, 255, 255, 0.02) 51%, transparent 51%);
+  background-size: 100% 4px;
+  animation: scanline 10s linear infinite;
+  pointer-events: none;
+  z-index: 10;
 }
 
-.typing-cursor {
-  animation: blink 1s step-end infinite;
-}
-@keyframes blink {
-  50% { opacity: 0; }
+@keyframes scanline {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
 }

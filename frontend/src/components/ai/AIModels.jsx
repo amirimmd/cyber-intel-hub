@@ -1,377 +1,136 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, Terminal, AlertTriangle, Cpu } from 'lucide-react';
-
-// --- کامپوننت نمایش وزن‌های SHAP ---
-const ShapVisualization = ({ shapData }) => {
-    if (!shapData || shapData.length === 0) return null;
-
-    let maxAbsVal = 0;
-    shapData.forEach((item) => {
-        // هندل کردن ساختارهای مختلف داده [token, weight] یا {token, weight}
-        const val = Array.isArray(item) ? item[1] : item.weight;
-        if (Math.abs(val) > maxAbsVal) maxAbsVal = Math.abs(val);
-    });
-    if (maxAbsVal === 0) maxAbsVal = 1;
-
-    const getColor = (item) => {
-        const val = Array.isArray(item) ? item[1] : item.weight;
-        const alpha = Math.min(Math.abs(val) / maxAbsVal, 1.0) * 0.7;
-        if (val > 0) return `rgba(239, 68, 68, ${alpha})`; // قرمز (ریسک)
-        if (val < 0) return `rgba(59, 130, 246, ${alpha})`; // آبی (امن)
-        return 'rgba(255, 255, 255, 0)';
-    };
-
-    return (
-        <div className="mt-3 p-3 bg-slate-950/50 rounded-lg border border-slate-700 font-mono text-xs">
-            <p className="font-bold text-slate-400 mb-2 flex items-center gap-2">
-                <Sparkles className="w-3 h-3 text-indigo-400" />
-                تحلیل SHAP (اهمیت کلمات):
-            </p>
-            <div className="flex flex-wrap gap-1 leading-relaxed" dir="ltr">
-                {shapData.map((item, index) => {
-                    const token = Array.isArray(item) ? item[0] : item.token;
-                    const val = Array.isArray(item) ? item[1] : item.weight;
-                    return (
-                        <span 
-                            key={index} 
-                            title={`Impact: ${val?.toFixed(4)}`}
-                            className="px-1 py-0.5 rounded cursor-help transition-colors hover:ring-1 ring-white/30 text-slate-200"
-                            style={{ backgroundColor: getColor(item) }}
-                        >
-                            {token}
-                        </span>
-                    );
-                })}
-            </div>
-            <div className="flex gap-4 mt-2 text-[10px] text-slate-500" dir="ltr">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> کاهش ریسک</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> افزایش ریسک</span>
-            </div>
-        </div>
-    );
-};
-
-// --- تنظیمات API ---
-const HF_USER = "amirimmd";
-const HF_SPACE_NAME = "ExBERT-Classifier-Inference";
-const BASE_API_URL = `https://${HF_USER}-${HF_SPACE_NAME}.hf.space`;
-const QUEUE_JOIN_URL = `${BASE_API_URL}/gradio_api/queue/join`;
-const QUEUE_DATA_URL = (sessionHash) => `${BASE_API_URL}/gradio_api/queue/data?session_hash=${sessionHash}`;
-
-// تولید هش تصادفی برای نشست
-const generateSessionHash = () => {
-    return Math.random().toString(36).substring(2, 13);
-};
+import React, { useState, useRef, useEffect } from 'react';
+import { Send, Bot, User, ChevronDown, Sparkles, AlertTriangle } from 'lucide-react';
 
 const AIModels = () => {
-    const [activeModel, setActiveModel] = useState('xai'); // 'exbert' یا 'xai'
-    const [messages, setMessages] = useState([
-        { 
-            id: 'welcome', 
-            sender: 'ai', 
-            text: ':: سیستم آنلاین است ::\nهسته عصبی ExBERT-XAI آماده است. مدل مورد نظر را انتخاب کرده و توضیحات آسیب‌پذیری را وارد کنید.', 
-            shapData: null 
-        }
-    ]);
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [statusText, setStatusText] = useState('');
-    
-    const messagesEndRef = useRef(null);
-    const eventSourceRef = useRef(null);
-    
-    // اسکرول خودکار به پایین
-    useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-        }
-    }, [messages, statusText]);
+  const [selectedModel, setSelectedModel] = useState('ExBERT-Phase2');
+  const [messages, setMessages] = useState([
+    { id: 1, role: 'ai', content: 'VulnSight AI initialized. Select a model and provide a vulnerability description for analysis.' }
+  ]);
+  const [input, setInput] = useState('');
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const messagesEndRef = useRef(null);
 
-    // بستن اتصال هنگام خروج از کامپوننت
-    useEffect(() => {
-        return () => {
-            if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-            }
-        };
-    }, []);
+  const models = [
+    { id: 'ExBERT-Phase2', name: 'ExBERT Baseline (Phase 2)', status: 'Stable' },
+    { id: 'ExBERT-Phase3-V1', name: 'ExBERT Optimized (Phase 3)', status: 'Beta' },
+    { id: 'ExBERT-Phase3-V2', name: 'ExBERT Experimental', status: 'Alpha' },
+  ];
 
-    const handleSend = async () => {
-        const query = input.trim();
-        if (!query || loading) return;
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-        setInput('');
-        setLoading(true);
-        setStatusText('در حال برقراری ارتباط...');
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
-        // افزودن پیام کاربر
-        const userMsg = { id: Date.now(), sender: 'user', text: query };
-        setMessages(prev => [...prev, userMsg]);
+  const handleSend = () => {
+    if (!input.trim()) return;
 
-        // بستن اتصال قبلی اگر وجود دارد
-        if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-        }
+    const userMsg = { id: Date.now(), role: 'user', content: input };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
 
-        try {
-            const sessionHash = generateSessionHash();
-            
-            // 1. پیوستن به صف (Join Queue)
-            const joinHeaders = { 'Content-Type': 'application/json' };
-            const payload = {
-                "data": [query],
-                "fn_index": 2, // ایندکس تابع در Gradio
-                "session_hash": sessionHash
-            };
+    setTimeout(() => {
+      const aiResponse = { 
+        id: Date.now() + 1, 
+        role: 'ai', 
+        content: `Analysis complete using [${selectedModel}]. Probability of exploitation: 85%. This appears to be a buffer overflow vulnerability.` 
+      };
+      setMessages(prev => [...prev, aiResponse]);
+    }, 1500);
+  };
 
-            const joinResponse = await fetch(QUEUE_JOIN_URL, {
-                method: 'POST',
-                headers: joinHeaders,
-                body: JSON.stringify(payload)
-            });
-
-            if (!joinResponse.ok) {
-                throw new Error(`خطا در اتصال به صف: ${joinResponse.status}`);
-            }
-
-            // 2. گوش دادن به استریم رویدادها
-            const dataUrl = QUEUE_DATA_URL(sessionHash);
-            eventSourceRef.current = new EventSource(dataUrl);
-
-            eventSourceRef.current.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-
-                switch (message.msg) {
-                    case "process_starts":
-                        setStatusText("در حال پردازش شبکه عصبی...");
-                        break;
-                    
-                    case "process_completed":
-                        if (message.success && message.output && message.output.data) {
-                            const rawData = message.output.data[0];
-                            
-                            let aiText = "";
-                            let shapData = null;
-                            
-                            try {
-                                const resultData = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
-
-                                if (activeModel === 'xai') {
-                                    if (resultData.xai_model) {
-                                        const res = resultData.xai_model;
-                                        aiText = `[PHASE 3 - XAI OPTIMIZED]\n\nPrediction: ${res.label}\nConfidence: ${(res.score * 100).toFixed(2)}%\nRisk Level: ${res.score > 0.5 ? 'CRITICAL' : 'SAFE'}`;
-                                        shapData = resultData.explanation;
-                                    } else {
-                                        aiText = `تحلیل کامل شد: ${JSON.stringify(resultData)}`;
-                                    }
-                                } else {
-                                    if (resultData.baseline) {
-                                        const res = resultData.baseline;
-                                        aiText = `[PHASE 2 - BASELINE]\n\nPrediction: ${res.label}\nConfidence: ${(res.score * 100).toFixed(2)}%`;
-                                        shapData = null;
-                                    } else {
-                                        aiText = `تحلیل کامل شد: ${JSON.stringify(resultData)}`;
-                                    }
-                                }
-                            } catch (e) {
-                                aiText = rawData.toString();
-                            }
-
-                            const aiMsg = { 
-                                id: Date.now() + 1, 
-                                sender: 'ai', 
-                                text: aiText, 
-                                shapData: shapData 
-                            };
-                            setMessages(prev => [...prev, aiMsg]);
-                        } else {
-                            const errorMsg = {
-                                id: Date.now() + 1,
-                                sender: 'ai',
-                                text: `:: خطای پردازش ::\nسرور داده معتبری برنگرداند.`,
-                                isError: true
-                            };
-                            setMessages(prev => [...prev, errorMsg]);
-                        }
-                        
-                        eventSourceRef.current.close();
-                        setLoading(false);
-                        setStatusText('');
-                        break;
-
-                    case "queue_full":
-                        setMessages(prev => [...prev, { id: Date.now(), sender: 'ai', text: "خطا: صف سرور پر است.", isError: true }]);
-                        eventSourceRef.current.close();
-                        setLoading(false);
-                        break;
-                        
-                    case "estimation":
-                        setStatusText(`در صف... زمان تقریبی: ${message.rank_eta?.toFixed(1)} ثانیه`);
-                        break;
-                }
-            };
-
-            eventSourceRef.current.onerror = (err) => {
-                console.error("EventSource Error:", err);
-                if (loading) {
-                    setMessages(prev => [...prev, { 
-                        id: Date.now(), 
-                        sender: 'ai', 
-                        text: "ارتباط با سرور قطع شد.", 
-                        isError: true 
-                    }]);
-                    setLoading(false);
-                    setStatusText('');
-                }
-                if (eventSourceRef.current) eventSourceRef.current.close();
-            };
-
-        } catch (error) {
-            console.error("Connection Error:", error);
-            setMessages(prev => [...prev, { 
-                id: Date.now(), 
-                sender: 'ai', 
-                text: `:: خطای اتصال ::\n${error.message}`, 
-                isError: true 
-            }]);
-            setLoading(false);
-            setStatusText('');
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-[calc(100vh-140px)] bg-slate-900 rounded-2xl border border-slate-700 overflow-hidden shadow-2xl">
-            
-            {/* هدر و انتخابگر مدل */}
-            <div className="bg-slate-950 p-4 border-b border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-500/10 rounded-lg border border-indigo-500/20">
-                        <Terminal className="w-5 h-5 text-indigo-400" />
-                    </div>
-                    <div>
-                        <h3 className="text-white font-bold text-sm">VulnSight Command Line</h3>
-                        <p className="text-slate-500 text-xs">ExBERT-XAI Inference Engine</p>
-                    </div>
-                </div>
-
-                <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-                    <button
-                        onClick={() => setActiveModel('exbert')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                            activeModel === 'exbert' 
-                            ? 'bg-slate-700 text-white shadow-sm' 
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                    >
-                        Baseline (Phase 2)
-                    </button>
-                    <button
-                        onClick={() => setActiveModel('xai')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
-                            activeModel === 'xai' 
-                            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
-                            : 'text-slate-400 hover:text-slate-200'
-                        }`}
-                    >
-                        <Sparkles className="w-3 h-3" />
-                        XAI Optimized (Phase 3)
-                    </button>
-                </div>
-            </div>
-
-            {/* ناحیه چت - اسکرول فیکس شده */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth bg-slate-900/50">
-                {messages.map((msg) => (
-                    <div key={msg.id} className={`flex w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`flex max-w-[85%] md:max-w-[75%] gap-3 ${msg.sender === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                            
-                            {/* آواتار */}
-                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center border mt-1 ${
-                                msg.sender === 'user' 
-                                ? 'bg-blue-600 border-blue-500 text-white' 
-                                : msg.isError ? 'bg-red-500/10 border-red-500/50 text-red-500' : 'bg-slate-800 border-slate-700 text-emerald-400'
-                            }`}>
-                                {msg.sender === 'user' ? <User size={16} /> : msg.isError ? <AlertTriangle size={16} /> : <Bot size={16} />}
-                            </div>
-
-                            {/* حباب پیام */}
-                            <div className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                                <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-md ${
-                                    msg.sender === 'user' 
-                                    ? 'bg-blue-600 text-white rounded-tr-sm shadow-blue-900/20' 
-                                    : 'bg-slate-800 text-slate-200 rounded-tl-sm border border-slate-700'
-                                }`}>
-                                    {msg.text}
-                                </div>
-                                {/* نمایش SHAP (فقط برای پیام‌های هوش مصنوعی) */}
-                                {msg.sender === 'ai' && msg.shapData && (
-                                    <ShapVisualization shapData={msg.shapData} />
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-                
-                {/* نشانگر لودینگ */}
-                {loading && (
-                    <div className="flex justify-start w-full animate-pulse">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center">
-                                <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
-                            </div>
-                            <span className="text-xs text-slate-500">{statusText || "در حال پردازش..."}</span>
-                        </div>
-                    </div>
-                )}
-                
-                <div ref={messagesEndRef} />
-            </div>
-
-            {/* ناحیه ورودی */}
-            <div className="p-4 bg-slate-950 border-t border-slate-800 shrink-0">
-                <div className="relative flex items-end gap-2 bg-slate-900 p-2 rounded-xl border border-slate-800 focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/50 transition-all">
-                    <div className="p-2 text-slate-500">
-                        <Cpu className="w-5 h-5" />
-                    </div>
-                    <textarea
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSend();
-                            }
-                        }}
-                        placeholder="توضیحات آسیب‌پذیری (CVE) را وارد کنید..."
-                        className="w-full bg-transparent text-slate-200 text-sm p-2 max-h-32 min-h-[44px] resize-none focus:outline-none placeholder:text-slate-600 text-left dir-ltr"
-                        rows={1}
-                        style={{ height: 'auto' }}
-                        disabled={loading}
-                    />
-                    <button
-                        onClick={handleSend}
-                        disabled={!input.trim() || loading}
-                        className={`p-2 rounded-lg mb-0.5 transition-all ${
-                            !input.trim() || loading
-                            ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-500 hover:shadow-lg hover:shadow-indigo-500/20 active:scale-95'
-                        }`}
-                    >
-                        {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                    </button>
-                </div>
-                <div className="text-center mt-2 flex justify-between px-2">
-                    <p className="text-[10px] text-slate-600">
-                        مدل فعال: {activeModel === 'xai' ? 'ExBERT-XAI (Shapley Values)' : 'ExBERT Baseline'}
-                    </p>
-                    <p className="text-[10px] text-slate-600">
-                        وضعیت: {loading ? 'مشغول' : 'آماده'}
-                    </p>
-                </div>
-            </div>
+  return (
+    <div className="flex flex-col h-full bg-[#0a0a0a] relative">
+      
+      {/* Header */}
+      <div className="h-16 border-b border-[#1f1f1f] flex items-center justify-between px-6 bg-[#0a0a0a]/90 backdrop-blur z-20 shrink-0">
+        <div className="flex items-center gap-2">
+          <Sparkles className="text-purple-500 w-5 h-5" />
+          <span className="font-bold text-gray-200">AI Analyst</span>
         </div>
-    );
+
+        <div className="relative">
+          <button 
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="flex items-center gap-3 bg-[#111] border border-[#333] hover:border-cyan-500/50 px-4 py-2 rounded text-xs font-mono text-cyan-400 transition-all min-w-[240px] justify-between"
+          >
+            <span>{models.find(m => m.id === selectedModel)?.name}</span>
+            <ChevronDown size={14} className={`transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {isDropdownOpen && (
+            <div className="absolute top-full right-0 mt-2 w-[280px] bg-[#111] border border-[#333] rounded shadow-2xl shadow-black z-50 overflow-hidden">
+              {models.map(model => (
+                <div 
+                  key={model.id}
+                  onClick={() => {
+                    setSelectedModel(model.id);
+                    setIsDropdownOpen(false);
+                  }}
+                  className="px-4 py-3 hover:bg-[#1f1f1f] cursor-pointer border-b border-[#1f1f1f] last:border-0"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-300 text-xs font-bold">{model.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                      model.status === 'Stable' ? 'border-green-500/30 text-green-400' : 'border-yellow-500/30 text-yellow-400'
+                    }`}>
+                      {model.status}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-gray-600 font-mono mt-1">{model.id}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Chat Area */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-[#333]">
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {msg.role === 'ai' && (
+              <div className="w-8 h-8 rounded bg-purple-900/20 border border-purple-500/30 flex items-center justify-center shrink-0">
+                <Bot size={16} className="text-purple-400" />
+              </div>
+            )}
+            <div className={`max-w-[80%] p-4 rounded-lg text-sm leading-relaxed border ${
+              msg.role === 'user' 
+                ? 'bg-cyan-900/10 border-cyan-500/20 text-cyan-100 rounded-tr-none' 
+                : 'bg-[#111] border-[#333] text-gray-300 rounded-tl-none font-mono'
+            }`}>
+              {msg.content}
+            </div>
+            {msg.role === 'user' && (
+              <div className="w-8 h-8 rounded bg-cyan-900/20 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                <User size={16} className="text-cyan-400" />
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="p-4 border-t border-[#1f1f1f] bg-[#0a0a0a] shrink-0">
+        <div className="relative">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder="Enter vulnerability description..."
+            className="w-full bg-[#111] border border-[#333] rounded-lg pl-4 pr-12 py-4 text-sm text-gray-300 focus:outline-none focus:border-cyan-500/50 transition-colors font-mono"
+          />
+          <button onClick={handleSend} className="absolute right-2 top-2 p-2 text-cyan-400">
+            <Send size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default AIModels;

@@ -1,116 +1,66 @@
 import React from 'react';
 import { 
-  LayoutDashboard, ShieldAlert, Swords, BrainCircuit, 
-  LogOut, Settings, X, Hexagon 
+  LayoutDashboard, ShieldAlert, Database, Bot, 
+  X, LogOut, Settings 
 } from 'lucide-react';
 
-const NavItem = ({ icon: Icon, label, active, onClick, delay }) => (
+const NavItem = ({ icon: Icon, label, active, onClick }) => (
   <button
     onClick={onClick}
     className={`
-      group relative flex items-center w-full p-3 rounded-xl mb-2 transition-all duration-300 ease-out
+      w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-200 border-l-2
       ${active 
-        ? 'bg-gradient-to-r from-cyan-900/40 to-transparent text-white border-l-2 border-cyber-cyan' 
-        : 'text-gray-400 hover:text-white hover:bg-white/5'}
+        ? 'border-cyan-400 bg-cyan-900/10 text-cyan-400' 
+        : 'border-transparent text-gray-500 hover:text-gray-200 hover:bg-white/5'}
     `}
-    style={{ animationDelay: `${delay}ms` }}
   >
-    <div className={`
-      absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300
-      bg-gradient-to-r from-cyan-500/10 to-transparent
-    `}></div>
-    
-    <Icon 
-      className={`w-5 h-5 mr-3 z-10 transition-colors duration-300 ${active ? 'text-cyber-cyan drop-shadow-[0_0_5px_rgba(0,255,255,0.5)]' : 'group-hover:text-cyber-cyan'}`} 
-    />
-    <span className="z-10 text-sm font-medium tracking-wide">{label}</span>
-    
-    {active && (
-      <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-cyber-cyan shadow-[0_0_8px_#00ffff]"></div>
-    )}
+    <Icon size={18} className={active ? 'drop-shadow-[0_0_5px_rgba(0,240,255,0.5)]' : ''} />
+    <span className="tracking-wide">{label}</span>
   </button>
 );
 
-export const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) => {
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'nvd', label: 'NVD Feed', icon: ShieldAlert },
-    { id: 'exploitdb', label: 'Exploit DB', icon: Swords },
-    { id: 'ai-analysis', label: 'AI Analysis', icon: BrainCircuit },
-  ];
-
+export const Sidebar = ({ activeTab, setActiveTab, isOpen, setIsOpen }) => {
   return (
     <>
       {/* Mobile Overlay */}
       <div 
-        className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${
-          sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-40 transition-opacity duration-300 md:hidden ${
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setSidebarOpen(false)}
+        onClick={() => setIsOpen(false)}
       />
 
-      {/* Sidebar Container */}
+      {/* Sidebar Panel */}
       <aside 
         className={`
-          fixed md:relative top-0 left-0 z-50 h-screen w-72 
-          bg-[#0d1117]/95 backdrop-blur-xl border-r border-white/10
-          transform transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          flex flex-col
+          fixed md:relative inset-y-0 left-0 z-50 w-64 bg-[#0a0a0a] border-r border-[#1f1f1f]
+          transform transition-transform duration-300 ease-in-out flex flex-col justify-between
+          ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        {/* Logo Area */}
-        <div className="p-6 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Hexagon className="w-8 h-8 text-cyber-cyan animate-pulse" />
-              <div className="absolute inset-0 bg-cyber-cyan/20 blur-lg rounded-full"></div>
-            </div>
-            <div>
-              <h1 className="font-bold text-white text-lg tracking-wider">VULN<span className="text-cyber-cyan">SIGHT</span></h1>
-              <p className="text-[10px] text-gray-500 font-mono tracking-widest">INTEL.HUB v2.0</p>
-            </div>
+        <div>
+          <div className="h-16 flex items-center justify-between px-4 border-b border-[#1f1f1f]">
+            <span className="text-xs font-bold text-gray-600 uppercase tracking-[0.2em]">Navigation</span>
+            <button 
+              onClick={() => setIsOpen(false)}
+              className="md:hidden text-gray-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button 
-            onClick={() => setSidebarOpen(false)}
-            className="md:hidden text-gray-400 hover:text-white transition-colors"
-          >
-            <X size={24} />
-          </button>
+
+          <nav className="mt-4 space-y-1">
+            <NavItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+            <NavItem icon={ShieldAlert} label="NVD Feed" active={activeTab === 'nvd'} onClick={() => setActiveTab('nvd')} />
+            <NavItem icon={Database} label="Exploit DB" active={activeTab === 'exploitdb'} onClick={() => setActiveTab('exploitdb')} />
+            <NavItem icon={Bot} label="AI Analysis" active={activeTab === 'ai-analysis'} onClick={() => setActiveTab('ai-analysis')} />
+          </nav>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto py-6 px-4">
-          <p className="text-xs font-mono text-gray-600 mb-4 px-2 uppercase">Main Modules</p>
-          {menuItems.map((item, index) => (
-            <NavItem
-              key={item.id}
-              icon={item.icon}
-              label={item.label}
-              active={activeTab === item.id}
-              onClick={() => {
-                setActiveTab(item.id);
-                setSidebarOpen(false);
-              }}
-              delay={index * 50}
-            />
-          ))}
-        </nav>
-
-        {/* User Profile / Footer */}
-        <div className="p-4 border-t border-white/5 bg-black/20">
-          <button className="flex items-center w-full p-3 rounded-lg hover:bg-white/5 transition-colors group">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-cyber-cyan to-blue-600 p-[1px]">
-              <div className="w-full h-full rounded-full bg-black flex items-center justify-center text-xs font-bold text-white">
-                AD
-              </div>
-            </div>
-            <div className="ml-3 text-left">
-              <p className="text-sm text-white font-medium group-hover:text-cyber-cyan transition-colors">Admin User</p>
-              <p className="text-xs text-gray-500">Security Analyst</p>
-            </div>
-            <Settings className="ml-auto w-4 h-4 text-gray-500 group-hover:rotate-90 transition-transform duration-500" />
-          </button>
+        <div className="p-4 border-t border-[#1f1f1f]">
+          <div className="mt-4 text-[10px] text-center text-gray-700 font-mono">
+            VULNSIGHT CORE v2.1.0
+          </div>
         </div>
       </aside>
     </>
