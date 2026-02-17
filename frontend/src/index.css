@@ -20,7 +20,6 @@ html, body, #root {
   background-color: var(--bg-dark);
   font-family: 'JetBrains Mono', 'Courier New', monospace;
   color: var(--text-main);
-  /* Base font size increased slightly for better readability */
   font-size: 16px; 
 }
 
@@ -51,7 +50,7 @@ html, body, #root {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px; /* Slightly wider scrollbar */
+  width: 8px;
   height: 8px;
 }
 ::-webkit-scrollbar-track {
@@ -63,6 +62,57 @@ html, body, #root {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary-cyan);
+}
+
+/* Custom Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-zoom-in {
+  animation: zoomIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* Utility Classes */
@@ -89,29 +139,4 @@ html, body, #root {
   .badge-medium { @apply bg-yellow-900/30 text-yellow-400 border-yellow-500/30; }
   .badge-low { @apply bg-blue-900/30 text-blue-400 border-blue-500/30; }
   .badge-unknown { @apply bg-gray-800 text-gray-400 border-gray-700; }
-}
-
-/* Animations */
-.animate-scanline {
-  position: relative;
-  overflow: hidden;
-}
-.animate-scanline::before {
-  content: " ";
-  display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  width: 100%;
-  background: linear-gradient(to bottom, transparent 50%, rgba(0, 255, 255, 0.02) 51%, transparent 51%);
-  background-size: 100% 4px;
-  animation: scanline 10s linear infinite;
-  pointer-events: none;
-  z-index: 10;
-}
-
-@keyframes scanline {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(100%); }
 }
