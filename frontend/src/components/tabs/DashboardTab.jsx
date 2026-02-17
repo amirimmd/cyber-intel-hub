@@ -4,14 +4,14 @@ import {
   BrainCircuit, Network, Lock, Terminal,
   TrendingUp, Microscope, Zap, CheckCircle2,
   AlertTriangle, BarChart3, ChevronRight, GitCommit,
-  FileCode, ShieldCheck
+  ShieldCheck
 } from 'lucide-react';
 
 // --- Components ---
 
 const SectionHeader = ({ title, icon: Icon, color, delay }) => (
   <div 
-    className="flex items-center gap-3 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-in slide-in-from-left-4 duration-700 fill-mode-forwards"
+    className="flex items-center gap-3 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-slide-in-left"
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`p-2 rounded-lg bg-${color}-900/10 border border-${color}-500/20 shadow-[0_0_15px_rgba(0,0,0,0.5)]`}>
@@ -26,7 +26,7 @@ const SectionHeader = ({ title, icon: Icon, color, delay }) => (
 
 const StatBox = ({ label, value, sub, color, delay }) => (
   <div 
-    className="bg-[#0f0f0f] border border-[#222] p-4 rounded-xl relative overflow-hidden group hover:border-[#333] transition-colors opacity-0 animate-in zoom-in-95 duration-500 fill-mode-forwards"
+    className="bg-[#0f0f0f] border border-[#222] p-4 rounded-xl relative overflow-hidden group hover:border-[#333] transition-colors opacity-0 animate-zoom-in"
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`absolute top-0 right-0 w-20 h-20 bg-${color}-500/5 rounded-bl-full -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-150`}></div>
@@ -49,7 +49,7 @@ const StatBox = ({ label, value, sub, color, delay }) => (
 
 const PipelineStep = ({ step, title, desc, active, delay, icon: Icon }) => (
   <div 
-    className={`flex flex-col items-center text-center max-w-[140px] relative z-10 opacity-0 animate-in fade-in slide-in-from-bottom-4 duration-700 fill-mode-forwards group`}
+    className={`flex flex-col items-center text-center max-w-[140px] relative z-10 opacity-0 animate-fade-in-up group`}
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`
@@ -71,7 +71,7 @@ export default function DashboardTab() {
     <div className="h-full overflow-y-auto p-6 space-y-12 pb-20 scrollbar-thin scrollbar-thumb-[#333]">
       
       {/* 1. Cinematic Header */}
-      <div className="relative opacity-0 animate-in fade-in duration-1000 fill-mode-forwards">
+      <div className="relative opacity-0 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
         <div className="absolute top-0 right-0 p-4 opacity-10 animate-[pulse_4s_infinite]">
           <BrainCircuit size={150} className="text-cyan-500" />
         </div>
@@ -96,17 +96,16 @@ export default function DashboardTab() {
         </p>
       </div>
 
-      {/* 2. Scientific Pipeline Visualization (Animated) */}
-      <div className="cyber-panel p-10 relative overflow-hidden opacity-0 animate-in zoom-in-95 duration-700 delay-300 fill-mode-forwards border-t-2 border-t-cyan-500">
-        {/* Background Tech Lines */}
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+      {/* 2. Scientific Pipeline Visualization */}
+      <div className="cyber-panel p-10 relative overflow-hidden opacity-0 animate-zoom-in border-t-2 border-t-cyan-500" style={{ animationDelay: '300ms' }}>
+        <div className="absolute inset-0 bg-opacity-5 bg-grid-white/[0.05]"></div>
         
         {/* Connection Line */}
         <div className="absolute top-[4.5rem] left-[10%] right-[10%] h-0.5 bg-[#222] -z-0">
-          <div className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 opacity-30 animate-[shimmer_3s_infinite]"></div>
+          <div className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 opacity-30"></div>
         </div>
 
-        <div className="flex justify-between relative z-10">
+        <div className="flex justify-between relative z-10 flex-wrap gap-4">
           <PipelineStep step="01" title="Data Ingestion" desc="NVD (240k) + ExploitDB" active={true} delay={400} icon={Database} />
           <PipelineStep step="02" title="Domain Adaptation" desc="BERT MLM Fine-Tuning" active={true} delay={600} icon={Cpu} />
           <PipelineStep step="03" title="Feature Extraction" desc="ExBERT (BERT+LSTM)" active={true} delay={800} icon={Layers} />
@@ -121,7 +120,7 @@ export default function DashboardTab() {
         {/* 3. Phase 1: Knowledge Acquisition */}
         <section>
           <SectionHeader title="Phase 1: Knowledge Acquisition" icon={Database} color="blue" delay={1400} />
-          <div className="cyber-panel p-6 border-l-4 border-l-blue-500 h-[calc(100%-4rem)] opacity-0 animate-in slide-in-from-bottom-4 duration-700 delay-1500 fill-mode-forwards flex flex-col">
+          <div className="cyber-panel p-6 border-l-4 border-l-blue-500 h-auto opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1500ms' }}>
             
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -142,7 +141,7 @@ export default function DashboardTab() {
             </div>
 
             {/* Custom Chart for Phase 1 */}
-            <div className="flex-1 bg-[#0a0a0a] rounded-xl border border-[#222] p-5 relative overflow-hidden group">
+            <div className="flex-1 bg-[#0a0a0a] rounded-xl border border-[#222] p-5 relative overflow-hidden group min-h-[160px]">
               <div className="absolute inset-0 bg-gradient-to-b from-blue-900/5 to-transparent"></div>
               
               <div className="flex items-end justify-between h-32 gap-2 relative z-10">
@@ -164,19 +163,15 @@ export default function DashboardTab() {
                   <div className="absolute bottom-2 left-1/2 -translate-x-1/2 -rotate-90 text-[9px] text-white font-bold uppercase tracking-widest whitespace-nowrap origin-center">Final</div>
                 </div>
               </div>
-              
-              {/* Curve Line */}
-              <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-30" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <path d="M 5 5 Q 30 90 95 95" fill="none" stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="2" />
-              </svg>
             </div>
+            <p className="text-[10px] text-gray-500 mt-3 text-center">Model successfully adapted to cybersecurity terminology.</p>
           </div>
         </section>
 
-        {/* 4. Phase 3: XAI Optimization (The Results) */}
+        {/* 4. Phase 3: XAI Optimization */}
         <section>
           <SectionHeader title="Phase 3: XAI-Driven Results" icon={TrendingUp} color="green" delay={1400} />
-          <div className="cyber-panel p-0 border-l-4 border-l-green-500 overflow-hidden h-[calc(100%-4rem)] opacity-0 animate-in slide-in-from-bottom-4 duration-700 delay-1600 fill-mode-forwards flex flex-col">
+          <div className="cyber-panel p-0 border-l-4 border-l-green-500 overflow-hidden h-auto opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1600ms' }}>
             
             <div className="bg-[#111] p-4 border-b border-[#222] flex justify-between items-center">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Benchmarking Strategy</span>
@@ -200,7 +195,7 @@ export default function DashboardTab() {
                   <tr className="hover:bg-white/5 transition-colors group">
                     <td className="px-4 py-3 text-gray-400 flex items-center gap-2">
                       <div className="w-1 h-4 bg-gray-600 rounded-full group-hover:bg-gray-400 transition-colors"></div>
-                      Baseline
+                      Baseline (Phase 2)
                     </td>
                     <td className="px-4 py-3 text-right">92.58%</td>
                     <td className="px-4 py-3 text-right text-gray-400">93.54%</td>
@@ -222,7 +217,6 @@ export default function DashboardTab() {
                     </td>
                     <td className="px-4 py-4 text-right text-white relative z-10">98.16%</td>
                     
-                    {/* Row Highlight Effect */}
                     <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   </tr>
 
@@ -243,9 +237,9 @@ export default function DashboardTab() {
               <div className="flex items-start gap-3">
                 <AlertTriangle className="text-yellow-500 shrink-0 mt-0.5 animate-pulse" size={16} />
                 <div>
-                  <h4 className="text-xs font-bold text-white uppercase">Why it matters?</h4>
+                  <h4 className="text-xs font-bold text-white uppercase">Critical Analysis</h4>
                   <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">
-                    Cybersecurity demands minimizing false negatives. Method 2 achieved <b>95.02% Recall</b>, meaning it detects 5% more actual threats than the baseline, significantly reducing risk exposure.
+                    Method 2 (Reverse Unfreezing) yielded the highest <b>Recall (95.02%)</b>. In cybersecurity, minimizing False Negatives is critical. This method correctly identified 5% more exploits than the baseline.
                   </p>
                 </div>
               </div>
@@ -257,9 +251,8 @@ export default function DashboardTab() {
       {/* 5. Detailed Architecture (ExBERT) */}
       <section className="pb-10">
         <SectionHeader title="System Architecture (ExBERT Implementation)" icon={Layers} color="purple" delay={1800} />
-        <div className="cyber-panel p-10 bg-[#0b0b0b] relative overflow-hidden opacity-0 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-2000 fill-mode-forwards">
-          {/* Background Circuit Pattern */}
-          <div className="absolute inset-0 bg-[linear-gradient(rgba(20,20,20,0.5)_1px,transparent_1px),linear-gradient(90deg,rgba(20,20,20,0.5)_1px,transparent_1px)] bg-[size:20px_20px] opacity-20"></div>
+        <div className="cyber-panel p-10 bg-[#0b0b0b] relative overflow-hidden opacity-0 animate-fade-in-up" style={{ animationDelay: '2000ms' }}>
+          <div className="absolute inset-0 bg-opacity-20 bg-grid-white/[0.05]"></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-black opacity-80"></div>
 
           <div className="relative z-10 flex flex-col lg:flex-row items-center justify-center gap-4 text-xs font-mono">
