@@ -20,6 +20,8 @@ html, body, #root {
   background-color: var(--bg-dark);
   font-family: 'JetBrains Mono', 'Courier New', monospace;
   color: var(--text-main);
+  /* Base font size increased slightly for better readability */
+  font-size: 16px; 
 }
 
 /* Cyber Grid Background */
@@ -49,15 +51,15 @@ html, body, #root {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px; /* Slightly wider scrollbar */
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: #0f0f0f;
 }
 ::-webkit-scrollbar-thumb {
   background: #333;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--primary-cyan);
@@ -70,17 +72,17 @@ html, body, #root {
   }
   
   .cyber-btn {
-    @apply px-4 py-2 bg-cyan-900/20 text-cyan-400 border border-cyan-500/30 rounded-lg
+    @apply px-5 py-3 bg-cyan-900/20 text-cyan-400 border border-cyan-500/30 rounded-lg
            hover:bg-cyan-500/20 hover:text-cyan-300 hover:shadow-[0_0_10px_rgba(0,240,255,0.2)]
-           transition-all duration-200 active:scale-95 text-xs font-bold tracking-wider uppercase;
+           transition-all duration-200 active:scale-95 text-sm font-bold tracking-wider uppercase;
   }
 
   .cyber-input {
-    @apply w-full bg-black/50 border border-[#333] text-gray-300 p-2 text-sm rounded-lg focus:outline-none focus:border-cyan-500/50 transition-colors font-mono;
+    @apply w-full bg-black/50 border border-[#333] text-gray-300 p-3 text-base rounded-lg focus:outline-none focus:border-cyan-500/50 transition-colors font-mono;
   }
   
   .severity-badge {
-    @apply px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider border;
+    @apply px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider border;
   }
   .badge-critical { @apply bg-red-900/30 text-red-400 border-red-500/30; }
   .badge-high { @apply bg-orange-900/30 text-orange-400 border-orange-500/30; }
