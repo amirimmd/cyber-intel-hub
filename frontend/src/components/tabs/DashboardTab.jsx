@@ -4,7 +4,7 @@ import {
   BrainCircuit, Network, Lock, Terminal,
   TrendingUp, Microscope, Zap, CheckCircle2,
   AlertTriangle, BarChart3, ChevronRight, GitCommit,
-  ShieldCheck, RefreshCw, Scale, Server, FileCode
+  ShieldCheck, RefreshCw, Scale, Server, FileCode, Play, ExternalLink
 } from 'lucide-react';
 
 // --- Components ---
@@ -198,43 +198,29 @@ export default function DashboardTab() {
               </h3>
               
               <div className="flex flex-col md:flex-row items-center justify-between gap-2 text-center text-[10px] font-mono relative z-10">
-                {/* Step 1 */}
+                {/* Steps */}
                 <div className="bg-[#1a1a1a] p-3 rounded-lg border border-red-500/30 w-full md:w-32">
                   <AlertTriangle className="mx-auto text-red-500 mb-2" size={16} />
                   <div className="text-red-300 font-bold">Misclassified</div>
-                  <div className="text-gray-500">Validation Set</div>
                 </div>
                 
                 <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
                 
-                {/* Step 2 */}
                 <div className="bg-[#1a1a1a] p-3 rounded-lg border border-blue-500/30 w-full md:w-32">
                   <Microscope className="mx-auto text-blue-500 mb-2" size={16} />
-                  <div className="text-blue-300 font-bold">SHAP Analysis</div>
-                  <div className="text-gray-500">Feature Importance</div>
+                  <div className="text-blue-300 font-bold">SHAP Weights</div>
                 </div>
 
                 <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
 
-                {/* Step 3 */}
-                <div className="bg-[#1a1a1a] p-3 rounded-lg border border-yellow-500/30 w-full md:w-32">
-                  <Scale className="mx-auto text-yellow-500 mb-2" size={16} />
-                  <div className="text-yellow-300 font-bold">Reweighting</div>
-                  <div className="text-gray-500">Hard Samples ↑</div>
-                </div>
-
-                <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
-
-                {/* Step 4 */}
                 <div className="bg-green-900/10 p-3 rounded-lg border border-green-500/50 w-full md:w-32 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
                   <Zap className="mx-auto text-green-500 mb-2" size={16} />
                   <div className="text-green-300 font-bold">Retraining</div>
-                  <div className="text-gray-500">Reverse Unfreeze</div>
                 </div>
               </div>
             </div>
 
-            {/* Method 2 Evolution (Reverse Unfreezing) */}
+            {/* Method 2 Evolution */}
             <div className="border-t border-[#222] pt-4">
               <h3 className="text-white font-bold text-sm mb-3">Evolution of Method 2 (Reverse Unfreezing)</h3>
               <div className="space-y-2">
@@ -290,10 +276,6 @@ export default function DashboardTab() {
                   </tr>
                 </tbody>
               </table>
-            </div>
-
-            <div className="p-3 bg-gradient-to-r from-green-900/10 to-transparent border-l-2 border-green-500 rounded-r text-[10px] text-gray-400 leading-relaxed">
-              <strong className="text-white">Why "Reverse Unfreezing"?</strong> Unfreezing layers from top (12) to bottom (0) allowed the model to fine-tune high-level semantic features first, preserving the core language knowledge while adapting to hard samples.
             </div>
           </div>
         </section>
@@ -356,6 +338,36 @@ export default function DashboardTab() {
             </div>
 
           </div>
+        </div>
+      </section>
+
+      {/* 6. Live AI Laboratory Embed */}
+      <section className="pb-10">
+        <SectionHeader title="Live AI Laboratory" icon={Play} color="cyan" delay={2200} />
+        <div className="cyber-panel p-0 h-[800px] overflow-hidden relative opacity-0 animate-fade-in-up" style={{ animationDelay: '2400ms' }}>
+          <div className="absolute top-4 right-4 z-10 flex gap-2">
+            <a 
+              href="https://amirimmd-exbert-classifier-inference.hf.space" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="px-3 py-1 bg-cyan-900/80 backdrop-blur rounded text-[10px] text-cyan-400 font-mono border border-cyan-500/50 hover:bg-cyan-500/20 transition-colors flex items-center gap-1"
+            >
+              <ExternalLink size={12} /> OPEN FULLSCREEN
+            </a>
+            <span className="px-2 py-1 bg-black/50 backdrop-blur rounded text-[10px] text-green-400 font-mono border border-gray-800 flex items-center gap-1">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+              SYSTEM ONLINE
+            </span>
+          </div>
+          
+          <iframe 
+            src="https://amirimmd-exbert-classifier-inference.hf.space" 
+            className="w-full h-full border-none bg-[#050505]"
+            title="VulnSight AI Engine"
+            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+          ></iframe>
+          
+          <div className="absolute inset-0 pointer-events-none border-4 border-cyan-500/10 rounded-xl"></div>
         </div>
       </section>
 
