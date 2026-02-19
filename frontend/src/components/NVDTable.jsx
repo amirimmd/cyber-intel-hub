@@ -13,33 +13,40 @@ export const NVDTable = ({ limit = 50 }) => {
   const [severityFilter, setSeverityFilter] = useState('all'); // all, critical, high, medium, low
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [errorMsg, setErrorMsg] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
+  // واکشی داده‌ها با تغییر هر یک از پارامترها
   useEffect(() => {
     fetchCVEs();
   }, [page, limit, severityFilter]);
 
   const fetchCVEs = async (isSearch = false) => {
     setLoading(true);
+    setErrorMsg(null);
     if (isSearch) setPage(1);
 
     try {
+      // ساخت کوئری (نام جدول اصلاح شد به vulnerabilities)
       let query = supabase
-        .from('nvd_cves')
+        .from('vulnerabilities')
         .select('*', { count: 'exact' });
       
+      // جستجو (نام ستون‌ها اصلاح شد: ID, text)
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
-        query = query.or(`cve_id.ilike.%${term}%,description.ilike.%${term}%`);
+        query = query.or(`ID.ilike.%${term}%,text.ilike.%${term}%`);
       }
 
+      // فیلتر Severity (نام ستون اصلاح شد: score)
       if (severityFilter !== 'all') {
-         if (severityFilter === 'critical') query = query.gte('cvss_score', 9.0);
-         else if (severityFilter === 'high') query = query.gte('cvss_score', 7.0).lt('cvss_score', 9.0);
-         else if (severityFilter === 'medium') query = query.gte('cvss_score', 4.0).lt('cvss_score', 7.0);
-         else if (severityFilter === 'low') query = query.lt('cvss_score', 4.0);
+         if (severityFilter === 'critical') query = query.gte('score', 9.0);
+         else if (severityFilter === 'high') query = query.gte('score', 7.0).lt('score', 9.0);
+         else if (severityFilter === 'medium') query = query.gte('score', 4.0).lt('score', 7.0);
+         else if (severityFilter === 'low') query = query.lt('score', 4.0);
       }
 
+      // صفحه‌بندی
       const currentPage = isSearch ? 1 : page;
       const { data, count, error } = await query
         .order('published_date', { ascending: false })
@@ -48,8 +55,10 @@ export const NVDTable = ({ limit = 50 }) => {
       if (error) throw error;
       setTotal(count || 0);
       setCves(data || []);
+      
     } catch (error) {
       console.error('Error fetching CVEs:', error);
+      setErrorMsg(error.message || 'Connection failed');
       setCves([]);
     } finally {
       setLoading(false);
@@ -140,6 +149,14 @@ export const NVDTable = ({ limit = 50 }) => {
 
       {/* 2. کانتینر جدول */}
       <div className="cyber-panel flex-1 overflow-hidden flex flex-col relative border-cyan-500/10 bg-[#0a0a0a]">
+        
+        {errorMsg && (
+          <div className="bg-red-900/10 text-red-400 p-3 text-xs text-center border-b border-red-500/20 flex items-center justify-center gap-2 animate-pulse">
+            <AlertTriangle size={14} />
+            System Error: {errorMsg}
+          </div>
+        )}
+
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent h-full">
           <table className="w-full text-left text-sm min-w-[800px]">
             <thead className="bg-[#111] text-gray-500 font-mono text-[10px] uppercase tracking-wider sticky top-0 z-10 shadow-lg shadow-black/50">
@@ -166,14 +183,16 @@ export const NVDTable = ({ limit = 50 }) => {
                  ))
                ) : cves.length > 0 ? (
                  cves.map((cve, index) => {
-                   const uniqueKey = `${cve.cve_id}-${index}`;
+                   const uniqueKey = `${cve.ID}-${index}`;
                    return (
                      <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
+                        
+                        {/* ID */}
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center gap-3">
-                            <span className="font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.cve_id}</span>
+                            <span className="font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.ID}</span>
                             <button 
-                              onClick={() => handleCopy(cve.cve_id, uniqueKey + 'id')}
+                              onClick={() => handleCopy(cve.ID, uniqueKey + 'id')}
                               className="opacity-100 md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-white transition-all p-1.5 rounded hover:bg-[#333]"
                               title="Copy ID"
                             >
@@ -181,15 +200,21 @@ export const NVDTable = ({ limit = 50 }) => {
                             </button>
                           </div>
                         </td>
-                        <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.cvss_score)}</td>
-                        <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.cvss_score}</td>
+
+                        {/* Severity */}
+                        <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.score)}</td>
+
+                        {/* Score */}
+                        <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score || 'N/A'}</td>
+
+                        {/* Description */}
                         <td className="px-4 md:px-6 py-4 relative">
                           <div className="group/desc">
                             <p className="text-gray-300 text-xs leading-relaxed line-clamp-2 max-w-xl pr-8">
-                              {cve.description}
+                              {cve.text || 'No description available'}
                             </p>
                             <button 
-                              onClick={() => handleCopy(cve.description, uniqueKey + 'desc')}
+                              onClick={() => handleCopy(cve.text, uniqueKey + 'desc')}
                               className="absolute right-0 top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 group-hover/desc:opacity-100 text-gray-600 hover:text-white transition-all p-1.5 rounded-md hover:bg-[#333]"
                               title="Copy Description"
                             >
@@ -197,9 +222,15 @@ export const NVDTable = ({ limit = 50 }) => {
                             </button>
                           </div>
                         </td>
-                        <td className="px-4 md:px-6 py-4 text-[10px] text-gray-500 font-mono">{new Date(cve.published_date).toLocaleDateString()}</td>
+
+                        {/* Date */}
+                        <td className="px-4 md:px-6 py-4 text-[10px] text-gray-500 font-mono">
+                          {cve.published_date ? new Date(cve.published_date).toLocaleDateString() : 'N/A'}
+                        </td>
+
+                        {/* Link */}
                         <td className="px-4 md:px-6 py-4 text-right">
-                          <a href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`} target="_blank" rel="noreferrer" className="inline-flex p-1.5 rounded hover:bg-[#333] text-gray-500 hover:text-cyan-400 transition-colors">
+                          <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noreferrer" className="inline-flex p-1.5 rounded hover:bg-[#333] text-gray-500 hover:text-cyan-400 transition-colors">
                             <ExternalLink size={16} />
                           </a>
                         </td>
