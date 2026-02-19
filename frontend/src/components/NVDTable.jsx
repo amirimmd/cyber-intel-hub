@@ -16,7 +16,7 @@ export const NVDTable = ({ limit = 50 }) => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
-  // واکشی داده‌ها با تغییر هر یک از پارامترها
+  // Fetch data on dependency change
   useEffect(() => {
     fetchCVEs();
   }, [page, limit, severityFilter]);
@@ -27,19 +27,18 @@ export const NVDTable = ({ limit = 50 }) => {
     if (isSearch) setPage(1);
 
     try {
-      // 1. ساخت کوئری (نام جدول اصلاح شد به vulnerabilities)
+      // 1. Build Query (Using 'estimated' count to prevent timeouts on large datasets)
       let query = supabase
         .from('vulnerabilities')
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'estimated' });
       
-      // 2. جستجو (نام ستون‌ها اصلاح شد: ID, text)
+      // 2. Search Filter (Using 'ilike' for case-insensitive search)
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
-        // جستجو هم در شناسه و هم در متن توضیحات
         query = query.or(`ID.ilike.%${term}%,text.ilike.%${term}%`);
       }
 
-      // 3. فیلتر Severity (نام ستون اصلاح شد: score)
+      // 3. Severity Filter
       if (severityFilter !== 'all') {
          if (severityFilter === 'critical') query = query.gte('score', 9.0);
          else if (severityFilter === 'high') query = query.gte('score', 7.0).lt('score', 9.0);
@@ -47,7 +46,7 @@ export const NVDTable = ({ limit = 50 }) => {
          else if (severityFilter === 'low') query = query.lt('score', 4.0);
       }
 
-      // 4. صفحه‌بندی
+      // 4. Pagination & Ordering
       const currentPage = isSearch ? 1 : page;
       const { data, count, error } = await query
         .order('published_date', { ascending: false })
@@ -89,10 +88,10 @@ export const NVDTable = ({ limit = 50 }) => {
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up pb-4 md:pb-0">
       
-      {/* 1. نوار ابزار (Toolbar) */}
+      {/* 1. Toolbar */}
       <div className="flex flex-col xl:flex-row gap-4 justify-between items-center bg-[#0a0a0a]/80 backdrop-blur-md p-4 rounded-xl border border-[#1f1f1f] shadow-lg">
         
-        {/* جستجو */}
+        {/* Search Input */}
         <div className="relative w-full xl:w-96 group order-2 xl:order-1">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors group-focus-within:text-cyan-400">
             <Search size={16} />
@@ -110,10 +109,10 @@ export const NVDTable = ({ limit = 50 }) => {
           </div>
         </div>
         
-        {/* فیلترها و دکمه‌ها */}
+        {/* Filters & Actions */}
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto order-1 xl:order-2">
            
-           {/* فیلتر شدت (Severity) */}
+           {/* Severity Filter */}
            <div className="relative group min-w-[140px] flex-1 sm:flex-none">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"><ListFilter size={14} /></div>
             <select
@@ -149,10 +148,10 @@ export const NVDTable = ({ limit = 50 }) => {
         </div>
       </div>
 
-      {/* 2. کانتینر جدول */}
+      {/* 2. Table Container */}
       <div className="cyber-panel flex-1 overflow-hidden flex flex-col relative border-cyan-500/10 bg-[#0a0a0a]">
         
-        {/* نمایش خطا */}
+        {/* Error State */}
         {errorMsg && (
           <div className="bg-red-900/10 text-red-400 p-3 text-xs text-center border-b border-red-500/20 flex items-center justify-center gap-2 animate-pulse">
             <AlertTriangle size={14} />
@@ -160,6 +159,7 @@ export const NVDTable = ({ limit = 50 }) => {
           </div>
         )}
 
+        {/* Scrollable Table */}
         <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent h-full">
           <table className="w-full text-left text-sm min-w-[800px]">
             <thead className="bg-[#111] text-gray-500 font-mono text-[10px] uppercase tracking-wider sticky top-0 z-10 shadow-lg shadow-black/50">
@@ -174,6 +174,7 @@ export const NVDTable = ({ limit = 50 }) => {
             </thead>
             <tbody className="divide-y divide-[#1f1f1f]">
                {loading ? (
+                 // Loading Skeleton
                  [...Array(8)].map((_, i) => (
                    <tr key={i} className="animate-pulse">
                      <td className="px-6 py-4"><div className="h-4 bg-[#1f1f1f] rounded w-24"></div></td>
@@ -190,7 +191,7 @@ export const NVDTable = ({ limit = 50 }) => {
                    return (
                      <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
                         
-                        {/* CVE ID (Copyable) */}
+                        {/* CVE ID */}
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center gap-3">
                             <span className="font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.ID}</span>
@@ -204,13 +205,13 @@ export const NVDTable = ({ limit = 50 }) => {
                           </div>
                         </td>
 
-                        {/* Severity Badge */}
+                        {/* Severity */}
                         <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.score)}</td>
 
                         {/* Score */}
                         <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
 
-                        {/* Description (Copyable) */}
+                        {/* Description */}
                         <td className="px-4 md:px-6 py-4 relative">
                           <div className="group/desc flex items-start gap-2">
                              <Terminal size={14} className="text-gray-700 mt-1 shrink-0 hidden sm:block" />
@@ -255,7 +256,7 @@ export const NVDTable = ({ limit = 50 }) => {
           </table>
         </div>
 
-        {/* 3. فوتر صفحه‌بندی (فیکس شده برای موبایل) */}
+        {/* 3. Pagination Footer (Mobile Fixed) */}
         <div className="mt-auto bg-[#0a0a0a] px-4 py-3 border-t border-[#1f1f1f] flex items-center justify-between shrink-0 sticky bottom-0 z-20">
           <span className="text-[10px] text-gray-600 font-mono">
             Page <span className="text-white font-bold">{page}</span>
