@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { 
   Search, Filter, Bug, Calendar, ExternalLink, 
   AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert,
-  ListFilter, RefreshCw, Copy, Check
+  ListFilter, RefreshCw, Copy, Check, Terminal
 } from 'lucide-react';
 
 export const NVDTable = ({ limit = 50 }) => {
@@ -27,18 +27,19 @@ export const NVDTable = ({ limit = 50 }) => {
     if (isSearch) setPage(1);
 
     try {
-      // ساخت کوئری (نام جدول اصلاح شد به vulnerabilities)
+      // 1. ساخت کوئری (نام جدول اصلاح شد به vulnerabilities)
       let query = supabase
         .from('vulnerabilities')
         .select('*', { count: 'exact' });
       
-      // جستجو (نام ستون‌ها اصلاح شد: ID, text)
+      // 2. جستجو (نام ستون‌ها اصلاح شد: ID, text)
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
+        // جستجو هم در شناسه و هم در متن توضیحات
         query = query.or(`ID.ilike.%${term}%,text.ilike.%${term}%`);
       }
 
-      // فیلتر Severity (نام ستون اصلاح شد: score)
+      // 3. فیلتر Severity (نام ستون اصلاح شد: score)
       if (severityFilter !== 'all') {
          if (severityFilter === 'critical') query = query.gte('score', 9.0);
          else if (severityFilter === 'high') query = query.gte('score', 7.0).lt('score', 9.0);
@@ -46,7 +47,7 @@ export const NVDTable = ({ limit = 50 }) => {
          else if (severityFilter === 'low') query = query.lt('score', 4.0);
       }
 
-      // صفحه‌بندی
+      // 4. صفحه‌بندی
       const currentPage = isSearch ? 1 : page;
       const { data, count, error } = await query
         .order('published_date', { ascending: false })
@@ -78,7 +79,7 @@ export const NVDTable = ({ limit = 50 }) => {
   };
 
   const getSeverityBadge = (score) => {
-    if (!score) return <span className="severity-badge badge-unknown">UNKNOWN</span>;
+    if (score === null || score === undefined) return <span className="severity-badge badge-unknown">UNKNOWN</span>;
     if (score >= 9.0) return <span className="severity-badge badge-critical animate-pulse">CRITICAL</span>;
     if (score >= 7.0) return <span className="severity-badge badge-high">HIGH</span>;
     if (score >= 4.0) return <span className="severity-badge badge-medium">MEDIUM</span>;
@@ -112,6 +113,7 @@ export const NVDTable = ({ limit = 50 }) => {
         {/* فیلترها و دکمه‌ها */}
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto order-1 xl:order-2">
            
+           {/* فیلتر شدت (Severity) */}
            <div className="relative group min-w-[140px] flex-1 sm:flex-none">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"><ListFilter size={14} /></div>
             <select
@@ -150,6 +152,7 @@ export const NVDTable = ({ limit = 50 }) => {
       {/* 2. کانتینر جدول */}
       <div className="cyber-panel flex-1 overflow-hidden flex flex-col relative border-cyan-500/10 bg-[#0a0a0a]">
         
+        {/* نمایش خطا */}
         {errorMsg && (
           <div className="bg-red-900/10 text-red-400 p-3 text-xs text-center border-b border-red-500/20 flex items-center justify-center gap-2 animate-pulse">
             <AlertTriangle size={14} />
@@ -187,7 +190,7 @@ export const NVDTable = ({ limit = 50 }) => {
                    return (
                      <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
                         
-                        {/* ID */}
+                        {/* CVE ID (Copyable) */}
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center gap-3">
                             <span className="font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.ID}</span>
@@ -201,25 +204,26 @@ export const NVDTable = ({ limit = 50 }) => {
                           </div>
                         </td>
 
-                        {/* Severity */}
+                        {/* Severity Badge */}
                         <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.score)}</td>
 
                         {/* Score */}
-                        <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score || 'N/A'}</td>
+                        <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
 
-                        {/* Description */}
+                        {/* Description (Copyable) */}
                         <td className="px-4 md:px-6 py-4 relative">
-                          <div className="group/desc">
-                            <p className="text-gray-300 text-xs leading-relaxed line-clamp-2 max-w-xl pr-8">
-                              {cve.text || 'No description available'}
-                            </p>
-                            <button 
-                              onClick={() => handleCopy(cve.text, uniqueKey + 'desc')}
-                              className="absolute right-0 top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 group-hover/desc:opacity-100 text-gray-600 hover:text-white transition-all p-1.5 rounded-md hover:bg-[#333]"
-                              title="Copy Description"
-                            >
-                              {copiedId === uniqueKey + 'desc' ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
-                            </button>
+                          <div className="group/desc flex items-start gap-2">
+                             <Terminal size={14} className="text-gray-700 mt-1 shrink-0 hidden sm:block" />
+                             <p className="text-gray-300 text-xs leading-relaxed line-clamp-2 max-w-xl pr-8 font-sans">
+                               {cve.text || 'No description available'}
+                             </p>
+                             <button 
+                               onClick={() => handleCopy(cve.text, uniqueKey + 'desc')}
+                               className="absolute right-0 top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 group-hover/desc:opacity-100 text-gray-600 hover:text-white transition-all p-1.5 rounded-md hover:bg-[#333]"
+                               title="Copy Description"
+                             >
+                               {copiedId === uniqueKey + 'desc' ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                             </button>
                           </div>
                         </td>
 
@@ -251,7 +255,7 @@ export const NVDTable = ({ limit = 50 }) => {
           </table>
         </div>
 
-        {/* 3. فوتر صفحه‌بندی (بهینه شده برای موبایل) */}
+        {/* 3. فوتر صفحه‌بندی (فیکس شده برای موبایل) */}
         <div className="mt-auto bg-[#0a0a0a] px-4 py-3 border-t border-[#1f1f1f] flex items-center justify-between shrink-0 sticky bottom-0 z-20">
           <span className="text-[10px] text-gray-600 font-mono">
             Page <span className="text-white font-bold">{page}</span>
