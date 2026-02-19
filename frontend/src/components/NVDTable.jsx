@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import { 
   Search, Filter, Bug, Calendar, ExternalLink, 
   AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert,
-  ListFilter, RefreshCw
+  ListFilter, RefreshCw, Copy, Check
 } from 'lucide-react';
 
 export const NVDTable = ({ limit = 50 }) => {
@@ -13,8 +13,8 @@ export const NVDTable = ({ limit = 50 }) => {
   const [severityFilter, setSeverityFilter] = useState('all'); // all, critical, high, medium, low
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [copiedId, setCopiedId] = useState(null);
 
-  // واکشی داده‌ها با تغییر هر یک از پارامترها
   useEffect(() => {
     fetchCVEs();
   }, [page, limit, severityFilter]);
@@ -24,18 +24,15 @@ export const NVDTable = ({ limit = 50 }) => {
     if (isSearch) setPage(1);
 
     try {
-      // ساخت کوئری
       let query = supabase
         .from('nvd_cves')
         .select('*', { count: 'exact' });
       
-      // جستجو
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
         query = query.or(`cve_id.ilike.%${term}%,description.ilike.%${term}%`);
       }
 
-      // فیلتر Severity
       if (severityFilter !== 'all') {
          if (severityFilter === 'critical') query = query.gte('cvss_score', 9.0);
          else if (severityFilter === 'high') query = query.gte('cvss_score', 7.0).lt('cvss_score', 9.0);
@@ -43,7 +40,6 @@ export const NVDTable = ({ limit = 50 }) => {
          else if (severityFilter === 'low') query = query.lt('cvss_score', 4.0);
       }
 
-      // صفحه‌بندی
       const currentPage = isSearch ? 1 : page;
       const { data, count, error } = await query
         .order('published_date', { ascending: false })
@@ -64,6 +60,12 @@ export const NVDTable = ({ limit = 50 }) => {
     if (e.key === 'Enter') {
       fetchCVEs(true);
     }
+  };
+
+  const handleCopy = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const getSeverityBadge = (score) => {
@@ -114,11 +116,18 @@ export const NVDTable = ({ limit = 50 }) => {
               <option value="medium">Medium (4-7)</option>
               <option value="low">Low (0-4)</option>
             </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">
+              <ChevronLeft size={12} className="-rotate-90" />
+            </div>
           </div>
 
-          <button onClick={() => fetchCVEs(true)} className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-[#111] hover:bg-[#161616] text-gray-300 text-xs font-medium rounded-lg border border-[#333] hover:border-cyan-500/30 transition-all active:scale-95 whitespace-nowrap">
+          <button 
+            onClick={() => fetchCVEs(true)} 
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-[#111] hover:bg-[#161616] text-gray-300 text-xs font-medium rounded-lg border border-[#333] hover:border-cyan-500/30 transition-all active:scale-95 whitespace-nowrap"
+          >
             <Filter size={14} className="text-cyan-500" /> <span>Search</span>
           </button>
+          
            <button 
             onClick={() => fetchCVEs(false)}
             className="p-2.5 bg-[#111] hover:bg-[#161616] text-gray-400 hover:text-white rounded-lg border border-[#333] hover:border-green-500/30 transition-all active:scale-95 group"
@@ -156,20 +165,47 @@ export const NVDTable = ({ limit = 50 }) => {
                    </tr>
                  ))
                ) : cves.length > 0 ? (
-                 cves.map(cve => (
-                   <tr key={cve.cve_id} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
-                      <td className="px-4 md:px-6 py-4 font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.cve_id}</td>
-                      <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.cvss_score)}</td>
-                      <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.cvss_score}</td>
-                      <td className="px-4 md:px-6 py-4 text-gray-300 text-xs leading-relaxed line-clamp-2 max-w-xl">{cve.description}</td>
-                      <td className="px-4 md:px-6 py-4 text-[10px] text-gray-500 font-mono">{new Date(cve.published_date).toLocaleDateString()}</td>
-                      <td className="px-4 md:px-6 py-4 text-right">
-                        <a href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`} target="_blank" rel="noreferrer" className="inline-flex p-1.5 rounded hover:bg-[#333] text-gray-500 hover:text-cyan-400 transition-colors">
-                          <ExternalLink size={16} />
-                        </a>
-                      </td>
-                   </tr>
-                 ))
+                 cves.map((cve, index) => {
+                   const uniqueKey = `${cve.cve_id}-${index}`;
+                   return (
+                     <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
+                        <td className="px-4 md:px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.cve_id}</span>
+                            <button 
+                              onClick={() => handleCopy(cve.cve_id, uniqueKey + 'id')}
+                              className="opacity-100 md:opacity-0 group-hover:opacity-100 text-gray-600 hover:text-white transition-all p-1.5 rounded hover:bg-[#333]"
+                              title="Copy ID"
+                            >
+                              {copiedId === uniqueKey + 'id' ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.cvss_score)}</td>
+                        <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.cvss_score}</td>
+                        <td className="px-4 md:px-6 py-4 relative">
+                          <div className="group/desc">
+                            <p className="text-gray-300 text-xs leading-relaxed line-clamp-2 max-w-xl pr-8">
+                              {cve.description}
+                            </p>
+                            <button 
+                              onClick={() => handleCopy(cve.description, uniqueKey + 'desc')}
+                              className="absolute right-0 top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 group-hover/desc:opacity-100 text-gray-600 hover:text-white transition-all p-1.5 rounded-md hover:bg-[#333]"
+                              title="Copy Description"
+                            >
+                              {copiedId === uniqueKey + 'desc' ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 md:px-6 py-4 text-[10px] text-gray-500 font-mono">{new Date(cve.published_date).toLocaleDateString()}</td>
+                        <td className="px-4 md:px-6 py-4 text-right">
+                          <a href={`https://nvd.nist.gov/vuln/detail/${cve.cve_id}`} target="_blank" rel="noreferrer" className="inline-flex p-1.5 rounded hover:bg-[#333] text-gray-500 hover:text-cyan-400 transition-colors">
+                            <ExternalLink size={16} />
+                          </a>
+                        </td>
+                     </tr>
+                   );
+                 })
                ) : (
                   <tr>
                     <td colSpan="6" className="px-6 py-20 text-center">
