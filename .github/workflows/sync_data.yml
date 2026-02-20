@@ -25,6 +25,6 @@ jobs:
       - name: Run NVD Sync
         run: cd scripts && npm run sync:nvd
         env:
-          # در صورتی که متغیرهای محیطی دارید اینجا قرار می‌گیرند
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
