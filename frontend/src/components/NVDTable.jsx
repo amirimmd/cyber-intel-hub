@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { 
-  Search, Filter, Bug, Calendar, ExternalLink, 
-  AlertTriangle, ChevronLeft, ChevronRight, ShieldAlert,
+  Search, Filter, Bug, ExternalLink, 
+  AlertTriangle, ChevronLeft, ChevronRight,
   ListFilter, RefreshCw, Copy, Check, Terminal
 } from 'lucide-react';
 
@@ -205,7 +205,7 @@ export const NVDTable = ({ limit = 50 }) => {
                           </div>
                         </td>
 
-                        {/* Severity */}
+                        {/* Severity Badge */}
                         <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.score)}</td>
 
                         {/* Score */}
@@ -244,7 +244,7 @@ export const NVDTable = ({ limit = 50 }) => {
                  })
                ) : (
                   <tr>
-                    <td colSpan="6" className="px-6 py-20 text-center">
+                    <td colSpan="6" className="px-6 py-20 text-center bg-[#0a0a0a]">
                       <div className="flex flex-col items-center justify-center gap-4 opacity-40">
                         <Bug size={64} className="text-gray-700" />
                         <p className="text-gray-400 font-mono text-sm">No CVEs match your filters.</p>
