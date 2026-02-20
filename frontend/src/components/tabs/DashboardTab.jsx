@@ -1,10 +1,10 @@
 import React from 'react';
 import { 
-  Database, Cpu, Layers, Activity, ArrowRight, 
-  BrainCircuit, Network, Lock, Terminal,
-  TrendingUp, Microscope, Zap, CheckCircle2,
-  AlertTriangle, BarChart3, ChevronRight, GitCommit,
-  ShieldCheck, RefreshCw, Scale, Server, FileCode, Play, ExternalLink
+  Database, Cpu, Layers, ArrowRight, 
+  BrainCircuit, Network, Terminal,
+  TrendingUp, Microscope, Zap, 
+  AlertTriangle, ShieldCheck, 
+  Activity, FileCode, CheckCircle, Code
 } from 'lucide-react';
 
 // --- Components ---
@@ -37,7 +37,7 @@ const StatBox = ({ label, value, sub, color, delay }) => (
       {label}
     </p>
     <div className="flex flex-col">
-      <span className="text-3xl font-bold text-white font-mono tracking-tight">{value}</span>
+      <span className="text-2xl lg:text-3xl font-bold text-white font-mono tracking-tight">{value}</span>
       {sub && (
         <span className={`text-[10px] font-mono mt-1 ${sub.includes('+') || sub.includes('-') ? `text-${color}-400` : 'text-gray-600'}`}>
           {sub}
@@ -49,7 +49,7 @@ const StatBox = ({ label, value, sub, color, delay }) => (
 
 const PipelineStep = ({ step, title, desc, active, delay, icon: Icon }) => (
   <div 
-    className={`flex flex-col items-center text-center max-w-[140px] relative z-10 opacity-0 animate-fade-in-up group`}
+    className={`flex flex-col items-center text-center w-full sm:w-auto sm:max-w-[140px] relative z-10 opacity-0 animate-fade-in-up group`}
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`
@@ -117,12 +117,12 @@ export default function DashboardTab() {
       <div className="cyber-panel p-10 relative overflow-hidden opacity-0 animate-zoom-in border-t-2 border-t-cyan-500" style={{ animationDelay: '300ms' }}>
         <div className="absolute inset-0 bg-opacity-5 bg-grid-white/[0.05]"></div>
         
-        {/* Connection Line */}
-        <div className="absolute top-[4.5rem] left-[10%] right-[10%] h-0.5 bg-[#222] -z-0">
+        {/* Connection Line - Hidden on smaller screens to prevent overlap */}
+        <div className="hidden lg:block absolute top-[4.5rem] left-[10%] right-[10%] h-0.5 bg-[#222] -z-0">
           <div className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-blue-500 via-purple-500 to-green-500 opacity-30"></div>
         </div>
 
-        <div className="flex justify-between relative z-10 flex-wrap gap-4">
+        <div className="flex flex-col sm:flex-row justify-between relative z-10 gap-8 sm:gap-4">
           <PipelineStep step="01" title="Data Ingestion" desc="NVD (240k) + ExploitDB" active={true} delay={400} icon={Database} />
           <PipelineStep step="02" title="Domain Adaptation" desc="BERT MLM Fine-Tuning" active={true} delay={600} icon={Cpu} />
           <PipelineStep step="03" title="Feature Extraction" desc="ExBERT (BERT+LSTM)" active={true} delay={800} icon={Layers} />
@@ -137,7 +137,7 @@ export default function DashboardTab() {
         {/* 3. Phase 1: Knowledge Acquisition */}
         <section>
           <SectionHeader title="Phase 1: Knowledge Acquisition" icon={Database} color="blue" delay={1400} />
-          <div className="cyber-panel p-6 border-l-4 border-l-blue-500 h-auto opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1500ms' }}>
+          <div className="cyber-panel p-6 border-l-4 border-l-blue-500 h-full opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1500ms' }}>
             
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -157,153 +157,251 @@ export default function DashboardTab() {
               <StatBox label="Final Perplexity" value="5.33" sub="-95.2% Optimization" color="green" delay={1700} />
             </div>
 
-            {/* Custom Chart for Phase 1 */}
-            <div className="flex-1 bg-[#0a0a0a] rounded-xl border border-[#222] p-5 relative overflow-hidden group min-h-[160px]">
+            {/* Custom Chart for Phase 1 - FIXED OVERLAP */}
+            <div className="flex-1 bg-[#0a0a0a] rounded-xl border border-[#222] p-5 relative overflow-hidden flex flex-col justify-end min-h-[220px]">
               <div className="absolute inset-0 bg-gradient-to-b from-blue-900/5 to-transparent"></div>
               
-              <div className="flex items-end justify-between h-32 gap-2 relative z-10">
+              <div className="flex items-end justify-around h-32 gap-2 relative z-10 w-full mb-8">
                 {/* Bars */}
-                <div className="w-12 bg-red-500/20 border border-red-500/30 rounded-t relative group-hover:bg-red-500/40 transition-all h-full">
-                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] text-red-400 font-mono">111</div>
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 -rotate-90 text-[9px] text-gray-500 uppercase tracking-widest whitespace-nowrap origin-center">Epoch 0</div>
+                <div className="w-full max-w-[40px] bg-red-500/20 border border-red-500/30 rounded-t relative transition-all h-full flex justify-center group">
+                  <span className="absolute -top-6 text-[10px] text-red-400 font-mono bg-[#111] px-1 rounded">111</span>
+                  <span className="absolute -bottom-6 text-[9px] text-gray-500 uppercase tracking-wider font-mono">Ep 0</span>
                 </div>
                 
-                <div className="w-12 bg-orange-500/20 border border-orange-500/30 rounded-t relative h-[40%]"></div>
-                <div className="w-12 bg-yellow-500/20 border border-yellow-500/30 rounded-t relative h-[25%]"></div>
-                <div className="w-12 bg-blue-500/20 border border-blue-500/30 rounded-t relative h-[15%]">
-                   <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] text-blue-400 font-mono">16.7</div>
-                </div>
-                <div className="w-12 bg-blue-500/20 border border-blue-500/30 rounded-t relative h-[10%]"></div>
+                <div className="w-full max-w-[40px] bg-orange-500/20 border border-orange-500/30 rounded-t relative h-[40%] flex justify-center group"></div>
+                <div className="w-full max-w-[40px] bg-yellow-500/20 border border-yellow-500/30 rounded-t relative h-[25%] flex justify-center group"></div>
                 
-                <div className="w-12 bg-green-500/40 border border-green-500/60 rounded-t relative h-[5%] shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs text-green-400 font-bold font-mono bg-black/80 px-1 rounded">5.3</div>
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 -rotate-90 text-[9px] text-white font-bold uppercase tracking-widest whitespace-nowrap origin-center">Final</div>
+                <div className="w-full max-w-[40px] bg-blue-500/20 border border-blue-500/30 rounded-t relative h-[15%] flex justify-center group">
+                   <span className="absolute -top-6 text-[10px] text-blue-400 font-mono bg-[#111] px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">16.7</span>
+                </div>
+                
+                <div className="w-full max-w-[40px] bg-blue-500/20 border border-blue-500/30 rounded-t relative h-[10%] flex justify-center group"></div>
+                
+                <div className="w-full max-w-[40px] bg-green-500/40 border border-green-500/60 rounded-t relative h-[5%] shadow-[0_0_15px_rgba(34,197,94,0.4)] flex justify-center group">
+                  <span className="absolute -top-7 text-xs text-green-400 font-bold font-mono bg-black/80 px-1.5 py-0.5 rounded border border-green-500/30">5.3</span>
+                  <span className="absolute -bottom-6 text-[9px] text-green-400 font-bold uppercase tracking-wider font-mono">Final</span>
                 </div>
               </div>
+
+              <div className="border-t border-[#222] pt-3 relative z-10 text-center">
+                <p className="text-[10px] text-gray-500">Model successfully adapted to cybersecurity terminology.</p>
+              </div>
             </div>
-            <p className="text-[10px] text-gray-500 mt-3 text-center">Model successfully adapted to cybersecurity terminology.</p>
           </div>
         </section>
 
-        {/* 4. Phase 3: XAI Optimization */}
+        {/* 4. Phase 2: Supervised Fine-Tuning (NEW) */}
         <section>
-          <SectionHeader title="Phase 3: XAI-Driven Optimization (Methodology)" icon={Microscope} color="green" delay={1400} />
-          <div className="cyber-panel p-6 border-l-4 border-l-green-500 overflow-hidden h-auto opacity-0 animate-fade-in-up flex flex-col gap-6" style={{ animationDelay: '1600ms' }}>
+          <SectionHeader title="Phase 2: Supervised Fine-Tuning" icon={Code} color="orange" delay={1600} />
+          <div className="cyber-panel p-6 border-l-4 border-l-orange-500 h-full opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1700ms' }}>
             
-            {/* Logic Flow Visualization */}
-            <div className="relative">
-              <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
-                <RefreshCw size={14} className="text-green-400" />
-                SHAP Retraining Loop
-              </h3>
-              
-              <div className="flex flex-col md:flex-row items-center justify-between gap-2 text-center text-[10px] font-mono relative z-10">
-                {/* Steps */}
-                <div className="bg-[#1a1a1a] p-3 rounded-lg border border-red-500/30 w-full md:w-32">
-                  <AlertTriangle className="mx-auto text-red-500 mb-2" size={16} />
-                  <div className="text-red-300 font-bold">Misclassified</div>
-                </div>
-                
-                <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
-                
-                <div className="bg-[#1a1a1a] p-3 rounded-lg border border-blue-500/30 w-full md:w-32">
-                  <Microscope className="mx-auto text-blue-500 mb-2" size={16} />
-                  <div className="text-blue-300 font-bold">SHAP Weights</div>
-                </div>
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                  <Cpu size={14} className="text-orange-400" />
+                  ExBERT Training (Labeled Data)
+                </h3>
+                <p className="text-[10px] text-gray-500 font-mono mt-1">Dataset: 56,804 samples (Train: 70%, Val: 15%, Test: 15%)</p>
+              </div>
+              <span className="px-2 py-1 bg-orange-900/30 text-orange-400 text-[9px] font-bold rounded border border-orange-500/20 shadow-[0_0_10px_rgba(249,115,22,0.2)]">
+                COMPLETED
+              </span>
+            </div>
 
-                <ArrowRight className="text-gray-600 rotate-90 md:rotate-0" size={16} />
+            {/* Metrics */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <StatBox label="Test Acc" value="92.58%" color="orange" delay={1800} />
+              <StatBox label="Test F1" value="92.65%" color="orange" delay={1900} />
+              <StatBox label="Test AUC" value="97.72%" color="orange" delay={2000} />
+            </div>
 
-                <div className="bg-green-900/10 p-3 rounded-lg border border-green-500/50 w-full md:w-32 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
-                  <Zap className="mx-auto text-green-500 mb-2" size={16} />
-                  <div className="text-green-300 font-bold">Retraining</div>
+            {/* Code Snippet Window */}
+            <div className="bg-[#050505] rounded-lg border border-[#222] overflow-hidden mb-4 flex-1 flex flex-col">
+              <div className="bg-[#111] px-4 py-2 border-b border-[#222] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <FileCode size={12} className="text-gray-500" />
+                  <span className="text-[10px] font-mono text-gray-400">train_classifier.py</span>
                 </div>
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/50"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/50"></div>
+                </div>
+              </div>
+              <div className="p-4 overflow-y-auto h-32 scrollbar-thin scrollbar-thumb-[#333] flex-1">
+                <pre className="text-[9px] text-cyan-100/70 font-mono whitespace-pre-wrap break-all leading-relaxed">
+{`# ExBERT Training Pipeline
+model = ExBERT_Classifier(
+    phase1_model_path=paths['phase1_model_path'],
+    pooling_strategy='cls',
+    use_multi_layer=True,
+    dropout_rate=0.2
+)
+
+trainer = FinalTrainer(
+    model=model,
+    args=training_args,
+    train_dataset=tokenized_train_dataset,
+    eval_dataset=tokenized_val_dataset,
+    compute_metrics=compute_metrics,
+)
+
+train_result = trainer.train()
+# Evaluating on Test Set...`}
+                </pre>
               </div>
             </div>
 
-            {/* Method 2 Evolution */}
-            <div className="border-t border-[#222] pt-4">
-              <h3 className="text-white font-bold text-sm mb-3">Evolution of Method 2 (Reverse Unfreezing)</h3>
-              <div className="space-y-2">
-                <SessionCard session="1" layers="12 (Top)" acc="92.79%" delta="20%" active={false} />
-                <SessionCard session="2" layers="6 → 12" acc="93.06%" delta="50%" active={false} />
-                <SessionCard session="3" layers="0 → 12 (All)" acc="93.84%" delta="100%" active={true} />
+            {/* Terminal Output Window */}
+            <div className="bg-[#050505] rounded-lg border border-[#222] overflow-hidden shrink-0">
+               <div className="bg-[#111] px-4 py-1.5 border-b border-[#222] flex items-center gap-2">
+                   <Terminal size={12} className="text-gray-500" />
+                   <span className="text-[10px] font-mono text-gray-400">Terminal Output</span>
+               </div>
+               <div className="p-3 overflow-x-auto scrollbar-thin scrollbar-thumb-[#333]">
+                 <pre className="text-[9px] text-green-400 font-mono whitespace-pre">
+{`--- 📋 FINAL MODEL PERFORMANCE ---
+Total Training Time: 4544.45 seconds
+---------------------------------
+    Metric  Training Set  Validation Set  Test Set
+  Accuracy        0.9559          0.9210    0.9258
+  F1-Score        0.9563          0.9221    0.9265
+ Precision        0.9459          0.9093    0.9177
+    Recall        0.9669          0.9352    0.9354
+       MCC        0.9120          0.8424    0.8518
+       AUC        0.9912          0.9771    0.9772`}
+                 </pre>
+               </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* 5. Phase 3: XAI Optimization (Spans 2 columns on extra large screens) */}
+        <section className="xl:col-span-2">
+          <SectionHeader title="Phase 3: XAI-Driven Results" icon={TrendingUp} color="green" delay={2000} />
+          <div className="cyber-panel p-6 border-l-4 border-l-green-500 overflow-hidden h-auto opacity-0 animate-fade-in-up flex flex-col xl:flex-row gap-8" style={{ animationDelay: '2200ms' }}>
+            
+            {/* Logic Flow & Sessions */}
+            <div className="flex-1 space-y-6">
+              <div className="relative">
+                <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+                  <CheckCircle size={14} className="text-green-400" />
+                  SHAP Retraining Loop
+                </h3>
+                
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-center text-[10px] font-mono relative z-10">
+                  <div className="bg-[#1a1a1a] p-3 rounded-lg border border-red-500/30 w-full sm:w-1/3">
+                    <AlertTriangle className="mx-auto text-red-500 mb-2" size={16} />
+                    <div className="text-red-300 font-bold">Misclassified</div>
+                  </div>
+                  
+                  <ArrowRight className="text-gray-600 rotate-90 sm:rotate-0 shrink-0" size={16} />
+                  
+                  <div className="bg-[#1a1a1a] p-3 rounded-lg border border-blue-500/30 w-full sm:w-1/3">
+                    <Microscope className="mx-auto text-blue-500 mb-2" size={16} />
+                    <div className="text-blue-300 font-bold">SHAP Weights</div>
+                  </div>
+
+                  <ArrowRight className="text-gray-600 rotate-90 sm:rotate-0 shrink-0" size={16} />
+
+                  <div className="bg-green-900/10 p-3 rounded-lg border border-green-500/50 w-full sm:w-1/3 shadow-[0_0_15px_rgba(34,197,94,0.1)]">
+                    <Zap className="mx-auto text-green-500 mb-2" size={16} />
+                    <div className="text-green-300 font-bold">Retraining</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-[#222] pt-4">
+                <h3 className="text-white font-bold text-sm mb-3">Evolution of Method 2 (Reverse Unfreezing)</h3>
+                <div className="space-y-2">
+                  <SessionCard session="1" layers="12 (Top)" acc="92.79%" delta="20%" active={false} />
+                  <SessionCard session="2" layers="6 → 12" acc="93.06%" delta="50%" active={false} />
+                  <SessionCard session="3" layers="0 → 12 (All)" acc="93.84%" delta="100%" active={true} />
+                </div>
               </div>
             </div>
 
             {/* Results Table */}
-            <div className="bg-[#111] rounded-xl border border-[#222] overflow-hidden">
-              <div className="bg-[#0c0c0c] p-3 border-b border-[#222] flex justify-between items-center">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Performance Comparison</span>
-                <span className="text-[9px] font-mono text-green-500 flex items-center gap-1 bg-green-900/20 px-2 py-0.5 rounded border border-green-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                  Method 2 Winner
-                </span>
+            <div className="flex-1 flex flex-col justify-end">
+              <div className="bg-[#111] rounded-xl border border-[#222] overflow-hidden">
+                <div className="bg-[#0c0c0c] p-3 border-b border-[#222] flex justify-between items-center">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Performance Comparison</span>
+                  <span className="text-[9px] font-mono text-green-500 flex items-center gap-1 bg-green-900/20 px-2 py-0.5 rounded border border-green-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                    Method 2 Winner
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-[10px] sm:text-xs font-mono min-w-[300px]">
+                    <thead className="bg-[#161616] text-gray-500 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Strategy</th>
+                        <th className="px-4 py-3 font-medium text-right">Acc</th>
+                        <th className="px-4 py-3 font-medium text-right">Recall</th>
+                        <th className="px-4 py-3 font-medium text-right">Error</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#1f1f1f]">
+                      <tr className="hover:bg-white/5 transition-colors">
+                        <td className="px-4 py-3 text-gray-400">Baseline (Ph2)</td>
+                        <td className="px-4 py-3 text-right">92.58%</td>
+                        <td className="px-4 py-3 text-right text-gray-400">93.54%</td>
+                        <td className="px-4 py-3 text-right text-red-400">7.42%</td>
+                      </tr>
+                      
+                      {/* Highlighted Method 2 */}
+                      <tr className="bg-green-900/10 hover:bg-green-900/20 transition-colors relative group">
+                        <td className="px-4 py-4 text-white font-bold flex items-center gap-2">
+                          <div className="w-1 h-3 bg-green-500 rounded-full"></div>
+                          Method 2 (Rev)
+                        </td>
+                        <td className="px-4 py-4 text-right text-white font-bold">93.84%</td>
+                        <td className="px-4 py-4 text-right text-green-400 font-bold">95.02%</td>
+                        <td className="px-4 py-4 text-right text-white">6.16%</td>
+                      </tr>
+
+                      <tr className="hover:bg-white/5 transition-colors opacity-60">
+                        <td className="px-4 py-3 text-gray-500">Method 1 / 3</td>
+                        <td className="px-4 py-3 text-right">~93.4%</td>
+                        <td className="px-4 py-3 text-right">~94.8%</td>
+                        <td className="px-4 py-3 text-right">~6.6%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-
-              <table className="w-full text-left text-[10px] font-mono">
-                <thead className="bg-[#161616] text-gray-500 uppercase">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Strategy</th>
-                    <th className="px-4 py-2 font-medium text-right">Acc</th>
-                    <th className="px-4 py-2 font-medium text-right">Recall</th>
-                    <th className="px-4 py-2 font-medium text-right">Error</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#1f1f1f]">
-                  <tr className="hover:bg-white/5 transition-colors">
-                    <td className="px-4 py-2 text-gray-400">Baseline</td>
-                    <td className="px-4 py-2 text-right">92.58%</td>
-                    <td className="px-4 py-2 text-right text-gray-400">93.54%</td>
-                    <td className="px-4 py-2 text-right text-red-400">7.42%</td>
-                  </tr>
-                  
-                  {/* Highlighted Method 2 */}
-                  <tr className="bg-green-900/10 hover:bg-green-900/20 transition-colors relative group">
-                    <td className="px-4 py-3 text-white font-bold flex items-center gap-2">
-                      <div className="w-1 h-3 bg-green-500 rounded-full"></div>
-                      Method 2 (Rev)
-                    </td>
-                    <td className="px-4 py-3 text-right text-white font-bold">93.84%</td>
-                    <td className="px-4 py-3 text-right text-green-400 font-bold">95.02%</td>
-                    <td className="px-4 py-3 text-right text-white">6.16%</td>
-                  </tr>
-
-                  <tr className="hover:bg-white/5 transition-colors opacity-60">
-                    <td className="px-4 py-2 text-gray-500">Method 1 / 3</td>
-                    <td className="px-4 py-2 text-right">~93.4%</td>
-                    <td className="px-4 py-2 text-right">~94.8%</td>
-                    <td className="px-4 py-2 text-right">~6.6%</td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
+            
           </div>
         </section>
+
       </div>
 
-      {/* 5. Detailed Architecture (ExBERT) */}
-      <section className="pb-10">
-        <SectionHeader title="System Architecture (ExBERT Implementation)" icon={Layers} color="purple" delay={1800} />
-        <div className="cyber-panel p-10 bg-[#0b0b0b] relative overflow-hidden opacity-0 animate-fade-in-up" style={{ animationDelay: '2000ms' }}>
+      {/* 6. Detailed Architecture (ExBERT) */}
+      <section className="pb-10 pt-4">
+        <SectionHeader title="System Architecture (ExBERT Implementation)" icon={Layers} color="purple" delay={2400} />
+        <div className="cyber-panel p-6 sm:p-10 bg-[#0b0b0b] relative overflow-hidden opacity-0 animate-fade-in-up" style={{ animationDelay: '2600ms' }}>
           <div className="absolute inset-0 bg-opacity-20 bg-grid-white/[0.05]"></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-black opacity-80"></div>
 
           <div className="relative z-10 flex flex-col lg:flex-row items-center justify-center gap-4 text-xs font-mono">
             
             {/* Input */}
-            <div className="flex flex-col justify-center items-center gap-2 group">
-              <div className="w-32 py-4 bg-[#1a1a1a] border border-gray-700 rounded-xl text-center text-gray-400 group-hover:border-white transition-colors shadow-lg">Input Text</div>
+            <div className="flex flex-col justify-center items-center gap-2 group w-full lg:w-auto">
+              <div className="w-full lg:w-32 py-4 bg-[#1a1a1a] border border-gray-700 rounded-xl text-center text-gray-400 group-hover:border-white transition-colors shadow-lg">Input Text</div>
               <ArrowRight className="rotate-90 lg:rotate-0 text-gray-600 animate-pulse" />
             </div>
 
             {/* Tokenizer */}
-            <div className="flex flex-col justify-center items-center gap-2 group">
-              <div className="w-32 py-4 bg-[#1a1a1a] border border-gray-700 rounded-xl text-center text-gray-400 group-hover:text-white transition-colors">Tokenizer</div>
+            <div className="flex flex-col justify-center items-center gap-2 group w-full lg:w-auto">
+              <div className="w-full lg:w-32 py-4 bg-[#1a1a1a] border border-gray-700 rounded-xl text-center text-gray-400 group-hover:text-white transition-colors">Tokenizer</div>
               <ArrowRight className="rotate-90 lg:rotate-0 text-gray-600 animate-pulse" />
             </div>
 
             {/* BERT */}
-            <div className="flex-1 border-2 border-blue-500/30 bg-blue-900/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center min-w-[200px] relative overflow-hidden group hover:border-blue-500/60 transition-all duration-500">
+            <div className="flex-1 border-2 border-blue-500/30 bg-blue-900/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center w-full lg:min-w-[200px] relative overflow-hidden group hover:border-blue-500/60 transition-all duration-500">
               <div className="absolute inset-0 bg-blue-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
               <Cpu size={40} className="text-blue-500 mb-3 opacity-80 relative z-10" />
               <h4 className="text-white font-bold text-sm relative z-10">BERT-Base</h4>
@@ -317,7 +415,7 @@ export default function DashboardTab() {
             </div>
 
             {/* LSTM */}
-            <div className="flex-1 border-2 border-purple-500/30 bg-purple-900/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center min-w-[200px] relative overflow-hidden group hover:border-purple-500/60 transition-all duration-500">
+            <div className="flex-1 border-2 border-purple-500/30 bg-purple-900/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center w-full lg:min-w-[200px] relative overflow-hidden group hover:border-purple-500/60 transition-all duration-500">
               <div className="absolute inset-0 bg-purple-500/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
               <Network size={40} className="text-purple-500 mb-3 opacity-80 relative z-10" />
               <h4 className="text-white font-bold text-sm relative z-10">LSTM Layer</h4>
@@ -331,43 +429,13 @@ export default function DashboardTab() {
             </div>
 
             {/* Output */}
-            <div className="flex flex-col justify-center items-center gap-2">
-              <div className="w-32 py-4 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/40 rounded-xl text-center text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] font-bold animate-pulse">
+            <div className="flex flex-col justify-center items-center gap-2 w-full lg:w-auto">
+              <div className="w-full lg:w-32 py-4 bg-gradient-to-r from-red-500/20 to-orange-500/20 border border-red-500/40 rounded-xl text-center text-white shadow-[0_0_20px_rgba(239,68,68,0.3)] font-bold animate-pulse">
                 Exploitability
               </div>
             </div>
 
           </div>
-        </div>
-      </section>
-
-      {/* 6. Live AI Laboratory Embed */}
-      <section className="pb-10">
-        <SectionHeader title="Live AI Laboratory" icon={Play} color="cyan" delay={2200} />
-        <div className="cyber-panel p-0 h-[800px] overflow-hidden relative opacity-0 animate-fade-in-up" style={{ animationDelay: '2400ms' }}>
-          <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <a 
-              href="https://amirimmd-exbert-classifier-inference.hf.space" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-3 py-1 bg-cyan-900/80 backdrop-blur rounded text-[10px] text-cyan-400 font-mono border border-cyan-500/50 hover:bg-cyan-500/20 transition-colors flex items-center gap-1"
-            >
-              <ExternalLink size={12} /> OPEN FULLSCREEN
-            </a>
-            <span className="px-2 py-1 bg-black/50 backdrop-blur rounded text-[10px] text-green-400 font-mono border border-gray-800 flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
-              SYSTEM ONLINE
-            </span>
-          </div>
-          
-          <iframe 
-            src="https://amirimmd-exbert-classifier-inference.hf.space" 
-            className="w-full h-full border-none bg-[#050505]"
-            title="VulnSight AI Engine"
-            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-          ></iframe>
-          
-          <div className="absolute inset-0 pointer-events-none border-4 border-cyan-500/10 rounded-xl"></div>
         </div>
       </section>
 
