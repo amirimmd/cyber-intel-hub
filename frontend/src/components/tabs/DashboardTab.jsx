@@ -11,7 +11,7 @@ import {
 
 const SectionHeader = ({ title, icon: Icon, color, delay }) => (
   <div 
-    className="flex items-center gap-3 mt-16 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-slide-in-left"
+    className="flex items-center gap-3 mb-6 border-b border-[#1f1f1f] pb-3 pt-2 opacity-0 animate-slide-in-left"
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`p-2 rounded-lg bg-${color}-900/10 border border-${color}-500/20 shadow-[0_0_15px_rgba(0,0,0,0.5)]`}>
@@ -131,13 +131,13 @@ export default function DashboardTab() {
         </div>
       </div>
 
-      {/* Grid Layout for Phases */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-16">
+      {/* Grid Layout for Phases - gap-y-24 ensures large safe vertical spacing on mobile */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-24 xl:gap-y-16 mt-8">
         
         {/* 3. Phase 1: Knowledge Acquisition */}
-        <section>
+        <section className="flex flex-col h-full">
           <SectionHeader title="Phase 1: Knowledge Acquisition" icon={Database} color="blue" delay={1400} />
-          <div className="cyber-panel p-6 border-l-4 border-l-blue-500 h-full opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1500ms' }}>
+          <div className="cyber-panel p-6 border-l-4 border-l-blue-500 flex-1 opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1500ms' }}>
             
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -157,11 +157,11 @@ export default function DashboardTab() {
               <StatBox label="Final Perplexity" value="5.33" sub="-95.2% Optimization" color="green" delay={1700} />
             </div>
 
-            {/* Custom Chart for Phase 1 - FIXED OVERLAP */}
+            {/* Custom Chart for Phase 1 */}
             <div className="flex-1 bg-[#0a0a0a] rounded-xl border border-[#222] p-5 relative overflow-hidden flex flex-col justify-end min-h-[220px]">
               <div className="absolute inset-0 bg-gradient-to-b from-blue-900/5 to-transparent"></div>
               
-              <div className="flex items-end justify-around h-32 gap-2 relative z-10 w-full mb-8">
+              <div className="flex items-end justify-around h-32 gap-2 relative z-10 w-full mb-8 mt-6">
                 {/* Bars */}
                 <div className="w-full max-w-[40px] bg-red-500/20 border border-red-500/30 rounded-t relative transition-all h-full flex justify-center group">
                   <span className="absolute -top-6 text-[10px] text-red-400 font-mono bg-[#111] px-1 rounded">111</span>
@@ -191,9 +191,9 @@ export default function DashboardTab() {
         </section>
 
         {/* 4. Phase 2: Supervised Fine-Tuning (NEW) */}
-        <section>
+        <section className="flex flex-col h-full">
           <SectionHeader title="Phase 2: Supervised Fine-Tuning" icon={Code} color="orange" delay={1600} />
-          <div className="cyber-panel p-6 border-l-4 border-l-orange-500 h-full opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1700ms' }}>
+          <div className="cyber-panel p-6 border-l-4 border-l-orange-500 flex-1 opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1700ms' }}>
             
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -278,9 +278,9 @@ Total Training Time: 4544.45 seconds
         </section>
 
         {/* 5. Phase 3: XAI Optimization (Spans 2 columns on extra large screens) */}
-        <section className="xl:col-span-2">
+        <section className="xl:col-span-2 flex flex-col h-full">
           <SectionHeader title="Phase 3: XAI-Driven Results" icon={TrendingUp} color="green" delay={2000} />
-          <div className="cyber-panel p-6 border-l-4 border-l-green-500 overflow-hidden h-auto opacity-0 animate-fade-in-up flex flex-col xl:flex-row gap-8" style={{ animationDelay: '2200ms' }}>
+          <div className="cyber-panel p-6 border-l-4 border-l-green-500 flex-1 overflow-hidden opacity-0 animate-fade-in-up flex flex-col xl:flex-row gap-8" style={{ animationDelay: '2200ms' }}>
             
             {/* Logic Flow & Sessions */}
             <div className="flex-1 space-y-6">
@@ -380,9 +380,9 @@ Total Training Time: 4544.45 seconds
       </div>
 
       {/* 6. Detailed Architecture (ExBERT) */}
-      <section className="pb-10 pt-4">
+      <section className="pb-10 pt-4 flex flex-col">
         <SectionHeader title="System Architecture (ExBERT Implementation)" icon={Layers} color="purple" delay={2400} />
-        <div className="cyber-panel p-6 sm:p-10 bg-[#0b0b0b] relative overflow-hidden opacity-0 animate-fade-in-up" style={{ animationDelay: '2600ms' }}>
+        <div className="cyber-panel p-6 sm:p-10 bg-[#0b0b0b] relative overflow-hidden opacity-0 animate-fade-in-up flex-1" style={{ animationDelay: '2600ms' }}>
           <div className="absolute inset-0 bg-opacity-20 bg-grid-white/[0.05]"></div>
           <div className="absolute inset-0 bg-gradient-to-r from-black via-transparent to-black opacity-80"></div>
 
