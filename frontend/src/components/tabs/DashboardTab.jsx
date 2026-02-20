@@ -11,7 +11,7 @@ import {
 
 const SectionHeader = ({ title, icon: Icon, color, delay }) => (
   <div 
-    className="flex items-center gap-3 mt-4 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-slide-in-left"
+    className="flex items-center gap-3 mt-16 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-slide-in-left"
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`p-2 rounded-lg bg-${color}-900/10 border border-${color}-500/20 shadow-[0_0_15px_rgba(0,0,0,0.5)]`}>
