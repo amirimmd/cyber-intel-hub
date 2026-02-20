@@ -1,36 +1,30 @@
-name: Sync External Data
+name: Sync NVD Data
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Run daily at midnight
-  workflow_dispatch: # Allow manual trigger
+    # اجرا به صورت خودکار (مثلاً هر روز نیمه‌شب - می‌توانید تغییر دهید)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # اجازه اجرای دستی اکشن از پنل گیت‌هاب
 
 jobs:
   sync:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20' # FIX: Upgraded from 18 to 20
+          node-version: '20.x'
 
-      - name: Install script dependencies
+      - name: Install dependencies
         run: cd scripts && npm install
 
       - name: Run NVD Sync
         run: cd scripts && npm run sync:nvd
         env:
+          # در صورتی که متغیرهای محیطی دارید اینجا قرار می‌گیرند
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }} # FIX: Added NVD API Key
-
-      - name: Run ExploitDB Sync
-        run: cd scripts && npm run sync:exploitdb
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          
