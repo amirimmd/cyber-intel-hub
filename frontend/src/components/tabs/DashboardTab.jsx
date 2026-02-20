@@ -11,7 +11,7 @@ import {
 
 const SectionHeader = ({ title, icon: Icon, color, delay }) => (
   <div 
-    className="flex items-center gap-3 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-slide-in-left"
+    className="flex items-center gap-3 mt-4 mb-6 border-b border-[#1f1f1f] pb-2 pt-4 opacity-0 animate-slide-in-left"
     style={{ animationDelay: `${delay}ms` }}
   >
     <div className={`p-2 rounded-lg bg-${color}-900/10 border border-${color}-500/20 shadow-[0_0_15px_rgba(0,0,0,0.5)]`}>
@@ -132,7 +132,7 @@ export default function DashboardTab() {
       </div>
 
       {/* Grid Layout for Phases */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-8 gap-y-16">
         
         {/* 3. Phase 1: Knowledge Acquisition */}
         <section>
