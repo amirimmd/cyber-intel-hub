@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/ui/Sidebar';
 import NVDTab from './components/tabs/NVDTab';
 import ExploitDBTab from './components/tabs/ExploitDBTab';
@@ -7,10 +7,11 @@ import AIModels from './components/ai/AIModels';
 import DashboardTab from './components/tabs/DashboardTab';
 import { Menu, ShieldCheck } from 'lucide-react';
 
-function App() {
+// ۱. این کامپوننت داخلی است تا به useLocation دسترسی امن داشته باشد
+function MainLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // دریافت مسیر فعلی از URL مرورگر
+  // دریافت مسیر فعلی
   const location = useLocation();
   const activeTab = location.pathname.replace('/', '') || 'dashboard';
 
@@ -58,7 +59,7 @@ function App() {
           </div>
         </header>
 
-        {/* Content Container (مسیرهای اختصاصی) */}
+        {/* Content Container */}
         <main className="flex-1 overflow-hidden relative">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -66,7 +67,6 @@ function App() {
             <Route path="/nvd" element={<NVDTab />} />
             <Route path="/exploitdb" element={<ExploitDBTab />} />
             <Route path="/ai-analysis" element={<AIModels />} />
-            {/* در صورت وارد کردن آدرس اشتباه، کاربر به داشبورد برمی‌گردد */}
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
@@ -75,4 +75,11 @@ function App() {
   );
 }
 
-export default App;
+// ۲. کامپوننت اصلی که کپسول روتر را ایجاد می‌کند
+export default function App() {
+  return (
+    <BrowserRouter>
+      <MainLayout />
+    </BrowserRouter>
+  );
+}
