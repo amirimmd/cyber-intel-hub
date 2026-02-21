@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Sidebar } from './components/ui/Sidebar';
 import NVDTab from './components/tabs/NVDTab';
 import ExploitDBTab from './components/tabs/ExploitDBTab';
@@ -7,23 +8,11 @@ import DashboardTab from './components/tabs/DashboardTab';
 import { Menu, ShieldCheck } from 'lucide-react';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-    setIsSidebarOpen(false);
-  };
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard': return <DashboardTab />;
-      case 'nvd': return <NVDTab />;
-      case 'exploitdb': return <ExploitDBTab />;
-      case 'ai-analysis': return <AIModels />;
-      default: return <DashboardTab />;
-    }
-  };
+  
+  // دریافت مسیر فعلی از URL مرورگر
+  const location = useLocation();
+  const activeTab = location.pathname.replace('/', '') || 'dashboard';
 
   return (
     <div className="relative flex h-screen w-full overflow-hidden bg-[#050505] text-gray-200 font-mono">
@@ -33,7 +22,6 @@ function App() {
       {/* Sidebar */}
       <Sidebar 
         activeTab={activeTab} 
-        setActiveTab={handleTabChange} 
         isOpen={isSidebarOpen} 
         setIsOpen={setIsSidebarOpen} 
       />
@@ -70,9 +58,17 @@ function App() {
           </div>
         </header>
 
-        {/* Content Container */}
+        {/* Content Container (مسیرهای اختصاصی) */}
         <main className="flex-1 overflow-hidden relative">
-          {renderContent()}
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardTab />} />
+            <Route path="/nvd" element={<NVDTab />} />
+            <Route path="/exploitdb" element={<ExploitDBTab />} />
+            <Route path="/ai-analysis" element={<AIModels />} />
+            {/* در صورت وارد کردن آدرس اشتباه، کاربر به داشبورد برمی‌گردد */}
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
         </main>
       </div>
     </div>

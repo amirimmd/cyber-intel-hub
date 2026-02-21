@@ -1,11 +1,13 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { 
   LayoutDashboard, ShieldAlert, Database, Bot, 
   X, LogOut, Settings 
 } from 'lucide-react';
 
-const NavItem = ({ icon: Icon, label, active, onClick }) => (
-  <button
+const NavItem = ({ icon: Icon, label, to, active, onClick }) => (
+  <Link
+    to={to}
     onClick={onClick}
     className={`
       w-full flex items-center gap-4 px-6 py-4 text-base font-medium transition-all duration-200 border-l-4
@@ -16,10 +18,10 @@ const NavItem = ({ icon: Icon, label, active, onClick }) => (
   >
     <Icon size={22} className={active ? 'drop-shadow-[0_0_5px_rgba(0,240,255,0.5)]' : ''} />
     <span className="tracking-wide uppercase">{label}</span>
-  </button>
+  </Link>
 );
 
-export const Sidebar = ({ activeTab, setActiveTab, isOpen, setIsOpen }) => {
+export const Sidebar = ({ activeTab, isOpen, setIsOpen }) => {
   return (
     <>
       {/* Mobile Overlay with Blur Effect */}
@@ -52,10 +54,10 @@ export const Sidebar = ({ activeTab, setActiveTab, isOpen, setIsOpen }) => {
 
           {/* Navigation Links */}
           <nav className="mt-6 space-y-2">
-            <NavItem icon={LayoutDashboard} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-            <NavItem icon={ShieldAlert} label="NVD Feed" active={activeTab === 'nvd'} onClick={() => setActiveTab('nvd')} />
-            <NavItem icon={Database} label="Exploit DB" active={activeTab === 'exploitdb'} onClick={() => setActiveTab('exploitdb')} />
-            <NavItem icon={Bot} label="AI Analysis" active={activeTab === 'ai-analysis'} onClick={() => setActiveTab('ai-analysis')} />
+            <NavItem icon={LayoutDashboard} label="Dashboard" to="/dashboard" active={activeTab === 'dashboard'} onClick={() => setIsOpen(false)} />
+            <NavItem icon={ShieldAlert} label="NVD Feed" to="/nvd" active={activeTab === 'nvd'} onClick={() => setIsOpen(false)} />
+            <NavItem icon={Database} label="Exploit DB" to="/exploitdb" active={activeTab === 'exploitdb'} onClick={() => setIsOpen(false)} />
+            <NavItem icon={Bot} label="AI Analysis" to="/ai-analysis" active={activeTab === 'ai-analysis'} onClick={() => setIsOpen(false)} />
           </nav>
         </div>
 
