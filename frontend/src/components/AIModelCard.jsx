@@ -2,21 +2,26 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Brain, AlertTriangle, ShieldCheck, Activity, Terminal, Send, Loader2 } from 'lucide-react';
 
 // ==========================================
-// کامپوننت مصورسازی SHAP (بهینه‌سازی شده)
+// کامپوننت مصورسازی SHAP (با محافظت ضدکِرَش)
 // ==========================================
 const ShapVisualization = ({ shapData }) => {
-  if (!shapData || shapData.length === 0) return null;
+  // محافظت در برابر داده‌های نامعتبر
+  if (!shapData || !Array.isArray(shapData) || shapData.length === 0) return null;
 
-  const maxAbsVal = Math.max(...shapData.map(item => Math.abs(item[1])));
+  // فیلتر کردن داده‌های صحیح برای جلوگیری از خطای رندر
+  const validData = shapData.filter(item => Array.isArray(item) && item.length >= 2);
+  if (validData.length === 0) return null;
+
+  const maxAbsVal = Math.max(...validData.map(item => Math.abs(item[1])));
 
   const getColor = (value) => {
-    if (maxAbsVal === 0) return 'rgba(255, 255, 255, 0.05)';
+    if (!maxAbsVal || maxAbsVal === 0) return 'rgba(255, 255, 255, 0.05)';
     const alpha = Math.min(Math.abs(value) / maxAbsVal, 1.0) * 0.85; 
     
     if (value > 0) {
-      return `rgba(239, 68, 68, ${alpha})`; // Threat
+      return `rgba(239, 68, 68, ${alpha})`; // Threat (قرمز)
     } else if (value < 0) {
-      return `rgba(34, 197, 94, ${alpha})`; // Mitigation
+      return `rgba(34, 197, 94, ${alpha})`; // Mitigation (سبز)
     }
     return 'rgba(255, 255, 255, 0.05)';
   };
@@ -31,10 +36,10 @@ const ShapVisualization = ({ shapData }) => {
       </div>
       
       <div className="flex flex-wrap leading-loose" style={{ gap: '6px' }}>
-        {shapData.map(([token, value], index) => (
+        {validData.map(([token, value], index) => (
           <span 
             key={index} 
-            title={`تأثیر حاشیه‌ای: ${value.toFixed(4)}`}
+            title={`تأثیر حاشیه‌ای: ${Number(value).toFixed(4)}`}
             className="px-2 py-1 rounded text-sm font-mono transition-colors hover:brightness-125 cursor-help text-gray-200 border border-white/5"
             style={{ backgroundColor: getColor(value) }}
           >
@@ -75,46 +80,36 @@ const generateSessionHash = () => {
   return result;
 };
 
-// --- Typewriter Hook ---
-const useTypewriter = (text, speed = 50) => {
+// --- Typewriter Hook (کاملاً بهینه‌سازی شده جهت جلوگیری از کِرَش) ---
+const useTypewriter = (speed = 25) => {
     const [displayText, setDisplayText] = useState('');
-    const [internalText, setInternalText] = useState(text);
     const [isTyping, setIsTyping] = useState(false);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const intervalRef = useRef(null);
+    const fullTextRef = useRef('');
+    const indexRef = useRef(0);
 
     const startTypingProcess = useCallback((newText) => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        setInternalText(newText || '');
+        fullTextRef.current = newText || '';
         setDisplayText('');
-        setCurrentIndex(0);
+        indexRef.current = 0;
         setIsTyping(!!newText);
     }, []);
 
     useEffect(() => {
-        if (intervalRef.current) clearInterval(intervalRef.current);
-
-        if (isTyping && internalText && currentIndex < internalText.length) {
-            intervalRef.current = setInterval(() => {
-                 if (currentIndex < internalText.length) {
-                    const nextIndex = currentIndex + 1;
-                    setDisplayText(internalText.substring(0, nextIndex));
-                    setCurrentIndex(nextIndex);
-                 } else {
-                    clearInterval(intervalRef.current);
-                    intervalRef.current = null;
+        let interval;
+        if (isTyping && fullTextRef.current) {
+            // ایجاد فقط یک اینتروال پایدار به جای صدها اینتروال متوالی
+            interval = setInterval(() => {
+                if (indexRef.current < fullTextRef.current.length) {
+                    indexRef.current += 1;
+                    setDisplayText(fullTextRef.current.substring(0, indexRef.current));
+                } else {
+                    clearInterval(interval);
                     setIsTyping(false);
-                 }
+                }
             }, speed);
-        } else if (currentIndex >= (internalText?.length || 0)) {
-            if(isTyping) setIsTyping(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
         }
-
-        return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-    }, [isTyping, speed, internalText, currentIndex]);
-
-    useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+        return () => { if (interval) clearInterval(interval); };
+    }, [isTyping, speed]);
 
     return [displayText, startTypingProcess, isTyping];
 };
@@ -129,10 +124,9 @@ export const AIModelCard = ({ model }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  const [typedOutput, startTypingProcess, isTyping] = useTypewriter(output, 20);
+  const [typedOutput, startTypingProcess, isTyping] = useTypewriter(20);
   const eventSourceRef = useRef(null);
   
-  // رفرنسی برای جلوگیری از پاک شدن خروجی توسط خطاهای شبکه پس از اتمام موفقیت‌آمیز
   const hasCompletedRef = useRef(false);
 
   useEffect(() => {
@@ -144,12 +138,15 @@ export const AIModelCard = ({ model }) => {
     };
   }, []);
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (e) => {
+    if (e) e.preventDefault(); // جلوگیری از رفرش ناخواسته صفحه
+
     if (!inputText.trim()) {
       setError('لطفاً توصیف یک آسیب‌پذیری را وارد کنید.');
       return;
     }
 
+    // این تنها مکانی است که استیت‌ها در آن ریست می‌شوند (فقط با درخواست کاربر)
     setLoading(true);
     setError(null);
     setOutput('');
@@ -175,10 +172,10 @@ export const AIModelCard = ({ model }) => {
         const payload = {
             "data": [
               inputText, 
-              model.id || "Baseline" // در صورتی که مدل آیدی به API پاس داده می‌شود
+              model.id || "Baseline"
             ],
             "event_data": null,
-            "fn_index": 2, // دقت کنید که اگر fn_index تغییر کرده آن را تطبیق دهید
+            "fn_index": 2, 
             "trigger_id": 12,
             "session_hash": sessionHash
         };
@@ -214,14 +211,12 @@ export const AIModelCard = ({ model }) => {
                         break;
                     case "process_generating": break;
                     case "process_completed":
-                        hasCompletedRef.current = true; // جلوگیری از پاک شدن خروجی
+                        hasCompletedRef.current = true; // قفل کردن استیت برای جلوگیری از پاک شدن
+                        
                         if (message.success && message.output && message.output.data && message.output.data.length > 0) {
-                            
-                            // استخراج متن پیش‌بینی
                             const rawPrediction = message.output.data[0];
                             const formattedOutput = `[EXBERT_REPORT]:\n${rawPrediction}`;
                             
-                            // استخراج داده‌های SHAP (اگر سرور در اندیس 1 بفرستد)
                             if (message.output.data[1]) {
                                 setShapData(message.output.data[1]);
                             }
@@ -234,15 +229,18 @@ export const AIModelCard = ({ model }) => {
                              setOutput(''); 
                              startTypingProcess('');
                         }
+                        
                         if(eventSourceRef.current) eventSourceRef.current.close();
                         eventSourceRef.current = null;
                         setLoading(false);
                         break;
                      case "queue_full":
-                         setError("API Error: The queue is full, please try again later.");
+                         if (!hasCompletedRef.current) {
+                           setError("API Error: The queue is full, please try again later.");
+                           setLoading(false);
+                         }
                          if(eventSourceRef.current) eventSourceRef.current.close();
                          eventSourceRef.current = null;
-                         setLoading(false);
                          break;
                      case "estimation":
                          const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
@@ -272,7 +270,6 @@ export const AIModelCard = ({ model }) => {
         };
 
         eventSourceRef.current.onerror = (errEvent) => {
-            // 🔴 باگ اصلی اینجا بود! اگر فرآیند تمام شده، نباید خروجی پاک شود
             if (!hasCompletedRef.current) {
               let errorMsg = "Error connecting to API stream.";
                if (!navigator.onLine) errorMsg += " Check your network connection.";
@@ -299,9 +296,9 @@ export const AIModelCard = ({ model }) => {
   };
 
   return (
-    <div className="bg-[#111] rounded-2xl border border-[#222] shadow-2xl overflow-hidden font-vazir flex flex-col h-full">
+    <div className="bg-[#111] rounded-2xl border border-[#222] shadow-2xl font-vazir flex flex-col h-full max-h-full">
       {/* هدر کارت */}
-      <div className="bg-gradient-to-r from-[#1a1a1a] to-[#111] p-5 border-b border-[#222] flex justify-between items-center">
+      <div className="bg-gradient-to-r from-[#1a1a1a] to-[#111] p-5 border-b border-[#222] flex justify-between items-center shrink-0">
         <div>
           <h3 className="text-xl font-bold text-gray-100 flex items-center gap-2">
             <Brain className="text-cyan-500" size={24} />
@@ -316,11 +313,11 @@ export const AIModelCard = ({ model }) => {
         )}
       </div>
 
-      {/* بدنه کارت */}
-      <div className="p-5 flex-grow flex flex-col">
+      {/* بدنه کارت - افزودن overflow-y-auto برای جلوگیری از قطع شدن محتوا */}
+      <div className="p-5 flex-grow flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
         
         {/* فیلد ورود اطلاعات */}
-        <div className="relative mb-5">
+        <div className="relative mb-5 shrink-0">
           <Terminal size={18} className="absolute right-3 top-3 text-gray-600" />
           <textarea
             value={inputText}
@@ -331,16 +328,22 @@ export const AIModelCard = ({ model }) => {
           />
         </div>
 
-        {/* دکمه ارسال */}
+        {/* دکمه ارسال (با مشخصه type="button" برای جلوگیری از رفرش صفحه) */}
         <button
+          type="button"
           onClick={handleAnalyze}
-          disabled={loading || !inputText.trim()}
-          className="w-full flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-black font-bold py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-5"
+          disabled={loading || isTyping || !inputText.trim()}
+          className="w-full flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-black font-bold py-3 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-5 shrink-0"
         >
           {loading ? (
             <>
               <Loader2 size={18} className="animate-spin" />
               در حال تحلیل عمیق شبکه...
+            </>
+          ) : isTyping ? (
+            <>
+              <Terminal size={18} className="animate-pulse" />
+              در حال نگارش گزارش...
             </>
           ) : (
             <>
@@ -352,14 +355,14 @@ export const AIModelCard = ({ model }) => {
 
         {/* نمایش پیام خطا */}
         {error && (
-          <div className="bg-red-900/20 border border-red-500/30 text-red-400 p-3 rounded-lg text-sm flex items-center gap-2 mb-4 animate-fade-in-up">
+          <div className="bg-red-900/20 border border-red-500/30 text-red-400 p-3 rounded-lg text-sm flex items-center gap-2 mb-4 animate-fade-in-up shrink-0">
             <AlertTriangle size={16} />
             {error}
           </div>
         )}
 
         {/* نمایش خروجی تایپ‌رایتر و نتیجه */}
-        <div className="mt-2 bg-[#0a0a0a] rounded-lg p-4 text-cyan-500 text-sm min-h-[100px] border border-cyan-500/30 overflow-auto whitespace-pre-wrap font-mono relative">
+        <div className="mt-2 bg-[#0a0a0a] rounded-lg p-4 text-cyan-500 text-sm min-h-[100px] border border-cyan-500/30 overflow-x-auto whitespace-pre-wrap font-mono relative shrink-0">
           {/* آیکون وضعیت */}
           {hasCompletedRef.current && output.includes('Predicted Label: 1') && (
             <AlertTriangle size={20} className="absolute top-4 right-4 text-red-500 animate-pulse" />
