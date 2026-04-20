@@ -27,12 +27,12 @@ export const NVDTable = ({ limit = 50 }) => {
     if (isSearch) setPage(1);
 
     try {
-      // 1. Build Query (Using 'estimated' count to prevent timeouts on large datasets)
+      // 1. Build Query - استفاده از نام صحیح جدول vulnerabilities
       let query = supabase
         .from('vulnerabilities')
         .select('*', { count: 'estimated' });
       
-      // 2. Search Filter (Using 'ilike' for case-insensitive search)
+      // 2. Search Filter - جستجو در ستون text به جای description
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
         query = query.or(`ID.ilike.%${term}%,text.ilike.%${term}%`);
@@ -78,11 +78,11 @@ export const NVDTable = ({ limit = 50 }) => {
   };
 
   const getSeverityBadge = (score) => {
-    if (score === null || score === undefined) return <span className="severity-badge badge-unknown">UNKNOWN</span>;
-    if (score >= 9.0) return <span className="severity-badge badge-critical animate-pulse">CRITICAL</span>;
-    if (score >= 7.0) return <span className="severity-badge badge-high">HIGH</span>;
-    if (score >= 4.0) return <span className="severity-badge badge-medium">MEDIUM</span>;
-    return <span className="severity-badge badge-low">LOW</span>;
+    if (score === null || score === undefined) return <span className="severity-badge badge-unknown bg-gray-800 text-gray-400 px-2 py-1 rounded text-xs">UNKNOWN</span>;
+    if (score >= 9.0) return <span className="severity-badge badge-critical animate-pulse bg-red-900/50 text-red-400 border border-red-500/50 px-2 py-1 rounded text-xs font-bold">CRITICAL</span>;
+    if (score >= 7.0) return <span className="severity-badge badge-high bg-orange-900/50 text-orange-400 border border-orange-500/50 px-2 py-1 rounded text-xs font-bold">HIGH</span>;
+    if (score >= 4.0) return <span className="severity-badge badge-medium bg-yellow-900/50 text-yellow-400 border border-yellow-500/50 px-2 py-1 rounded text-xs font-bold">MEDIUM</span>;
+    return <span className="severity-badge badge-low bg-green-900/50 text-green-400 border border-green-500/50 px-2 py-1 rounded text-xs font-bold">LOW</span>;
   };
 
   return (
@@ -149,7 +149,7 @@ export const NVDTable = ({ limit = 50 }) => {
       </div>
 
       {/* 2. Table Container */}
-      <div className="cyber-panel flex-1 overflow-hidden flex flex-col relative border-cyan-500/10 bg-[#0a0a0a]">
+      <div className="cyber-panel flex-1 overflow-hidden flex flex-col relative border-cyan-500/10 bg-[#0a0a0a] rounded-xl border">
         
         {/* Error State */}
         {errorMsg && (
@@ -190,7 +190,7 @@ export const NVDTable = ({ limit = 50 }) => {
                    const uniqueKey = `${cve.ID}-${index}`;
                    return (
                      <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
-                        
+                       
                         {/* CVE ID */}
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -211,7 +211,7 @@ export const NVDTable = ({ limit = 50 }) => {
                         {/* Score */}
                         <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
 
-                        {/* Description */}
+                        {/* Description (استفاده از cve.text به جای cve.description) */}
                         <td className="px-4 md:px-6 py-4 relative">
                           <div className="group/desc flex items-start gap-2">
                              <Terminal size={14} className="text-gray-700 mt-1 shrink-0 hidden sm:block" />
@@ -256,10 +256,10 @@ export const NVDTable = ({ limit = 50 }) => {
           </table>
         </div>
 
-        {/* 3. Pagination Footer (Mobile Fixed) */}
+        {/* 3. Pagination Footer */}
         <div className="mt-auto bg-[#0a0a0a] px-4 py-3 border-t border-[#1f1f1f] flex items-center justify-between shrink-0 sticky bottom-0 z-20">
           <span className="text-[10px] text-gray-600 font-mono">
-            Page <span className="text-white font-bold">{page}</span>
+            Page <span className="text-white font-bold">{page}</span> | Total: <span className="text-white font-bold">{total.toLocaleString()}</span>
           </span>
           
           <div className="flex gap-4">
