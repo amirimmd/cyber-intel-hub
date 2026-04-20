@@ -16,7 +16,6 @@ export const NVDTable = ({ limit = 50 }) => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
 
-  // Fetch data on dependency change
   useEffect(() => {
     fetchCVEs();
   }, [page, limit, severityFilter]);
@@ -27,18 +26,18 @@ export const NVDTable = ({ limit = 50 }) => {
     if (isSearch) setPage(1);
 
     try {
-      // 1. Build Query - استفاده از نام صحیح جدول vulnerabilities
+      // 🔴 فیکس خطای 500: استفاده از count: 'exact' به جای 'estimated'
       let query = supabase
         .from('vulnerabilities')
-        .select('*', { count: 'estimated' });
+        .select('*', { count: 'exact' });
       
-      // 2. Search Filter - جستجو در ستون text به جای description
+      // جستجو در شناسه و متن (اصلاح شده بر اساس ستون text)
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
         query = query.or(`ID.ilike.%${term}%,text.ilike.%${term}%`);
       }
 
-      // 3. Severity Filter
+      // فیلتر بر اساس شدت خطر
       if (severityFilter !== 'all') {
          if (severityFilter === 'critical') query = query.gte('score', 9.0);
          else if (severityFilter === 'high') query = query.gte('score', 7.0).lt('score', 9.0);
@@ -46,19 +45,25 @@ export const NVDTable = ({ limit = 50 }) => {
          else if (severityFilter === 'low') query = query.lt('score', 4.0);
       }
 
-      // 4. Pagination & Ordering
+      // صفحه‌بندی و مرتب‌سازی
       const currentPage = isSearch ? 1 : page;
       const { data, count, error } = await query
         .order('published_date', { ascending: false })
         .range((currentPage - 1) * limit, currentPage * limit - 1);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Supabase Raw Error:", error);
+        // نمایش دقیق ارور دیتابیس برای دیباگ راحت‌تر
+        const detailedError = error.details || error.hint ? `${error.message} (${error.details || ''} ${error.hint || ''})` : error.message;
+        throw new Error(detailedError);
+      }
+      
       setTotal(count || 0);
       setCves(data || []);
       
     } catch (error) {
       console.error('Error fetching CVEs:', error);
-      setErrorMsg(error.message || 'Connection failed');
+      setErrorMsg(error.message || 'مشکل در برقراری ارتباط با پایگاه داده');
       setCves([]);
     } finally {
       setLoading(false);
@@ -155,7 +160,7 @@ export const NVDTable = ({ limit = 50 }) => {
         {errorMsg && (
           <div className="bg-red-900/10 text-red-400 p-3 text-xs text-center border-b border-red-500/20 flex items-center justify-center gap-2 animate-pulse">
             <AlertTriangle size={14} />
-            System Error: {errorMsg}
+            خطای دیتابیس: {errorMsg}
           </div>
         )}
 
@@ -174,7 +179,6 @@ export const NVDTable = ({ limit = 50 }) => {
             </thead>
             <tbody className="divide-y divide-[#1f1f1f]">
                {loading ? (
-                 // Loading Skeleton
                  [...Array(8)].map((_, i) => (
                    <tr key={i} className="animate-pulse">
                      <td className="px-6 py-4"><div className="h-4 bg-[#1f1f1f] rounded w-24"></div></td>
@@ -190,7 +194,6 @@ export const NVDTable = ({ limit = 50 }) => {
                    const uniqueKey = `${cve.ID}-${index}`;
                    return (
                      <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
-                       
                         {/* CVE ID */}
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center gap-3">
@@ -211,7 +214,7 @@ export const NVDTable = ({ limit = 50 }) => {
                         {/* Score */}
                         <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
 
-                        {/* Description (استفاده از cve.text به جای cve.description) */}
+                        {/* Description (Uses cve.text) */}
                         <td className="px-4 md:px-6 py-4 relative">
                           <div className="group/desc flex items-start gap-2">
                              <Terminal size={14} className="text-gray-700 mt-1 shrink-0 hidden sm:block" />
@@ -247,7 +250,7 @@ export const NVDTable = ({ limit = 50 }) => {
                     <td colSpan="6" className="px-6 py-20 text-center bg-[#0a0a0a]">
                       <div className="flex flex-col items-center justify-center gap-4 opacity-40">
                         <Bug size={64} className="text-gray-700" />
-                        <p className="text-gray-400 font-mono text-sm">No CVEs match your filters.</p>
+                        <p className="text-gray-400 font-mono text-sm">هیچ داده‌ای یافت نشد.</p>
                       </div>
                     </td>
                   </tr>
