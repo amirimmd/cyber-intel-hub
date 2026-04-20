@@ -146,7 +146,7 @@ export const AIModelCard = ({ model }) => {
       return;
     }
 
-    // این تنها مکانی است که استیت‌ها در آن ریست می‌شوند (فقط با درخواست کاربر)
+    // 🟢 این تنها مکانی است که استیت‌ها در آن ریست می‌شوند (فقط با درخواست صریح کاربر)
     setLoading(true);
     setError(null);
     setOutput('');
@@ -201,6 +201,12 @@ export const AIModelCard = ({ model }) => {
         eventSourceRef.current = new EventSource(dataUrl); 
 
         eventSourceRef.current.onmessage = (event) => {
+            // 🛡️ گارد محافظتی آهنین: اگر قبلا نتیجه را گرفته‌ایم، تمام پیام‌های بعدی مرورگر (مثل ریکانکت شدن خودکار) مسدود می‌شوند
+            if (hasCompletedRef.current) {
+                if(eventSourceRef.current) eventSourceRef.current.close();
+                return;
+            }
+
             try {
                 const message = JSON.parse(event.data);
 
@@ -211,7 +217,7 @@ export const AIModelCard = ({ model }) => {
                         break;
                     case "process_generating": break;
                     case "process_completed":
-                        hasCompletedRef.current = true; // قفل کردن استیت برای جلوگیری از پاک شدن
+                        hasCompletedRef.current = true; // قفل کردن استیت
                         
                         if (message.success && message.output && message.output.data && message.output.data.length > 0) {
                             const rawPrediction = message.output.data[0];
@@ -226,8 +232,7 @@ export const AIModelCard = ({ model }) => {
                         } else {
                              const errorMsg = message.output?.error || "Unknown server processing error.";
                              setError(`Processing failed: ${errorMsg}`);
-                             setOutput(''); 
-                             startTypingProcess('');
+                             // 🔴 عدم پاک کردن خروجی در هنگام خطا
                         }
                         
                         if(eventSourceRef.current) eventSourceRef.current.close();
@@ -236,7 +241,7 @@ export const AIModelCard = ({ model }) => {
                         break;
                      case "queue_full":
                          if (!hasCompletedRef.current) {
-                           setError("API Error: The queue is full, please try again later.");
+                           setError("خطای API: صف درخواست‌ها پر است. لطفاً کمی بعد تلاش کنید.");
                            setLoading(false);
                          }
                          if(eventSourceRef.current) eventSourceRef.current.close();
@@ -245,7 +250,7 @@ export const AIModelCard = ({ model }) => {
                      case "estimation":
                          const queuePosition = message.rank !== undefined ? message.rank + 1 : '?';
                          const eta = message.rank_eta !== undefined ? message.rank_eta.toFixed(1) : '?';
-                         const waitMsg = `In queue (${queuePosition}). Est. wait: ${eta}s...`;
+                         const waitMsg = `در صف انتظار (${queuePosition}). زمان تقریبی: ${eta} ثانیه...`;
                          if (loading && !hasCompletedRef.current) {
                              setOutput(waitMsg);
                              startTypingProcess(waitMsg);
@@ -257,7 +262,7 @@ export const AIModelCard = ({ model }) => {
                         if (loading && !hasCompletedRef.current) { 
                             setLoading(false);
                             if (!output && !error) {
-                                setError("Stream closed unexpectedly before result.");
+                                setError("ارتباط قطع شد (Stream Closed).");
                             }
                         }
                         break;
@@ -270,12 +275,12 @@ export const AIModelCard = ({ model }) => {
         };
 
         eventSourceRef.current.onerror = (errEvent) => {
+            // 🛡️ اگر نتیجه را گرفته‌ایم، خطای اتصال مجدد مرورگر را نادیده می‌گیریم
             if (!hasCompletedRef.current) {
-              let errorMsg = "Error connecting to API stream.";
-               if (!navigator.onLine) errorMsg += " Check your network connection.";
+              let errorMsg = "ارتباط با سرور با مشکل مواجه شد.";
+               if (!navigator.onLine) errorMsg += " لطفاً اینترنت خود را بررسی کنید.";
               setError(errorMsg);
-              setOutput('');
-              startTypingProcess('');
+              // 🔴 دستورات پاک کردن خروجی (setOutput) از اینجا کاملاً حذف شدند تا چیزی ناپدید نشود!
             }
             if(eventSourceRef.current) eventSourceRef.current.close();
             eventSourceRef.current = null;
@@ -283,11 +288,10 @@ export const AIModelCard = ({ model }) => {
         };
 
     } catch (err) {
-        let displayError = err.message || "An unknown error occurred.";
+        let displayError = err.message || "یک خطای ناشناخته رخ داد.";
         setError(displayError);
         setLoading(false);
-        setOutput('');
-        startTypingProcess('');
+        // 🔴 دستورات پاک کردن خروجی (setOutput) از اینجا کاملاً حذف شدند
         if (eventSourceRef.current) {
            eventSourceRef.current.close();
            eventSourceRef.current = null;
@@ -328,7 +332,7 @@ export const AIModelCard = ({ model }) => {
           />
         </div>
 
-        {/* دکمه ارسال (با مشخصه type="button" برای جلوگیری از رفرش صفحه) */}
+        {/* دکمه ارسال */}
         <button
           type="button"
           onClick={handleAnalyze}
