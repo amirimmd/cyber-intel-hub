@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../../supabaseClient';
 import { 
   Database, Cpu, Layers, ArrowRight, 
   BrainCircuit, Network, Terminal,
@@ -84,6 +85,38 @@ const SessionCard = ({ session, layers, acc, delta, active }) => (
 // --- Main Dashboard ---
 
 export default function DashboardTab() {
+  const [dbStats, setDbStats] = useState({ totalVulnerabilities: 0, lastUpdate: null });
+  const [dbLoading, setDbLoading] = useState(true);
+
+  // واکشی زنده اطلاعات از دیتابیس برای رفع خطای 404 و نمایش در StatBox
+  useEffect(() => {
+    const fetchLiveStats = async () => {
+      try {
+        setDbLoading(true);
+        // استفاده از جدول صحیح (vulnerabilities)
+        const { count } = await supabase
+          .from('vulnerabilities')
+          .select('*', { count: 'exact', head: true });
+          
+        const { data } = await supabase
+          .from('vulnerabilities')
+          .select('published_date')
+          .order('published_date', { ascending: false })
+          .limit(1);
+
+        setDbStats({
+          totalVulnerabilities: count || 0,
+          lastUpdate: data?.[0]?.published_date || null
+        });
+      } catch (err) {
+        console.error("Dashboard Stats Error:", err);
+      } finally {
+        setDbLoading(false);
+      }
+    };
+    fetchLiveStats();
+  }, []);
+
   return (
     <div className="h-full overflow-y-auto p-6 space-y-12 pb-20 scrollbar-thin scrollbar-thumb-[#333]">
       
@@ -111,6 +144,26 @@ export default function DashboardTab() {
           <br/>
           This system bridges the gap between raw vulnerability descriptions and precise exploitability prediction.
         </p>
+
+        {/* --- LIVE DATABASE STATS (ترکیب با گرافیک شما) --- */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <StatBox 
+            label="Total Vulnerabilities" 
+            value={dbLoading ? "..." : dbStats.totalVulnerabilities.toLocaleString()} 
+            sub="NVD Live Database" 
+            color="blue" 
+            delay={200} 
+          />
+          <StatBox 
+            label="Last Data Sync" 
+            value={dbLoading ? "..." : (dbStats.lastUpdate ? new Date(dbStats.lastUpdate).toLocaleDateString() : "N/A")} 
+            sub={dbStats.lastUpdate ? new Date(dbStats.lastUpdate).toLocaleTimeString() : ""} 
+            color="green" 
+            delay={300} 
+          />
+          <StatBox label="Deployed Models" value="3" sub="ExBERT Variants" color="purple" delay={400} />
+          <StatBox label="System Status" value="ONLINE" sub="API Connected" color="cyan" delay={500} />
+        </div>
       </div>
 
       {/* 2. Scientific Pipeline Visualization */}
@@ -190,7 +243,7 @@ export default function DashboardTab() {
           </div>
         </section>
 
-        {/* 4. Phase 2: Supervised Fine-Tuning (NEW) */}
+        {/* 4. Phase 2: Supervised Fine-Tuning */}
         <section className="flex flex-col h-full">
           <SectionHeader title="Phase 2: Supervised Fine-Tuning" icon={Code} color="orange" delay={1600} />
           <div className="cyber-panel p-6 border-l-4 border-l-orange-500 flex-1 opacity-0 animate-fade-in-up flex flex-col" style={{ animationDelay: '1700ms' }}>
