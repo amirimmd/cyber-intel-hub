@@ -139,7 +139,7 @@ export const AIModelCard = ({ model }) => {
   }, []);
 
   const handleAnalyze = async (e) => {
-    if (e) e.preventDefault(); // جلوگیری از رفرش ناخواسته صفحه
+    if (e) e.preventDefault();
 
     if (!inputText.trim()) {
       setError('لطفاً توصیف یک آسیب‌پذیری را وارد کنید.');
@@ -201,7 +201,7 @@ export const AIModelCard = ({ model }) => {
         eventSourceRef.current = new EventSource(dataUrl); 
 
         eventSourceRef.current.onmessage = (event) => {
-            // 🛡️ گارد محافظتی آهنین: اگر قبلا نتیجه را گرفته‌ایم، تمام پیام‌های بعدی مرورگر (مثل ریکانکت شدن خودکار) مسدود می‌شوند
+            // 🛡️ گارد محافظتی آهنین
             if (hasCompletedRef.current) {
                 if(eventSourceRef.current) eventSourceRef.current.close();
                 return;
@@ -217,7 +217,7 @@ export const AIModelCard = ({ model }) => {
                         break;
                     case "process_generating": break;
                     case "process_completed":
-                        hasCompletedRef.current = true; // قفل کردن استیت
+                        hasCompletedRef.current = true;
                         
                         if (message.success && message.output && message.output.data && message.output.data.length > 0) {
                             const rawPrediction = message.output.data[0];
@@ -232,7 +232,6 @@ export const AIModelCard = ({ model }) => {
                         } else {
                              const errorMsg = message.output?.error || "Unknown server processing error.";
                              setError(`Processing failed: ${errorMsg}`);
-                             // 🔴 عدم پاک کردن خروجی در هنگام خطا
                         }
                         
                         if(eventSourceRef.current) eventSourceRef.current.close();
@@ -275,12 +274,10 @@ export const AIModelCard = ({ model }) => {
         };
 
         eventSourceRef.current.onerror = (errEvent) => {
-            // 🛡️ اگر نتیجه را گرفته‌ایم، خطای اتصال مجدد مرورگر را نادیده می‌گیریم
             if (!hasCompletedRef.current) {
               let errorMsg = "ارتباط با سرور با مشکل مواجه شد.";
                if (!navigator.onLine) errorMsg += " لطفاً اینترنت خود را بررسی کنید.";
               setError(errorMsg);
-              // 🔴 دستورات پاک کردن خروجی (setOutput) از اینجا کاملاً حذف شدند تا چیزی ناپدید نشود!
             }
             if(eventSourceRef.current) eventSourceRef.current.close();
             eventSourceRef.current = null;
@@ -291,7 +288,6 @@ export const AIModelCard = ({ model }) => {
         let displayError = err.message || "یک خطای ناشناخته رخ داد.";
         setError(displayError);
         setLoading(false);
-        // 🔴 دستورات پاک کردن خروجی (setOutput) از اینجا کاملاً حذف شدند
         if (eventSourceRef.current) {
            eventSourceRef.current.close();
            eventSourceRef.current = null;
@@ -317,7 +313,7 @@ export const AIModelCard = ({ model }) => {
         )}
       </div>
 
-      {/* بدنه کارت - افزودن overflow-y-auto برای جلوگیری از قطع شدن محتوا */}
+      {/* بدنه کارت */}
       <div className="p-5 flex-grow flex flex-col overflow-y-auto scrollbar-thin scrollbar-thumb-[#333] scrollbar-track-transparent">
         
         {/* فیلد ورود اطلاعات */}
@@ -365,7 +361,7 @@ export const AIModelCard = ({ model }) => {
           </div>
         )}
 
-        {/* نمایش خروجی تایپ‌رایتر و نتیجه */}
+        {/* نمایش خروجی */}
         <div className="mt-2 bg-[#0a0a0a] rounded-lg p-4 text-cyan-500 text-sm min-h-[100px] border border-cyan-500/30 overflow-x-auto whitespace-pre-wrap font-mono relative shrink-0">
           {/* آیکون وضعیت */}
           {hasCompletedRef.current && output.includes('Predicted Label: 1') && (
@@ -375,15 +371,15 @@ export const AIModelCard = ({ model }) => {
             <ShieldCheck size={20} className="absolute top-4 right-4 text-green-500" />
           )}
           
-          {/* متن تایپ شونده */}
-          {typedOutput}
+          {/* ✅ تغییر اصلی: حین تایپ → typedOutput | بعد از تایپ → output (پایدار) */}
+          {isTyping ? typedOutput : output}
           {isTyping ? <span className="inline-block w-2 h-4 bg-cyan-500 ml-1 animate-pulse"></span> : null}
           {!loading && !error && !output && !typedOutput && (
               <span className="text-gray-600">MODEL.RESPONSE.STANDBY...</span>
           )}
         </div>
 
-        {/* نمایش نمودار SHAP پس از اتمام تایپ و در صورت وجود داده */}
+        {/* نمایش نمودار SHAP پس از اتمام تایپ */}
         {!isTyping && hasCompletedRef.current && shapData && (
           <ShapVisualization shapData={shapData} />
         )}
