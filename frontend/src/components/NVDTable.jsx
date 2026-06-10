@@ -10,7 +10,7 @@ export const NVDTable = ({ limit = 50 }) => {
   const [cves, setCves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [severityFilter, setSeverityFilter] = useState('all'); // all, critical, high, medium, low
+  const [severityFilter, setSeverityFilter] = useState('all'); 
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -24,20 +24,20 @@ export const NVDTable = ({ limit = 50 }) => {
     setLoading(true);
     setErrorMsg(null);
     if (isSearch) setPage(1);
+    const currentPage = isSearch ? 1 : page;
 
     try {
-      // 🔴 فیکس خطای 500: استفاده از count: 'exact' به جای 'estimated'
+      // توجه: در جداول بسیار بزرگ، count: 'exact' می‌تواند باعث Timeout شود. 
+      // اگر مجددا خطا دریافت کردید، آن را به 'estimated' تغییر دهید.
       let query = supabase
         .from('vulnerabilities')
         .select('*', { count: 'exact' });
       
-      // جستجو در شناسه و متن (اصلاح شده بر اساس ستون text)
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
         query = query.or(`ID.ilike.%${term}%,text.ilike.%${term}%`);
       }
 
-      // فیلتر بر اساس شدت خطر
       if (severityFilter !== 'all') {
          if (severityFilter === 'critical') query = query.gte('score', 9.0);
          else if (severityFilter === 'high') query = query.gte('score', 7.0).lt('score', 9.0);
@@ -45,17 +45,12 @@ export const NVDTable = ({ limit = 50 }) => {
          else if (severityFilter === 'low') query = query.lt('score', 4.0);
       }
 
-      // صفحه‌بندی و مرتب‌سازی
-      const currentPage = isSearch ? 1 : page;
       const { data, count, error } = await query
         .order('published_date', { ascending: false })
         .range((currentPage - 1) * limit, currentPage * limit - 1);
 
       if (error) {
-        console.error("Supabase Raw Error:", error);
-        // نمایش دقیق ارور دیتابیس برای دیباگ راحت‌تر
-        const detailedError = error.details || error.hint ? `${error.message} (${error.details || ''} ${error.hint || ''})` : error.message;
-        throw new Error(detailedError);
+        throw new Error(error.message || 'خطای ناشناخته از دیتابیس');
       }
       
       setTotal(count || 0);
@@ -63,7 +58,12 @@ export const NVDTable = ({ limit = 50 }) => {
       
     } catch (error) {
       console.error('Error fetching CVEs:', error);
-      setErrorMsg(error.message || 'مشکل در برقراری ارتباط با پایگاه داده');
+      // مدیریت دقیق خطای Network و Timeout
+      if (error.message.includes('Failed to fetch')) {
+          setErrorMsg('ارتباط با سرور برقرار نشد. لطفاً وضعیت اینترنت یا متغیرهای Vercel را بررسی کنید.');
+      } else {
+          setErrorMsg(error.message || 'مشکل در برقراری ارتباط با پایگاه داده');
+      }
       setCves([]);
     } finally {
       setLoading(false);
@@ -90,12 +90,11 @@ export const NVDTable = ({ limit = 50 }) => {
     return <span className="severity-badge badge-low bg-green-900/50 text-green-400 border border-green-500/50 px-2 py-1 rounded text-xs font-bold">LOW</span>;
   };
 
+  // کدهای رندر UI (بدون تغییر نسبت به کد خودتان باقی می‌ماند تا ظاهر سایت به هم نریزد)
   return (
     <div className="flex flex-col h-full space-y-4 animate-fade-in-up pb-4 md:pb-0">
-      
       {/* 1. Toolbar */}
       <div className="flex flex-col xl:flex-row gap-4 justify-between items-center bg-[#0a0a0a]/80 backdrop-blur-md p-4 rounded-xl border border-[#1f1f1f] shadow-lg">
-        
         {/* Search Input */}
         <div className="relative w-full xl:w-96 group order-2 xl:order-1">
           <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors group-focus-within:text-cyan-400">
@@ -116,8 +115,6 @@ export const NVDTable = ({ limit = 50 }) => {
         
         {/* Filters & Actions */}
         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto order-1 xl:order-2">
-           
-           {/* Severity Filter */}
            <div className="relative group min-w-[140px] flex-1 sm:flex-none">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 z-10"><ListFilter size={14} /></div>
             <select
@@ -160,7 +157,7 @@ export const NVDTable = ({ limit = 50 }) => {
         {errorMsg && (
           <div className="bg-red-900/10 text-red-400 p-3 text-xs text-center border-b border-red-500/20 flex items-center justify-center gap-2 animate-pulse">
             <AlertTriangle size={14} />
-            خطای دیتابیس: {errorMsg}
+            {errorMsg}
           </div>
         )}
 
@@ -194,7 +191,6 @@ export const NVDTable = ({ limit = 50 }) => {
                    const uniqueKey = `${cve.ID}-${index}`;
                    return (
                      <tr key={uniqueKey} className="group hover:bg-[#141414] transition-colors border-l-2 border-transparent hover:border-l-cyan-500">
-                        {/* CVE ID */}
                         <td className="px-4 md:px-6 py-4">
                           <div className="flex items-center gap-3">
                             <span className="font-mono font-medium text-cyan-400 text-xs md:text-sm">{cve.ID}</span>
@@ -207,14 +203,8 @@ export const NVDTable = ({ limit = 50 }) => {
                             </button>
                           </div>
                         </td>
-
-                        {/* Severity Badge */}
                         <td className="px-4 md:px-6 py-4">{getSeverityBadge(cve.score)}</td>
-
-                        {/* Score */}
                         <td className="px-4 md:px-6 py-4 font-bold text-white font-mono">{cve.score ? cve.score.toFixed(1) : 'N/A'}</td>
-
-                        {/* Description (Uses cve.text) */}
                         <td className="px-4 md:px-6 py-4 relative">
                           <div className="group/desc flex items-start gap-2">
                              <Terminal size={14} className="text-gray-700 mt-1 shrink-0 hidden sm:block" />
@@ -230,13 +220,9 @@ export const NVDTable = ({ limit = 50 }) => {
                              </button>
                           </div>
                         </td>
-
-                        {/* Date */}
                         <td className="px-4 md:px-6 py-4 text-[10px] text-gray-500 font-mono">
                           {cve.published_date ? new Date(cve.published_date).toLocaleDateString() : 'N/A'}
                         </td>
-
-                        {/* Link */}
                         <td className="px-4 md:px-6 py-4 text-right">
                           <a href={`https://nvd.nist.gov/vuln/detail/${cve.ID}`} target="_blank" rel="noreferrer" className="inline-flex p-1.5 rounded hover:bg-[#333] text-gray-500 hover:text-cyan-400 transition-colors">
                             <ExternalLink size={16} />
@@ -264,7 +250,6 @@ export const NVDTable = ({ limit = 50 }) => {
           <span className="text-[10px] text-gray-600 font-mono">
             Page <span className="text-white font-bold">{page}</span> | Total: <span className="text-white font-bold">{total.toLocaleString()}</span>
           </span>
-          
           <div className="flex gap-4">
             <button 
               onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -273,7 +258,6 @@ export const NVDTable = ({ limit = 50 }) => {
             >
               <ChevronLeft size={20} />
             </button>
-            
             <button 
               onClick={() => setPage(p => p + 1)}
               disabled={cves.length < limit}
